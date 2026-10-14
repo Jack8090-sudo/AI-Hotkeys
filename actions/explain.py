@@ -1,4 +1,4 @@
-# AI-Hotkeys — azione "explain". I prompt sono in prompts.py.
+# AI-Hotkeys — "explain" action. Prompts are in prompts.py.
 import sys
 from pathlib import Path
 

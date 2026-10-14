@@ -1,4 +1,4 @@
-# AI-Hotkeys — azione "summarize". I prompt sono in prompts.py.
+# AI-Hotkeys — "summarize" action. Prompts are in prompts.py.
 import sys
 from pathlib import Path
 

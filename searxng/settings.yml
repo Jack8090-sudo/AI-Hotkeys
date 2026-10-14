@@ -1,16 +1,16 @@
 # =========================================================
-#  SearXNG per AI-Hotkeys
-#  Parte dalle impostazioni predefinite di SearXNG e cambia
-#  solo quello che serve a un uso personale sul tuo PC.
+#  SearXNG for AI-Hotkeys
+#  Starts from SearXNG defaults and changes
+#  only what a personal use on your PC needs.
 #
-#  Porta e indirizzo NON si cambiano qui: si cambiano in
-#  config.ini, sezione [searxng], riga "searxng_url".
+#  Port and address are NOT changed here: change them in
+#  config.ini, [searxng] section, "searxng_url" line.
 # =========================================================
 
 use_default_settings:
   engines:
-    # Motori che su un PC normale non servono o non funzionano
-    # (ahmia e torch richiedono Tor).
+    # Engines not needed or not working on a normal PC
+    # (ahmia and torch require Tor).
     remove:
       - ahmia
       - torch
@@ -24,14 +24,14 @@ search:
   safe_search: 0
   autocomplete: ""
   default_lang: "auto"
-  # json serve ad AI-Hotkeys; html per usarlo anche dal browser
+  # json is for AI-Hotkeys; html to also use it from the browser
   # (http://127.0.0.1:8888)
   formats:
     - html
     - json
 
 server:
-  # Solo dal tuo PC: nessun altro sulla rete può usarlo.
+  # From your PC only: nobody else on the network can use it.
   bind_address: "127.0.0.1"
   limiter: false
   public_instance: false
@@ -42,9 +42,9 @@ ui:
   query_in_title: true
 
 engines:
-  # Provati dal tuo PC (ottobre 2026): rispondono bene Google (google cse),
-  # Startpage e Yahoo. DuckDuckGo chiede il CAPTCHA, Brave blocca per
-  # "troppe richieste", Wikidata va sempre in timeout: spenti.
+  # Tested from your PC (October 2026): Google (google cse),
+  # Startpage and Yahoo respond well. DuckDuckGo asks for CAPTCHA, Brave blocks for
+  # "too many requests", Wikidata always times out: off.
   - name: startpage
     inactive: false
     disabled: false
@@ -56,7 +56,7 @@ engines:
     disabled: true
   - name: wikidata
     disabled: true
-  # Caricato ma spento: si può usare dal browser con "!mjk"
+  # Loaded but off: can be used from the browser with "!mjk"
   - name: mojeek
     inactive: false
     disabled: true

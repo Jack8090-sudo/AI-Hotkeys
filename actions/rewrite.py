@@ -1,4 +1,4 @@
-# AI-Hotkeys — azione "rewrite". I prompt sono in prompts.py.
+# AI-Hotkeys — "rewrite" action. Prompts are in prompts.py.
 import sys
 from pathlib import Path
 

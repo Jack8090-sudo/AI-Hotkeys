@@ -1,14 +1,14 @@
 """
-AI-Hotkeys — avvia SearXNG in locale (motore di ricerca per End).
+AI-Hotkeys — start local SearXNG (search engine for End).
 
-Lanciato in background da main.ahk all'avvio e, se serve, da explain.py.
-Usa il Python portatile di AI-Hotkeys: niente Docker, niente WSL.
+Launched in the background by main.ahk at startup and, if needed, by explain.py.
+Uses AI-Hotkeys' portable Python: no Docker, no WSL.
 
-    searxng\\app\\searx\\   codice di SearXNG
-    searxng\\lib\\          librerie necessarie
-    searxng\\settings.yml   impostazioni
-    work\\searxng.log       registro (si azzera a ogni avvio)
-    work\\searxng.pid       processo in esecuzione (per chiuderlo)
+    searxng\\app\\searx\\   SearXNG code
+    searxng\\lib\\          required libraries
+    searxng\\settings.yml   settings
+    work\\searxng.log       log (cleared on every start)
+    work\\searxng.pid       running process (to stop it)
 """
 
 import configparser
@@ -53,25 +53,25 @@ def main():
     host = "127.0.0.1"
     port = url.port or 8888
 
-    # Già in esecuzione (es. dopo "Ricarica"): non serve un secondo processo.
+    # Already running (e.g. after "Reload"): no second process needed.
     if port_in_use(host, port):
         return 0
 
-    # pythonw non ha console: tutto quello che SearXNG scrive va nel registro.
+    # pythonw has no console: everything SearXNG writes goes to the log.
     log = open(LOG_FILE, "w", encoding="utf-8", buffering=1)
     sys.stdout = log
     sys.stderr = log
 
     if not (HERE / "app" / "searx").is_dir():
-        print("ERRORE: manca la cartella searxng\\app\\searx", flush=True)
+        print("ERROR: missing folder searxng\\app\\searx", flush=True)
         return 2
 
     sys.path.insert(0, str(HERE / "app"))
     sys.path.insert(0, str(HERE / "lib"))
 
-    # --- Adattamenti per Windows -------------------------------------
-    # SearXNG è pensato per Linux: importa il modulo "pwd" (solo Unix)
-    # anche quando non usa Valkey. Un modulo vuoto basta.
+    # --- Windows tweaks -------------------------------------
+    # SearXNG targets Linux: it imports the "pwd" module (Unix-only)
+    # even when not using Valkey. An empty module is enough.
     try:
         import pwd  # noqa: F401
     except ImportError:
@@ -83,8 +83,8 @@ def main():
         stub.getpwuid = getpwuid
         sys.modules["pwd"] = stub
 
-    # curl_cffi (le richieste ai motori) vuole il ciclo asyncio "selector";
-    # su Windows quello predefinito è "proactor".
+    # curl_cffi (engine requests) wants the asyncio "selector" loop;
+    # on Windows the default is "proactor".
     if sys.platform == "win32":
         import asyncio
         with warnings.catch_warnings():
@@ -96,18 +96,18 @@ def main():
     os.environ["SEARXNG_DISABLE_ETC_SETTINGS"] = "1"
     os.environ["SEARXNG_BIND_ADDRESS"] = host
     os.environ["SEARXNG_PORT"] = str(port)
-    # Chiave nuova a ogni avvio: serve solo a firmare i cookie delle preferenze.
+    # New key on every start: only used to sign preference cookies.
     os.environ.setdefault("SEARXNG_SECRET", secrets.token_hex(32))
 
     PID_FILE.write_text(str(os.getpid()), encoding="ascii")
-    print(f"SearXNG su http://{host}:{port}  (pid {os.getpid()})", flush=True)
+    print(f"SearXNG on http://{host}:{port}  (pid {os.getpid()})", flush=True)
 
     try:
-        from searx import webapp  # importandolo, SearXNG si inizializza
+        from searx import webapp  # importing it initializes SearXNG
         from werkzeug.serving import make_server
 
         server = make_server(host, port, webapp.app, threaded=True)
-        print("Pronto.", flush=True)
+        print("Ready.", flush=True)
         server.serve_forever()
     except Exception:
         import traceback

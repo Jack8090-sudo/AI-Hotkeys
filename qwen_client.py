@@ -1,5 +1,5 @@
 """
-AI-Hotkeys — collegamento a Ollama condiviso da tutte le azioni.
+AI-Hotkeys — shared Ollama connection used by all actions.
 """
 
 import configparser
@@ -18,7 +18,7 @@ CONFIG_FILE = BASE_DIR / "config.ini"
 
 
 # =========================================================
-# CONFIGURAZIONE (config.ini)
+# CONFIGURATION (config.ini)
 # =========================================================
 
 DEFAULTS = {
@@ -48,10 +48,10 @@ CONFIG = load_config()
 MODEL = CONFIG["model"]
 CHAT_URL = CONFIG["ollama_url"].rstrip("/") + "/api/chat"
 
-# Quanto Ollama tiene il modello in memoria dopo l'ultima richiesta.
-# Senza questo il default è 5 minuti: la prima pressione dopo una pausa
-# paga il ricaricamento del modello da disco (10-20 secondi).
-# Ollama accetta -1 / 0 come numeri; come testo vuole una durata ("30m").
+# How long Ollama keeps the model in memory after the last request.
+# Without this the default is 5 minutes: the first press after a pause
+# pays for reloading the model from disk (10-20 seconds).
+# Ollama accepts -1 / 0 as numbers; as text it wants a duration ("30m").
 KEEP_ALIVE = CONFIG["keep_alive"]
 if re.fullmatch(r"-?\d+", KEEP_ALIVE):
     KEEP_ALIVE = int(KEEP_ALIVE)
@@ -62,7 +62,7 @@ def todo_file():
 
 
 # =========================================================
-# RICHIESTE
+# REQUESTS
 # =========================================================
 
 def _options(mode):
@@ -89,7 +89,7 @@ def _request(messages, mode, stream):
 
 
 def chat(messages, mode, timeout=600):
-    """Risposta completa (senza streaming)."""
+    """Full response (no streaming)."""
     with urllib.request.urlopen(_request(messages, mode, False), timeout=timeout) as r:
         data = json.load(r)
     if data.get("error"):
@@ -98,15 +98,15 @@ def chat(messages, mode, timeout=600):
 
 
 def open_stream(messages, mode, timeout=600):
-    """Apre una risposta in streaming: usare con stream_pieces()."""
+    """Open a streaming response: use with stream_pieces()."""
     return urllib.request.urlopen(_request(messages, mode, True), timeout=timeout)
 
 
 def unload(timeout=30):
-    """Libera subito la VRAM: chiede a Ollama di scaricare il modello.
+    """Free VRAM right away: ask Ollama to unload the model.
 
-    Si fa inviando una richiesta con keep_alive = 0 e nessun prompt:
-    Ollama toglie il modello dalla memoria senza generare niente.
+    This is done by sending a request with keep_alive = 0 and no prompt:
+    Ollama drops the model from memory without generating anything.
     """
     url = CONFIG["ollama_url"].rstrip("/") + "/api/generate"
     req = urllib.request.Request(
@@ -135,7 +135,7 @@ def stream_pieces(response):
 
 
 # =========================================================
-# PULIZIA DELLE RISPOSTE
+# RESPONSE CLEANUP
 # =========================================================
 
 INTRO_RE = re.compile(
@@ -147,33 +147,33 @@ INTRO_RE = re.compile(
 def clean_answer(text, mode=None):
     text = text.replace("\r\n", "\n").strip()
 
-    # Eventuale ragionamento
+    # Possible reasoning
     text = re.sub(r"(?s)^<think>.*?</think>\s*", "", text)
 
-    # Tutto racchiuso in ```...```
+    # Everything wrapped in ```...```
     fence = re.match(r"(?s)^```[a-zA-Z]*\n(.*)\n```$", text)
     if fence:
         text = fence.group(1).strip()
 
-    # Tag del prompt ripetuti dal modello
+    # Prompt tags repeated by the model
     text = re.sub(r"^</?(testo|versione_attuale|testo_originale)>\s*", "", text)
     text = re.sub(r"\s*</?(testo|versione_attuale|testo_originale)>$", "", text)
 
     if mode == "rewrite":
-        # "Ecco il testo corretto:" all'inizio
+        # "Ecco il testo corretto:" at the start
         text = INTRO_RE.sub("", text, count=1)
-        # Virgolette intorno a tutto il testo
+        # Quotes around the whole text
         if len(text) > 2 and text[0] in "\"«“" and text[-1] in "\"»”" and text.count("\n") < 1:
             text = text[1:-1].strip()
 
     if mode == "explain":
-        # Sezione di traduzione che non vogliamo
+        # Translation section we do not want
         text = re.sub(
             r"(?ims)^#{1,4}[^\n]*(traduzion|translation)[^\n]*\n.*?(?=^#{1,4} |\Z)",
             "",
             text,
         ).strip()
-        # Sezioni vuote: "## Termini tecnici\nNessuno." invece di ometterle
+        # Empty sections: "## Termini tecnici\nNessuno." instead of omitting them
         text = re.sub(
             r"(?im)^#{1,4}[^\n]*\n+\s*[-*]?\s*(?:nessun[oa]?|niente|non ci sono[^\n]{0,60}|n/a|-)\.?\s*(?=\n#{1,4} |\Z)",
             "",
@@ -185,11 +185,11 @@ def clean_answer(text, mode=None):
 
 
 # =========================================================
-# AZIONI PgUp / PgDn / End
+# PgUp / PgDn / End ACTIONS
 # =========================================================
 
 def run_action(mode, argv):
-    """Uso: <script> <input.txt> <output.txt>"""
+    """Usage: <script> <input.txt> <output.txt>"""
     import sys
     import time
 
@@ -200,10 +200,10 @@ def run_action(mode, argv):
     testo = input_file.read_text(encoding="utf-8-sig")
 
     if not testo.strip():
-        print("Testo vuoto.", file=sys.stderr)
+        print("Empty text.", file=sys.stderr)
         return 1
 
-    # End: prima la ricerca web con SearXNG (se attivo)
+    # End: first the web search with SearXNG (if enabled)
     fonti, query = [], []
     meta = {"mode": mode}
     if mode == "explain":
@@ -211,18 +211,18 @@ def run_action(mode, argv):
         try:
             fonti, query = websearch.gather_sources(testo)
         except Exception as e:
-            print(f"Ricerca web non riuscita: {e}", file=sys.stderr)
+            print(f"Web search failed: {e}", file=sys.stderr)
             fonti = []
         websearch.save_sources(fonti, query)
         meta.update({"web": bool(fonti), "query": query if fonti else [], "fonti": len(fonti)})
-        websearch.status("Qwen scrive la spiegazione…" + (f" ({len(fonti)} fonti)" if fonti else " (senza web)"))
+        websearch.status("Qwen is writing the explanation…" + (f" ({len(fonti)} sources)" if fonti else " (no web)"))
 
     try:
         fonti_txt = websearch.sources_block(fonti) if fonti else None
         messages = prompts.first_messages(mode, testo, fonti_txt, lunghezza=CONFIG.get("lunghezza", "normale"))
         risposta = chat(messages, mode)
     except Exception as e:
-        print(f"Errore Ollama: {e}", file=sys.stderr)
+        print(f"Ollama error: {e}", file=sys.stderr)
         return 1
 
     risposta = clean_answer(risposta, mode)
@@ -234,7 +234,7 @@ def run_action(mode, argv):
 
     output_file.write_text(risposta, encoding="utf-8")
 
-    # Dettagli per la pagina dei risultati (tempo, ricerca fatta)
+    # Details for the results page (time, web search done)
     meta["seconds"] = round(time.time() - t0, 1)
     try:
         (WORK_DIR / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")

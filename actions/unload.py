@@ -1,5 +1,5 @@
-# AI-Hotkeys — libera la VRAM scaricando il modello da Ollama.
-# Richiamato dal menu dell'icona nella barra delle applicazioni.
+# AI-Hotkeys — free VRAM by unloading the model from Ollama.
+# Called from the taskbar tray-icon menu.
 import sys
 from pathlib import Path
 
@@ -11,6 +11,6 @@ if __name__ == "__main__":
     try:
         qwen_client.unload()
     except Exception as e:
-        print(f"Errore: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     sys.exit(0)

@@ -4,12 +4,12 @@
 ; =========================================================
 ;  AI-Hotkeys — AutoHotkey → Python → Ollama → Qwen 3.5 9B
 ; =========================================================
-;  Impostazioni: icona nella barra delle applicazioni → Impostazioni
-;  (oppure config.ini). Quando config.ini cambia, lo script si ricarica da solo.
+;  Settings: tray icon → Settings
+;  (or config.ini). When config.ini changes, the script reloads itself.
 
 
 ; =========================================================
-; PERCORSI
+; PATHS
 ; =========================================================
 
 global BASE       := A_ScriptDir
@@ -20,55 +20,55 @@ global outputFile := BASE "\work\output.txt"
 global viewer     := BASE "\viewer.py"
 global statusFile := BASE "\work\status.txt"
 global busy       := false
-; Annullamento con Esc tenuto premuto: il lavoro in corso può essere
-; interrotto tenendo premuto Esc per 2 secondi (vedi EscDown/CheckEscHold).
-; cancelRequested = true chiede al ciclo di attesa di uccidere Python e pulire.
+; Cancelling by holding Esc: the running job can be
+; interrupted by holding Esc for 2 seconds (see EscDown/CheckEscHold).
+; cancelRequested = true asks the wait loop to kill Python and clean up.
 global cancelRequested := false
 global currentPid      := 0
 global escTracking     := false
-; Riquadro di avanzamento: definito subito, prima di qualsiasi tasto o timer
+; Progress popup: defined early, before any key or timer
 global toastGui   := 0
 global toastPos   := ""
 
 
 ; =========================================================
-; AZIONI
+; ACTIONS
 ; =========================================================
-; mode    = come si comporta la pagina dei risultati
-;           (rewrite = nuove versioni, summarize / explain = domande)
-; replace = nelle app di EDITABLE_APPS il risultato prende il posto del testo
-;           selezionato (solo la correzione, e solo se attivo nelle impostazioni)
-; doing   = cosa mostra il riquadro di avanzamento
+; mode    = how the results page behaves
+;           (rewrite = new versions, summarize / explain = questions)
+; replace = in EDITABLE_APPS apps the result replaces the selected
+;           text (only the fix, and only if enabled in Settings)
+; doing   = what the progress popup shows
 
 global ACTIONS := CIMap(
-    "rewrite",   {script: BASE "\actions\rewrite.py",   name: "Correzione",  mode: "rewrite",   replace: true, doing: "Qwen corregge il testo"},
-    "summarize", {script: BASE "\actions\summarize.py", name: "Riassunto",   mode: "summarize", doing: "Qwen scrive il riassunto"},
-    "explain",   {script: BASE "\actions\explain.py",   name: "Spiegazione", mode: "explain",   doing: "Qwen prepara la spiegazione"},
+    "rewrite",   {script: BASE "\actions\rewrite.py",   name: "Fix",         mode: "rewrite",   replace: true, doing: "Qwen is fixing the text"},
+    "summarize", {script: BASE "\actions\summarize.py", name: "Summary",     mode: "summarize", doing: "Qwen is writing the summary"},
+    "explain",   {script: BASE "\actions\explain.py",   name: "Explanation", mode: "explain",   doing: "Qwen is preparing the explanation"},
 
-    ; Azione speciale: riorganizza TUTTO il file To-Do List.md
-    "obsidian_todo", {special: "obsidian_todo", name: "Riorganizza To-Do List"}
+    ; Special action: reorganizes the whole To-Do List.md file
+    "obsidian_todo", {special: "obsidian_todo", name: "Reorganize To-Do List"}
 )
 
 
 ; =========================================================
-; TASTI (da config.ini, sezione [tasti])
+; KEYS (from config.ini, [tasti] section)
 ; =========================================================
-; Le tre "posizioni" hanno un tasto ciascuna; il dispatcher lavora sulle
-; posizioni, così cambiare tasto non richiede di toccare le regole sotto.
+; The three "slots" each have one key; the dispatcher works on
+; slots, so changing a key does not require touching the rules below.
 
 global DEFAULT_KEYS := Map("correggi", "PgUp", "riassumi", "PgDn", "spiega", "End")
 global KEYS := Map()
 
 
 ; =========================================================
-; DISPATCHER CENTRALE:  "contesto|posizione"  →  azione
+; CENTRAL DISPATCHER:  "context|slot"  →  action
 ; =========================================================
-; Contesti, dal più specifico al più generale:
-;   "Obsidian:To-Do"  = Obsidian con aperto To-Do List.md
-;   "Chrome.exe"      = nome del processo (maiuscole indifferenti)
-;   "*"               = qualsiasi programma
+; Contexts, from most specific to most general:
+;   "Obsidian:To-Do"  = Obsidian with To-Do List.md open
+;   "Chrome.exe"      = process name (case insensitive)
+;   "*"               = any program
 ;
-; Azione "native" = il tasto fa la sua funzione normale.
+; "native" action = the key keeps its normal function.
 
 global ROUTES := CIMap(
     "Obsidian:To-Do|correggi", "obsidian_todo",
@@ -77,17 +77,17 @@ global ROUTES := CIMap(
     "*|riassumi", "summarize",
     "*|spiega",   "explain"
 
-    ; Esempi (togli il ";" e aggiungi una virgola alla riga sopra):
+    ; Examples (remove the ";" and add a comma to the line above):
     ; "Code.exe|spiega",     "native",
     ; "Discord.exe|correggi", "native"
 )
 
 
 ; =========================================================
-; APP IN CUI LA CORREZIONE SOSTITUISCE DIRETTAMENTE IL TESTO
+; APPS WHERE THE FIX DIRECTLY REPLACES THE TEXT
 ; =========================================================
-; Solo con [comportamento] sostituisci_testo = si.
-; Riassunto e spiegazione si aprono sempre nella pagina dei risultati.
+; Only with [comportamento] sostituisci_testo = si.
+; Summary and explanation always open in the results page.
 
 global EDITABLE_APPS := CIMap(
     "Notepad.exe",   true,
@@ -102,16 +102,16 @@ global SHOW_PROGRESS   := !IsNo(ReadConfig("avanzamento", "si"))
 
 
 ; =========================================================
-; OBSIDIAN: riconoscimento di To-Do List.md
+; OBSIDIAN: recognizing To-Do List.md
 ; =========================================================
-; Il titolo della finestra di Obsidian è "<nota> - <vault> - Obsidian v1.x.x".
-; Si cambia in config.ini (window_title = ...)
+; The Obsidian window title is "<note> - <vault> - Obsidian v1.x.x".
+; It can be changed in config.ini (window_title = ...)
 
 global TODO_TITLE_PREFIX := ReadConfig("window_title", "To-Do List -")
 
 
 ; =========================================================
-; AVVIO
+; STARTUP
 ; =========================================================
 
 global THEME := LoadTheme()
@@ -120,23 +120,23 @@ DirCreate BASE "\work"
 RegisterKeys()
 SetupTrayMenu()
 
-; Esc tenuto premuto 2 s = annulla il lavoro in corso e pulisce work\.
-; "~" così Esc fa sempre anche la sua funzione normale (pressione breve).
+; Holding Esc for 2 s = cancels the running job and cleans work\.
+; "~" so Esc always keeps its normal function too (short press).
 Hotkey("~Esc", EscDown)
 Hotkey("~Esc Up", EscUp)
 
-; SearXNG (ricerca web per End) parte insieme ad AI-Hotkeys
+; SearXNG (web search for End) starts together with AI-Hotkeys
 StartSearxng()
 OnExit(StopSearxng)
 
-; Ricarica automatica quando config.ini cambia (es. dalle Impostazioni)
+; Automatic reload when config.ini changes (e.g. from Settings)
 global CONFIG_STAMP := ConfigStamp()
 SetTimer WatchConfig, 1500
 
 if FileExist(BASE "\work\reloaded.flag")
 {
     try FileDelete(BASE "\work\reloaded.flag")
-    ToastShow("Impostazioni applicate", "", 1800)
+    ToastShow("Settings applied", "", 1800)
 }
 
 
@@ -156,7 +156,7 @@ RegisterKeys()
             Hotkey("$" hk, Dispatch.Bind(slot), "On")
         catch
         {
-            ; AutoHotkey non conosce quel tasto: si usa il predefinito
+            ; AutoHotkey does not know that key: fall back to the default
             hk := def
             try Hotkey("$" hk, Dispatch.Bind(slot), "On")
         }
@@ -168,10 +168,10 @@ Dispatch(slot, *)
 {
     global busy, ROUTES, ACTIONS, KEYS
 
-    ; Nella pagina delle impostazioni i tasti servono per essere registrati
+    ; In the Settings page the keys are captured for registration
     try
     {
-        if InStr(WinGetTitle("A"), "Impostazioni di AI-Hotkeys")
+        if InStr(WinGetTitle("A"), "AI-Hotkeys Settings")
         {
             SendNative(KEYS[slot])
             return
@@ -180,7 +180,7 @@ Dispatch(slot, *)
 
     if busy
     {
-        Flash("Qwen sta ancora lavorando", KeyLabel(KEYS[slot]))
+        Flash("Qwen is still working", KeyLabel(KEYS[slot]))
         return
     }
 
@@ -202,7 +202,7 @@ Dispatch(slot, *)
 
     if !ACTIONS.Has(actionId)
     {
-        MsgBox "Azione sconosciuta nel dispatcher: " actionId, "AI-Hotkeys", "Icon!"
+        MsgBox "Unknown action in dispatcher: " actionId, "AI-Hotkeys", "Icon!"
         return
     }
 
@@ -252,7 +252,7 @@ GetContexts()
 
 
 ; =========================================================
-; AZIONI SUL TESTO SELEZIONATO
+; ACTIONS ON THE SELECTED TEXT
 ; =========================================================
 
 RunSelectionAction(action, hk)
@@ -265,8 +265,8 @@ RunSelectionAction(action, hk)
 
     keyLbl := KeyLabel(hk)
 
-    ; Ricordiamo la finestra di partenza: Qwen può metterci un po'
-    ; e nel frattempo potresti cambiare finestra.
+    ; Remember the starting window: Qwen may take a while
+    ; and you might switch windows in the meantime.
     try
     {
         hwnd := WinExist("A")
@@ -285,8 +285,8 @@ RunSelectionAction(action, hk)
 
     if !ClipWait(2)
     {
-        ; Niente selezionato: il tasto fa la sua funzione normale
-        ; (PgUp scorre, Home va a inizio riga...)
+        ; Nothing selected: the key keeps its normal function
+        ; (PgUp scrolls, Home goes to start of line...)
         A_Clipboard := savedClipboard
         SendNative(hk)
         return
@@ -295,7 +295,7 @@ RunSelectionAction(action, hk)
     testo := A_Clipboard
     A_Clipboard := savedClipboard
 
-    ; Salva il testo selezionato in UTF-8
+    ; Save the selected text as UTF-8
     file := FileOpen(inputFile, "w", "UTF-8-RAW")
     file.Write(testo)
     file.Close()
@@ -304,23 +304,23 @@ RunSelectionAction(action, hk)
         FileDelete(outputFile)
 
     if SHOW_PROGRESS
-        ToastShow(action.doing . "  ·  Esc 2 s = annulla", keyLbl)
+        ToastShow(action.doing . "  ·  Esc 2 s = cancel", keyLbl)
 
     comando := PYTHON ' "' action.script '" "' inputFile '" "' outputFile '"'
 
-    ; Python scrive in work\status.txt a che punto è (ricerca web,
-    ; lettura delle pagine, scrittura): lo mostra il riquadro di avanzamento.
+    ; Python writes its progress to work\status.txt (web search,
+    ; reading pages, writing): the progress popup shows it.
     try FileDelete(statusFile)
     ShowStatus("", true)
     statusTimer := ShowStatus.Bind(keyLbl)
     if SHOW_PROGRESS
         SetTimer statusTimer, 250
 
-    ; Avvio cancellabile: tenendo premuto Esc 2 s, CheckEscHold mette
-    ; cancelRequested := true e uccide il processo. Così una pressione
-    ; per sbaglio non lascia file a metà: si pulisce tutto.
-    ; (cancelRequested è già stato azzerato a inizio funzione, così
-    ;  Esc tenuto premuto anche durante la copia negli appunti funziona.)
+    ; Cancellable launch: holding Esc for 2 s makes CheckEscHold set
+    ; cancelRequested := true and kill the process. So an accidental
+    ; press leaves no half-written files: everything is cleaned up.
+    ; (cancelRequested was already reset at the start of this function, so
+    ;  holding Esc even while copying to the clipboard works.)
     try
     {
         Run(comando, BASE, "Hide", &currentPid)
@@ -330,7 +330,7 @@ RunSelectionAction(action, hk)
         SetTimer statusTimer, 0
         ToastHide()
         currentPid := 0
-        MsgBox "Impossibile avviare Python:`n" e.Message, "AI-Hotkeys", "Iconx"
+        MsgBox "Could not start Python:`n" e.Message, "AI-Hotkeys", "Iconx"
         return
     }
 
@@ -344,23 +344,23 @@ RunSelectionAction(action, hk)
     if cancelled
     {
         CleanupWorkFiles()
-        ToastShow("Annullato", keyLbl, 2000)
+        ToastShow("Cancelled", keyLbl, 2000)
         return
     }
 
-    ; Il processo è finito da solo: se Python è uscito in errore
-    ; non ha scritto output.txt (stesso controllo di prima, senza exitCode
-    ; che con Run non è disponibile).
+    ; The process ended on its own: if Python exited with an error
+    ; it did not write output.txt (same check as before, without exitCode
+    ; which is not available with Run).
     if !FileExist(outputFile)
     {
-        ; Annullato all'ultimo istante mentre il processo moriva
+        ; Cancelled at the last moment while the process was dying
         if cancelRequested
         {
             CleanupWorkFiles()
-            ToastShow("Annullato", keyLbl, 2000)
+            ToastShow("Cancelled", keyLbl, 2000)
             return
         }
-        MsgBox "Qwen non ha risposto.`nControlla che Ollama sia acceso e che il modello sia scaricato.", "AI-Hotkeys", "Iconx"
+        MsgBox "Qwen did not respond.`nCheck that Ollama is running and that the model is downloaded.", "AI-Hotkeys", "Iconx"
         return
     }
 
@@ -368,12 +368,12 @@ RunSelectionAction(action, hk)
 
     if Trim(risposta) = ""
     {
-        MsgBox "Qwen ha restituito una risposta vuota.", "AI-Hotkeys", "Icon!"
+        MsgBox "Qwen returned an empty response.", "AI-Hotkeys", "Icon!"
         return
     }
 
     ; -----------------------------------------------------
-    ; CORREZIONE IN UN'APP DI SCRITTURA → sostituzione diretta
+    ; FIX IN A WRITING APP → direct replacement
     ; -----------------------------------------------------
 
     if (REPLACE_ENABLED && action.HasOwnProp("replace") && action.replace
@@ -387,12 +387,12 @@ RunSelectionAction(action, hk)
         Send "^v"
         Sleep 300
 
-        ; Il risultato resta negli appunti
+        ; The result stays in the clipboard
         return
     }
 
     ; -----------------------------------------------------
-    ; TUTTO IL RESTO → pagina dei risultati
+    ; EVERYTHING ELSE → results page
     ; -----------------------------------------------------
 
     Run PYTHON ' "' viewer '" "' inputFile '" "' outputFile '" "' action.name '" ' action.mode ' "--key=' keyLbl '"', BASE, "Hide"
@@ -400,7 +400,7 @@ RunSelectionAction(action, hk)
 
 
 ; =========================================================
-; OBSIDIAN: RIORGANIZZAZIONE DI To-Do List.md
+; OBSIDIAN: REORGANIZING To-Do List.md
 ; =========================================================
 
 RunObsidianTodo(keyLbl)
@@ -412,14 +412,14 @@ RunObsidianTodo(keyLbl)
 
     statusFile := BASE "\work\obsidian_status.txt"
 
-    ; Salva la nota prima di leggerla da disco
+    ; Save the note before reading it from disk
     Send "^s"
     Sleep 500
 
     if FileExist(statusFile)
         FileDelete(statusFile)
 
-    ToastShow("Qwen riorganizza la To-Do List, può volerci qualche minuto  ·  Esc 2 s = annulla", keyLbl)
+    ToastShow("Qwen is reorganizing the To-Do List, it may take a few minutes  ·  Esc 2 s = cancel", keyLbl)
 
     comando := PYTHON ' "' BASE '\actions\obsidian_todo.py"'
 
@@ -431,7 +431,7 @@ RunObsidianTodo(keyLbl)
     {
         ToastHide()
         currentPid := 0
-        MsgBox "Impossibile avviare Python:`n" e.Message, "AI-Hotkeys", "Iconx"
+        MsgBox "Could not start Python:`n" e.Message, "AI-Hotkeys", "Iconx"
         return
     }
 
@@ -442,11 +442,11 @@ RunObsidianTodo(keyLbl)
 
     if cancelled
     {
-        ; Il file originale non è stato toccato (la scrittura è atomica
-        ; alla fine): basta togliere gli esiti parziali.
+        ; The original file was not touched (writing is atomic
+        ; at the end): just remove the partial results.
         try FileDelete(statusFile)
         try FileDelete(BASE "\work\obsidian_output.txt")
-        ToastShow("Annullato", keyLbl, 2000)
+        ToastShow("Cancelled", keyLbl, 2000)
         return
     }
 
@@ -458,7 +458,7 @@ RunObsidianTodo(keyLbl)
     esito := RegExReplace(rawEsito, "^(OK|ERRORE)\R", "")
 
     if rawEsito = ""
-        MsgBox "Nessun esito.", "AI-Hotkeys - To-Do List", "Icon!"
+        MsgBox "No result.", "AI-Hotkeys - To-Do List", "Icon!"
     else if RegExMatch(rawEsito, "^OK\R")
         ToastShow(Trim(esito), keyLbl, 4000)
     else
@@ -467,18 +467,18 @@ RunObsidianTodo(keyLbl)
 
 
 ; =========================================================
-; ANNULLAMENTO: Esc tenuto premuto 2 s
+; CANCELLATION: holding Esc for 2 s
 ; =========================================================
-; Se premi un tasto per sbaglio, tieni premuto Esc per 2 secondi:
-; il processo Python in corso viene ucciso e i file a metà in work\
-; vengono cancellati, così la pressione dopo parte pulita.
-; La pressione breve di Esc resta normale ("~" non la blocca).
+; If you press a key by mistake, hold Esc for 2 seconds:
+; the running Python process is killed and the half-written files in work\
+; are deleted, so the next press starts clean.
+; A short Esc press stays normal ("~" does not block it).
 
 EscDown(*)
 {
     global escTracking
     if escTracking
-        return              ; auto-ripetizione mentre è tenuto premuto
+        return              ; auto-repeat while held down
     escTracking := true
     SetTimer CheckEscHold, -2000
 }
@@ -494,10 +494,10 @@ CheckEscHold()
 {
     global escTracking, busy, cancelRequested, currentPid
     escTracking := false
-    ; Esc già mollato prima dei 2 secondi: niente da fare
+    ; Esc already released before 2 seconds: nothing to do
     if !GetKeyState("Esc", "P")
         return
-    ; Niente in corso: Esc fa solo la sua funzione normale
+    ; Nothing running: Esc just keeps its normal function
     if !busy
         return
     if cancelRequested
@@ -508,11 +508,11 @@ CheckEscHold()
         if currentPid
             ProcessClose(currentPid)
     }
-    ; La pulizia vera (file + riquadro) la fa il ciclo in WaitPid
+    ; The actual cleanup (files + popup) is done by the loop in WaitPid
 }
 
-; Attende la fine del processo pid. Restituisce true se l'utente ha
-; annullato con Esc, false se il processo è finito da solo.
+; Waits for the pid process to end. Returns true if the user
+; cancelled with Esc, false if the process ended on its own.
 WaitPid(pid)
 {
     global cancelRequested
@@ -542,7 +542,7 @@ WaitPid(pid)
     }
 }
 
-; Toglie i file a metà di un'azione annullata, così tutto è pulito.
+; Removes the half-written files of a cancelled action, so all is clean.
 CleanupWorkFiles()
 {
     global BASE
@@ -554,11 +554,11 @@ CleanupWorkFiles()
 
 
 ; =========================================================
-; RIQUADRO DI AVANZAMENTO (al posto del ToolTip di Windows)
+; PROGRESS POPUP (instead of the Windows ToolTip)
 ; =========================================================
-; Piccola finestra senza bordi, vicino al mouse, con i colori del tema:
-; a sinistra il tasto premuto, a destra cosa sta succedendo.
-; Non prende il focus e i clic la attraversano.
+; Small borderless window, near the mouse, with the theme colors:
+; the pressed key on the left, what is happening on the right.
+; It never takes focus and clicks pass through it.
 
 
 ToastShow(text, key := "", ms := 0, anchor := true)
@@ -585,7 +585,7 @@ ToastShow(text, key := "", ms := 0, anchor := true)
         g.AddText("x14 y8 h28 +0x200", text)
     }
 
-    ; Angoli arrotondati e bordo sottile (Windows 11; altrove viene ignorato)
+    ; Rounded corners and thin border (Windows 11; ignored elsewhere)
     try DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", g.Hwnd, "Int", 33, "Int*", 2, "Int", 4)
     try DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", g.Hwnd, "Int", 34, "UInt*", HexToColorRef(THEME.line), "Int", 4)
 
@@ -600,7 +600,7 @@ ToastShow(text, key := "", ms := 0, anchor := true)
     g.GetPos(, , &w, &h)
     x := toastPos[1], y := toastPos[2]
 
-    ; Dentro lo schermo su cui si trova il mouse
+    ; Inside the screen where the mouse is
     Loop MonitorGetCount()
     {
         MonitorGetWorkArea(A_Index, &l, &t, &r, &b)
@@ -613,7 +613,7 @@ ToastShow(text, key := "", ms := 0, anchor := true)
     }
 
     g.Show("NoActivate x" x " y" y)
-    ; Leggermente trasparente: così diventa "layered" e i clic lo attraversano
+    ; Slightly transparent: this makes it "layered" so clicks pass through
     try WinSetTransparent(246, g)
     toastGui := g
 
@@ -632,7 +632,7 @@ ToastHide()
     }
 }
 
-; Mostra la fase scritta da Python in work\status.txt
+; Shows the phase written by Python in work\status.txt
 ShowStatus(keyLbl, reset := false)
 {
     global statusFile
@@ -655,16 +655,16 @@ ShowStatus(keyLbl, reset := false)
         return
 
     last := s
-    ToastShow(RTrim(s, ".…") . "  ·  Esc 2 s = annulla", keyLbl, 0, false)
+    ToastShow(RTrim(s, ".…") . "  ·  Esc 2 s = cancel", keyLbl, 0, false)
 }
 
-; Messaggio breve
+; Short message
 Flash(text, key := "", ms := 1800)
 {
     ToastShow(text, key, ms)
 }
 
-; Colori del riquadro, dal tema scelto nelle impostazioni
+; Popup colors, from the theme chosen in Settings
 LoadTheme()
 {
     tema := StrLower(ReadConfig("tema", "scuro"))
@@ -700,14 +700,14 @@ HexToColorRef(hex)
 
 
 ; =========================================================
-; TASTI: controllo, nomi leggibili, tasto originale
+; KEYS: validation, readable names, native key
 ; =========================================================
 
 ValidHotkey(hk)
 {
     if !RegExMatch(hk, "^([\^!+#]*)([A-Za-z0-9]+)$", &m)
         return false
-    ; Lettere e numeri da soli servono per scrivere
+    ; Single letters and digits alone are for typing
     if (StrLen(m[2]) = 1 && m[1] = "")
         return false
     return true
@@ -716,7 +716,7 @@ ValidHotkey(hk)
 ; "^!r" → "Ctrl+Alt+R", "PgUp" → "PgUp"
 KeyLabel(hk)
 {
-    names := Map("^", "Ctrl", "!", "Alt", "+", "Maiusc", "#", "Win")
+    names := Map("^", "Ctrl", "!", "Alt", "+", "Shift", "#", "Win")
     label := ""
     i := 1
     while (i <= StrLen(hk) && InStr("^!+#", SubStr(hk, i, 1)))
@@ -728,7 +728,7 @@ KeyLabel(hk)
     return label (StrLen(k) = 1 ? StrUpper(k) : k)
 }
 
-; Invia il tasto come se AI-Hotkeys non ci fosse
+; Sends the key as if AI-Hotkeys was not there
 SendNative(hk)
 {
     i := 1
@@ -739,7 +739,7 @@ SendNative(hk)
 
 
 ; =========================================================
-; IMPOSTAZIONI E RICARICA AUTOMATICA
+; SETTINGS AND AUTOMATIC RELOAD
 ; =========================================================
 
 OpenSettings()
@@ -747,7 +747,7 @@ OpenSettings()
     global PYTHON, BASE
     try Run(PYTHON ' "' BASE '\settings.py"', BASE, "Hide")
     catch as e
-        MsgBox "Impossibile aprire le impostazioni:`n" e.Message, "AI-Hotkeys", "Iconx"
+        MsgBox "Could not open Settings:`n" e.Message, "AI-Hotkeys", "Iconx"
 }
 
 ConfigStamp()
@@ -764,7 +764,7 @@ WatchConfig()
     if (stamp = "" || stamp = CONFIG_STAMP)
         return
     if busy
-        return          ; si ricarica a lavoro finito
+        return          ; reloads when the job is done
     CONFIG_STAMP := stamp
     try FileAppend("", BASE "\work\reloaded.flag")
     Reload()
@@ -772,10 +772,10 @@ WatchConfig()
 
 
 ; =========================================================
-; UTILITÀ
+; UTILITIES
 ; =========================================================
 
-; Python incluso nell'installazione, altrimenti quello di sistema
+; Bundled Python if present, otherwise the system one
 FindPython()
 {
     if FileExist(A_ScriptDir "\python\pythonw.exe")
@@ -783,7 +783,7 @@ FindPython()
     return "pythonw"
 }
 
-; Legge "chiave = valore" da config.ini (UTF-8)
+; Reads "key = value" from config.ini (UTF-8)
 ReadConfig(key, default := "")
 {
     path := A_ScriptDir "\config.ini"
@@ -805,49 +805,49 @@ SetupTrayMenu()
     global KEYS
     if FileExist(A_ScriptDir "\icon.ico")
         TraySetIcon A_ScriptDir "\icon.ico"
-    A_IconTip := "AI-Hotkeys`n" KeyLabel(KEYS["correggi"]) " corregge, " KeyLabel(KEYS["riassumi"]) " riassume, " KeyLabel(KEYS["spiega"]) " spiega"
+    A_IconTip := "AI-Hotkeys`n" KeyLabel(KEYS["correggi"]) " fixes, " KeyLabel(KEYS["riassumi"]) " summarizes, " KeyLabel(KEYS["spiega"]) " explains"
     tray := A_TrayMenu
     tray.Delete()
-    tray.Add("Impostazioni", (*) => OpenSettings())
-    tray.Default := "Impostazioni"
+    tray.Add("Settings", (*) => OpenSettings())
+    tray.Default := "Settings"
     tray.Add()
-    tray.Add("Libera la VRAM", (*) => UnloadModel())
-    tray.Add("Apri SearXNG nel browser", (*) => OpenSearxng())
+    tray.Add("Free VRAM", (*) => UnloadModel())
+    tray.Add("Open SearXNG in browser", (*) => OpenSearxng())
     tray.Add()
-    tray.Add("Modifica i prompt", (*) => Run('notepad.exe "' A_ScriptDir '\prompts.py"'))
-    tray.Add("Apri config.ini", (*) => Run('notepad.exe "' A_ScriptDir '\config.ini"'))
-    tray.Add("Apri la cartella", (*) => Run('explorer.exe "' A_ScriptDir '"'))
+    tray.Add("Edit prompts", (*) => Run('notepad.exe "' A_ScriptDir '\prompts.py"'))
+    tray.Add("Open config.ini", (*) => Run('notepad.exe "' A_ScriptDir '\config.ini"'))
+    tray.Add("Open folder", (*) => Run('explorer.exe "' A_ScriptDir '"'))
     tray.Add()
-    tray.Add("Ricarica", (*) => Reload())
-    tray.Add("Esci", (*) => ExitApp())
+    tray.Add("Reload", (*) => Reload())
+    tray.Add("Exit", (*) => ExitApp())
 }
 
-; Scarica il modello da Ollama: libera la VRAM senza chiudere AI-Hotkeys.
-; Alla pressione successiva di un tasto il modello si ricarica da solo.
+; Unloads the model from Ollama: frees the VRAM without closing AI-Hotkeys.
+; On the next key press the model reloads by itself.
 UnloadModel()
 {
     global PYTHON, BASE
 
-    ToastShow("Libero la VRAM")
+    ToastShow("Freeing VRAM")
 
     try
         exitCode := RunWait(PYTHON ' "' BASE '\actions\unload.py"', BASE, "Hide")
     catch as e
     {
         ToastHide()
-        MsgBox "Impossibile avviare Python:`n" e.Message, "AI-Hotkeys", "Iconx"
+        MsgBox "Could not start Python:`n" e.Message, "AI-Hotkeys", "Iconx"
         return
     }
 
     if exitCode = 0
-        ToastShow("VRAM libera: il modello si ricarica al prossimo tasto", "", 2600)
+        ToastShow("VRAM freed: the model reloads on the next key", "", 2600)
     else
-        ToastShow("Ollama non risponde: forse non è acceso", "", 2600)
+        ToastShow("Ollama is not responding: it may not be running", "", 2600)
 }
 
 
 ; =========================================================
-; SearXNG (ricerca web per End)
+; SearXNG (web search for End)
 ; =========================================================
 
 SearxngUrl()
@@ -860,7 +860,7 @@ SearxngEnabled()
     return !RegExMatch(ReadConfig("web_search", "auto"), "i)^(false|0|no|off)$")
 }
 
-; Avvia SearXNG in background (se è già acceso, il lanciatore esce subito)
+; Starts SearXNG in the background (if already running, the launcher exits at once)
 StartSearxng()
 {
     global PYTHON, BASE
@@ -873,7 +873,7 @@ StartSearxng()
     try Run(PYTHON ' "' BASE '\searxng\avvia_searxng.py"', BASE, "Hide")
 }
 
-; Chiude SearXNG quando si esce da AI-Hotkeys (non con "Ricarica")
+; Closes SearXNG when exiting AI-Hotkeys (not on "Reload")
 StopSearxng(reason, *)
 {
     if (reason = "Reload" || reason = "Single")
@@ -886,7 +886,7 @@ StopSearxng(reason, *)
     try
     {
         pid := Integer(Trim(FileRead(pidFile)))
-        ; Solo se quel numero è ancora un processo Python (il PID può essere stato riusato)
+        ; Only if that number is still a Python process (the PID may have been reused)
         if InStr(ProcessGetName(pid), "python")
             ProcessClose pid
     }
@@ -899,7 +899,7 @@ OpenSearxng()
     Run SearxngUrl()
 }
 
-; Map che ignora maiuscole/minuscole nelle chiavi
+; Map with case-insensitive keys
 CIMap(pairs*)
 {
     m := Map()

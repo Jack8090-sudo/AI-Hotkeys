@@ -38,7 +38,7 @@
                     | "Chiedi a Qwen"       |
                     +-----------------------+
 
-Config: config.esempio.ini -> config.ini (personale, gitignored) <-> config_edit.py <-> watch in main.ahk
+Config: config.example.ini -> config.ini (personal, gitignored) <-> config_edit.py <-> watch in main.ahk
 State: work/input.txt, work/output.txt, work/status.txt, work/meta.json, work/sources.json, work/obsidian_*.txt
 ```
 
@@ -59,7 +59,7 @@ State: work/input.txt, work/output.txt, work/status.txt, work/meta.json, work/so
 | `config_edit.py` | Scrittura `config.ini` preservando commenti/ordine/BOM/CRLF + CLI per installer | `set_values`, `read_values`; CLI `config_edit.py <ini> sezione.chiave=valore` | nessuna (stdlib) |
 | `test_config_edit.py` | Test preservazione commenti/BOM/CRLF | 1 test `SetValuesTest` (`python test_config_edit.py`) | `config_edit.py` |
 | `searxng/avvia_searxng.py`, `searxng/settings.yml` | Launcher SearXNG locale (pid `work/searxng.pid`, log `work/searxng.log`) | avvio idempotente + attesa `healthz` | `searxng/app/`, `searxng/lib/` (vendored, gitignored) |
-| `installer/sorgente/installer.nsi`, `installer/sorgente/stop.ps1` | Setup (VERSION `1.0.0`, MODEL `qwen3.5:9b`): payload app+python+ahk, `config.ini` mai sovrascritto, check Ollama via winget | sezioni app/avvio/desktop/Ollama | `config.esempio.ini` come sorgente del `config.ini` iniziale |
+| `installer/sorgente/installer.nsi`, `installer/sorgente/stop.ps1` | Setup (VERSION `1.0.0`, MODEL `qwen3.5:9b`): payload app+python+ahk, `config.ini` never overwritten, check Ollama via winget | app/startup/desktop/Ollama sections | `config.example.ini` as source of the initial `config.ini` |
 
 ## Data Flow
 
@@ -71,7 +71,7 @@ State: work/input.txt, work/output.txt, work/status.txt, work/meta.json, work/so
 
 ## External Dependencies
 
-- Ollama su `http://localhost:11434` + modello `qwen3.5:9b` (non vendored; `ollama pull qwen3.5:9b`) — versione in `installer.nsi` (`MODEL`) e `config.esempio.ini` (`[qwen] model`)
+- Ollama on `http://localhost:11434` + model `qwen3.5:9b` (not vendored; `ollama pull qwen3.5:9b`) — version in `installer.nsi` (`MODEL`) and `config.example.ini` (`[qwen] model`)
 - SearXNG su `http://127.0.0.1:8888` (wrapper versionato `avvia_searxng.py`+`settings.yml`, AGPLv3 `searxng/LICENSE-searxng.txt`; `app/|lib/` vendored ~82 MB via Releases)
 - AutoHotkey v2 (`ahk/AutoHotkey64.exe` locale via setup, GPLv2 `ahk/license.txt`; sorgente `main.ahk` con `#Requires AutoHotkey v2.0`)
 - Python 3.x soli moduli standard (`configparser`, `urllib`, `http.server`, `concurrent.futures`, `html.parser`, …); `python/` portatile ~31 MB via Releases; `curl_cffi` riusato da `searxng/lib` per pagine anti-403
@@ -85,5 +85,5 @@ State: work/input.txt, work/output.txt, work/status.txt, work/meta.json, work/so
 ## Related Areas
 
 - Utente finale: `installer/AI-Hotkeys/LEGGIMI.txt`, `README.md` (sezioni Uso/Comportamento)
-- Configurazione: `config.esempio.ini` (template) → `config.ini` (personale); validazione in `settings.py` (`CHOICES`/`NUMBERS`/`TEXTS`/`KEYS`), aspetto in `pages.py` (`LOOK`, `TEXT_SIZE`)
+- Configuration: `config.example.ini` (template) → `config.ini` (personal); validation in `settings.py` (`CHOICES`/`NUMBERS`/`TEXTS`/`KEYS`), look in `pages.py` (`LOOK`, `TEXT_SIZE`)
 - Storia rimozioni: `docs/DELETION_LOG.md`

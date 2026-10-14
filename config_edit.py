@@ -1,11 +1,11 @@
 """
-AI-Hotkeys — modifica di config.ini senza toccare commenti e ordine.
+AI-Hotkeys — edit config.ini without touching comments and order.
 
     set_values(path, {"aspetto": {"tema": "chiaro"}, "tasti": {"spiega": "End"}})
 
-Cambia solo le righe "chiave = valore" indicate; se una chiave o una
-sezione manca, la aggiunge. Mantiene la codifica (UTF-8, con o senza BOM)
-e gli a capo del file (CRLF di Windows o LF).
+Only changes the given "key = value" lines; if a key or a
+section is missing, it adds it. Keeps the encoding (UTF-8, with or without BOM)
+and the file's line endings (Windows CRLF or LF).
 """
 
 import re
@@ -41,7 +41,7 @@ def set_values(path, updates):
             if found is not None:
                 lines[found] = f"{key} = {value}"
                 continue
-            # chiave nuova: dopo l'ultima riga piena della sezione
+            # new key: after the last non-empty line of the section
             insert = end
             while insert > start + 1 and not lines[insert - 1].strip():
                 insert -= 1
@@ -53,7 +53,7 @@ def set_values(path, updates):
 
 
 def read_values(path):
-    """{sezione: {chiave: valore}} (senza commenti)."""
+    """{section: {key: value}} (without comments)."""
     out, section = {}, None
     try:
         text = Path(path).read_text(encoding="utf-8-sig")
@@ -75,21 +75,21 @@ def read_values(path):
 
 
 # ---------------------------------------------------------
-# Applicazione da riga di comando (usata dall'installer):
+# Command-line tool (used by the installer):
 #   python config_edit.py config.ini aspetto.tema=chiaro searxng.web_search=auto
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 3:
-        print("Uso: config_edit.py <config.ini> sezione.chiave=valore ...")
+        print("Usage: config_edit.py <config.ini> section.key=value ...")
         sys.exit(1)
     updates = {}
     for arg in sys.argv[2:]:
         name, _, value = arg.partition("=")
         section, _, key = name.partition(".")
         if not section or not key:
-            print(f"Argomento non valido: {arg}")
+            print(f"Invalid argument: {arg}")
             sys.exit(1)
         updates.setdefault(section, {})[key] = value
     set_values(sys.argv[1], updates)

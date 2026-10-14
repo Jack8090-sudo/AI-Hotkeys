@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="it" translate="no" data-theme="dark">
+<html lang="en" translate="no" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="referrer" content="no-referrer">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Impostazioni di AI-Hotkeys</title>
+<title>AI-Hotkeys Settings</title>
 
 <style>/*__THEME__*/</style>
 
 <style>
 /* =========================================================
-   Impostazioni
+   Settings
    ========================================================= */
 
 .wrap { width: min(100% - 48px, 1120px); margin: 0 auto; }
@@ -34,7 +34,7 @@ h1 {
     padding: 30px 0 0;
 }
 
-/* ---------- sezioni ---------- */
+/* ---------- sections ---------- */
 
 .section { padding: 0 0 30px; margin: 0 0 30px; border-bottom: 1px solid var(--line); }
 .section:last-of-type { border-bottom: 0; }
@@ -64,7 +64,7 @@ h1 {
 .field.wide { grid-template-columns: minmax(0, 1fr); }
 .field.wide .control { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
 
-/* ---------- controlli ---------- */
+/* ---------- controls ---------- */
 
 .seg {
     display: inline-flex;
@@ -167,7 +167,7 @@ h1 {
 }
 .text:focus, .select:focus { outline: none; border-color: var(--accent); }
 
-/* tasto da registrare */
+/* key to record */
 .capture {
     display: flex;
     align-items: center;
@@ -204,7 +204,7 @@ h1 {
 }
 .link:hover { color: var(--text); }
 
-/* ---------- anteprima ---------- */
+/* ---------- preview ---------- */
 
 .preview { position: sticky; top: 24px; }
 .preview h2 { margin: 0 0 12px; font: 500 calc(var(--fs) * .88)/1.2 var(--f-ui); color: var(--muted); }
@@ -230,7 +230,7 @@ h1 {
 .sample .bar b { padding: 7px 12px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font: 600 .84em/1.4 var(--f-ui); }
 .preview .note { margin: 12px 0 0; color: var(--muted); font-size: calc(var(--fs) * .84); }
 
-/* ---------- barra di salvataggio ---------- */
+/* ---------- save bar ---------- */
 
 .savebar {
     position: sticky;
@@ -290,8 +290,8 @@ h1 {
     <div class="wrap">
         <div class="keys" id="heroKeys" aria-hidden="true"></div>
         <div>
-            <h1>Impostazioni</h1>
-            <p class="lead">Le modifiche valgono dalla prossima volta che premi un tasto.</p>
+            <h1>Settings</h1>
+            <p class="lead">Changes take effect the next time you press a key.</p>
         </div>
     </div>
 </header>
@@ -301,36 +301,36 @@ h1 {
     <form id="form" novalidate>
 
         <section class="section" aria-labelledby="s-look">
-            <h2 id="s-look">Aspetto</h2>
-            <p>Come appaiono la pagina dei risultati e questa pagina.</p>
+            <h2 id="s-look">Appearance</h2>
+            <p>How the results page and this page look.</p>
 
             <div class="field">
-                <span class="name" id="l-tema">Tema</span>
-                <p class="hint">«Nero» usa il nero puro, ideale sugli schermi OLED. «Come Windows» segue il tema chiaro o scuro del sistema.</p>
+                <span class="name" id="l-tema">Theme</span>
+                <p class="hint">"Black" uses pure black, ideal on OLED screens. "Like Windows" follows the system's light or dark theme.</p>
                 <div class="control seg" role="radiogroup" aria-labelledby="l-tema" data-name="aspetto.tema">
-                    <button type="button" role="radio" data-value="scuro">Scuro</button>
-                    <button type="button" role="radio" data-value="nero">Nero</button>
-                    <button type="button" role="radio" data-value="chiaro">Chiaro</button>
-                    <button type="button" role="radio" data-value="sistema">Come Windows</button>
+                    <button type="button" role="radio" data-value="scuro">Dark</button>
+                    <button type="button" role="radio" data-value="nero">Black</button>
+                    <button type="button" role="radio" data-value="chiaro">Light</button>
+                    <button type="button" role="radio" data-value="sistema">Like Windows</button>
                 </div>
             </div>
 
             <div class="field wide">
-                <span class="name" id="l-colore">Colore</span>
-                <p class="hint">Il colore del tasto illuminato, delle citazioni e dei pulsanti.</p>
+                <span class="name" id="l-colore">Color</span>
+                <p class="hint">The color of the lit key, citations and buttons.</p>
                 <div class="control swatches" role="radiogroup" aria-labelledby="l-colore" data-name="aspetto.colore">
-                    <button type="button" class="swatch" role="radio" data-value="ambra" style="--sw:#F5A623"><i></i>Ambra</button>
-                    <button type="button" class="swatch" role="radio" data-value="ghiaccio" style="--sw:#62C9F2"><i></i>Ghiaccio</button>
-                    <button type="button" class="swatch" role="radio" data-value="menta" style="--sw:#52D3A3"><i></i>Menta</button>
-                    <button type="button" class="swatch" role="radio" data-value="corallo" style="--sw:#FF8473"><i></i>Corallo</button>
-                    <button type="button" class="swatch" role="radio" data-value="viola" style="--sw:#AC9EFF"><i></i>Viola</button>
-                    <button type="button" class="swatch" role="radio" data-value="neutro" style="--sw:#DCE1E8"><i></i>Neutro</button>
+                    <button type="button" class="swatch" role="radio" data-value="ambra" style="--sw:#F5A623"><i></i>Amber</button>
+                    <button type="button" class="swatch" role="radio" data-value="ghiaccio" style="--sw:#62C9F2"><i></i>Ice</button>
+                    <button type="button" class="swatch" role="radio" data-value="menta" style="--sw:#52D3A3"><i></i>Mint</button>
+                    <button type="button" class="swatch" role="radio" data-value="corallo" style="--sw:#FF8473"><i></i>Coral</button>
+                    <button type="button" class="swatch" role="radio" data-value="viola" style="--sw:#AC9EFF"><i></i>Purple</button>
+                    <button type="button" class="swatch" role="radio" data-value="neutro" style="--sw:#DCE1E8"><i></i>Neutral</button>
                 </div>
             </div>
 
             <div class="field">
-                <label class="name" for="f-testo">Dimensione del testo</label>
-                <p class="hint">Vale per i risultati e per le risposte alle domande.</p>
+                <label class="name" for="f-testo">Text size</label>
+                <p class="hint">Applies to results and answers to questions.</p>
                 <div class="control range">
                     <input type="range" id="f-testo" min="14" max="20" step="1" data-name="aspetto.testo">
                     <output for="f-testo" id="o-testo"></output>
@@ -338,131 +338,131 @@ h1 {
             </div>
 
             <div class="field">
-                <span class="name" id="l-larghezza">Larghezza della colonna di lettura</span>
-                <p class="hint">Righe più corte si leggono meglio, righe più lunghe fanno scorrere meno.</p>
+                <span class="name" id="l-larghezza">Reading column width</span>
+                <p class="hint">Shorter lines are easier to read, longer lines scroll less.</p>
                 <div class="control seg" role="radiogroup" aria-labelledby="l-larghezza" data-name="aspetto.larghezza">
-                    <button type="button" role="radio" data-value="stretta">Stretta</button>
-                    <button type="button" role="radio" data-value="normale">Normale</button>
-                    <button type="button" role="radio" data-value="ampia">Ampia</button>
+                    <button type="button" role="radio" data-value="stretta">Narrow</button>
+                    <button type="button" role="radio" data-value="normale">Normal</button>
+                    <button type="button" role="radio" data-value="ampia">Wide</button>
                 </div>
             </div>
 
             <div class="field">
-                <span class="name" id="l-orig">Testo selezionato a lato</span>
-                <p class="hint">Mostra accanto al risultato il testo da cui è partito. Puoi sempre aprirlo o chiuderlo dalla pagina.</p>
+                <span class="name" id="l-orig">Selected text on the side</span>
+                <p class="hint">Shows the text it started from next to the result. You can always open or close it from the page.</p>
                 <button type="button" class="control switch" role="switch" aria-labelledby="l-orig" data-name="aspetto.mostra_originale"></button>
             </div>
 
             <div class="field">
-                <span class="name" id="l-av">Avanzamento vicino al mouse</span>
-                <p class="hint">Un piccolo riquadro dice cosa sta facendo Qwen: ricerca, lettura delle pagine, scrittura.</p>
+                <span class="name" id="l-av">Progress near the mouse</span>
+                <p class="hint">A small box tells you what Qwen is doing: searching, reading pages, writing.</p>
                 <button type="button" class="control switch" role="switch" aria-labelledby="l-av" data-name="aspetto.avanzamento"></button>
             </div>
         </section>
 
         <section class="section" aria-labelledby="s-keys">
-            <h2 id="s-keys">Tasti</h2>
-            <p>Seleziona del testo in qualsiasi programma e premi il tasto dell'azione. Per cambiarlo, fai clic sul riquadro e premi il tasto o la combinazione nuova.</p>
+            <h2 id="s-keys">Keys</h2>
+            <p>Select text in any program and press the action key. To change it, click the box and press the new key or combination.</p>
 
             <div class="field" data-key="tasti.correggi">
-                <span class="name">Correggi</span>
-                <p class="hint">Corregge errori e refusi del testo selezionato.</p>
-                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Predefinito</button></div>
+                <span class="name">Fix</span>
+                <p class="hint">Fixes errors and typos in the selected text.</p>
+                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Default</button></div>
                 <p class="error"></p>
             </div>
             <div class="field" data-key="tasti.riassumi">
-                <span class="name">Riassumi</span>
-                <p class="hint">Apre il riassunto nella pagina dei risultati.</p>
-                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Predefinito</button></div>
+                <span class="name">Summarize</span>
+                <p class="hint">Opens the summary in the results page.</p>
+                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Default</button></div>
                 <p class="error"></p>
             </div>
             <div class="field" data-key="tasti.spiega">
-                <span class="name">Spiega</span>
-                <p class="hint">Spiega il testo e, quando serve, cerca sul web.</p>
-                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Predefinito</button></div>
+                <span class="name">Explain</span>
+                <p class="hint">Explains the text and, when needed, searches the web.</p>
+                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Default</button></div>
                 <p class="error"></p>
             </div>
         </section>
 
         <section class="section" aria-labelledby="s-beh">
-            <h2 id="s-beh">Comportamento</h2>
-            <p>Dove compare il risultato e quanto è lungo.</p>
+            <h2 id="s-beh">Behavior</h2>
+            <p>Where the result appears and how long it is.</p>
 
             <div class="field">
-                <span class="name" id="l-sost">Correzione direttamente nel testo</span>
-                <p class="hint">In Blocco note, Obsidian, Word, VS Code e Notepad++ la correzione prende il posto del testo selezionato. Se lo spegni, si apre nella pagina come le altre azioni.</p>
+                <span class="name" id="l-sost">Fix directly in the text</span>
+                <p class="hint">In Notepad, Obsidian, Word, VS Code and Notepad++ the fix replaces the selected text. If you turn it off, it opens in the page like the other actions.</p>
                 <button type="button" class="control switch" role="switch" aria-labelledby="l-sost" data-name="comportamento.sostituisci_testo"></button>
             </div>
 
             <div class="field">
-                <span class="name" id="l-len">Lunghezza di riassunti e spiegazioni</span>
-                <p class="hint">La correzione resta lunga quanto il testo originale.</p>
+                <span class="name" id="l-len">Length of summaries and explanations</span>
+                <p class="hint">The fix stays as long as the original text.</p>
                 <div class="control seg" role="radiogroup" aria-labelledby="l-len" data-name="comportamento.lunghezza">
-                    <button type="button" role="radio" data-value="breve">Breve</button>
-                    <button type="button" role="radio" data-value="normale">Normale</button>
-                    <button type="button" role="radio" data-value="dettagliata">Dettagliata</button>
+                    <button type="button" role="radio" data-value="breve">Short</button>
+                    <button type="button" role="radio" data-value="normale">Normal</button>
+                    <button type="button" role="radio" data-value="dettagliata">Detailed</button>
                 </div>
             </div>
         </section>
 
         <section class="section" aria-labelledby="s-web">
-            <h2 id="s-web">Ricerca web</h2>
-            <p>Prima di spiegare, AI-Hotkeys può cercare con SearXNG sul tuo PC e leggere le pagine trovate.</p>
+            <h2 id="s-web">Web search</h2>
+            <p>Before explaining, AI-Hotkeys can search with SearXNG on your PC and read the pages found.</p>
 
             <div class="field">
-                <span class="name" id="l-web">Quando cercare</span>
-                <p class="hint">«Quando serve»: cerca per termini tecnici, nomi, errori; non per pensieri o messaggi personali.</p>
+                <span class="name" id="l-web">When to search</span>
+                <p class="hint">"When needed": searches for technical terms, names, errors; not for personal thoughts or messages.</p>
                 <div class="control seg" role="radiogroup" aria-labelledby="l-web" data-name="searxng.web_search">
-                    <button type="button" role="radio" data-value="auto">Quando serve</button>
-                    <button type="button" role="radio" data-value="always">Sempre</button>
-                    <button type="button" role="radio" data-value="false">Mai</button>
+                    <button type="button" role="radio" data-value="auto">When needed</button>
+                    <button type="button" role="radio" data-value="always">Always</button>
+                    <button type="button" role="radio" data-value="false">Never</button>
                 </div>
             </div>
 
             <div class="field">
-                <span class="name" id="l-res">Risultati da usare</span>
-                <p class="hint">Quante fonti passare a Qwen.</p>
+                <span class="name" id="l-res">Results to use</span>
+                <p class="hint">How many sources to pass to Qwen.</p>
                 <div class="control stepper" data-name="searxng.results" data-min="3" data-max="8" aria-labelledby="l-res">
-                    <button type="button" data-step="-1" aria-label="Meno">−</button><output></output><button type="button" data-step="1" aria-label="Più">+</button>
+                    <button type="button" data-step="-1" aria-label="Less">−</button><output></output><button type="button" data-step="1" aria-label="More">+</button>
                 </div>
             </div>
 
             <div class="field">
-                <span class="name" id="l-pages">Pagine da leggere per intero</span>
-                <p class="hint">Delle altre fonti Qwen vede solo l'anteprima. Più pagine danno più contesto ma la risposta arriva più tardi.</p>
+                <span class="name" id="l-pages">Pages to read in full</span>
+                <p class="hint">Qwen only sees the preview of the other sources. More pages give more context but the answer arrives later.</p>
                 <div class="control stepper" data-name="searxng.pages_to_read" data-min="0" data-max="5" aria-labelledby="l-pages">
-                    <button type="button" data-step="-1" aria-label="Meno">−</button><output></output><button type="button" data-step="1" aria-label="Più">+</button>
+                    <button type="button" data-step="-1" aria-label="Less">−</button><output></output><button type="button" data-step="1" aria-label="More">+</button>
                 </div>
             </div>
         </section>
 
         <section class="section" aria-labelledby="s-model">
-            <h2 id="s-model">Modello</h2>
-            <p>Il modello di Ollama che fa il lavoro.</p>
+            <h2 id="s-model">Model</h2>
+            <p>The Ollama model that does the work.</p>
 
             <div class="field">
-                <label class="name" for="f-model">Modello</label>
-                <p class="hint">Deve essere già scaricato, per esempio con <code>ollama pull qwen3.5:9b</code>.</p>
+                <label class="name" for="f-model">Model</label>
+                <p class="hint">It must already be downloaded, for example with <code>ollama pull qwen3.5:9b</code>.</p>
                 <input class="control text" id="f-model" data-name="qwen.model" spellcheck="false">
                 <p class="error"></p>
             </div>
 
             <div class="field">
-                <label class="name" for="f-keep">Resta in memoria</label>
-                <p class="hint">Finché è in memoria risponde subito ma occupa la VRAM. Non usa la GPU quando è fermo.</p>
+                <label class="name" for="f-keep">Keep in memory</label>
+                <p class="hint">While it stays in memory it answers immediately but takes up VRAM. It does not use the GPU when idle.</p>
                 <select class="control select" id="f-keep" data-name="qwen.keep_alive">
-                    <option value="5m">5 minuti</option>
-                    <option value="10m">10 minuti</option>
-                    <option value="30m">30 minuti</option>
-                    <option value="1h">1 ora</option>
-                    <option value="-1">Sempre</option>
-                    <option value="0">Si scarica subito</option>
+                    <option value="5m">5 minutes</option>
+                    <option value="10m">10 minutes</option>
+                    <option value="30m">30 minutes</option>
+                    <option value="1h">1 hour</option>
+                    <option value="-1">Always</option>
+                    <option value="0">Unload immediately</option>
                 </select>
             </div>
 
             <div class="field">
-                <label class="name" for="f-url">Indirizzo di Ollama</label>
-                <p class="hint">Cambialo solo se Ollama gira su un altro computer o su un'altra porta.</p>
+                <label class="name" for="f-url">Ollama address</label>
+                <p class="hint">Change it only if Ollama runs on another computer or port.</p>
                 <input class="control text" id="f-url" data-name="qwen.ollama_url" spellcheck="false">
                 <p class="error"></p>
             </div>
@@ -470,27 +470,27 @@ h1 {
 
         <div class="savebar">
             <div class="inner">
-                <p class="msg" id="msg" role="status" aria-live="polite">Nessuna modifica.</p>
-                <button type="button" class="btn" id="defaults">Ripristina i predefiniti</button>
-                <button type="button" class="btn" id="undo" disabled>Annulla le modifiche</button>
-                <button type="submit" class="btn primary" id="save" disabled>Salva</button>
+                <p class="msg" id="msg" role="status" aria-live="polite">No changes.</p>
+                <button type="button" class="btn" id="defaults">Restore defaults</button>
+                <button type="button" class="btn" id="undo" disabled>Discard changes</button>
+                <button type="submit" class="btn primary" id="save" disabled>Save</button>
             </div>
         </div>
     </form>
 
-    <aside class="preview" aria-label="Anteprima">
-        <h2>Anteprima della pagina dei risultati</h2>
+    <aside class="preview" aria-label="Preview">
+        <h2>Results page preview</h2>
         <div class="sample" id="sample">
             <div class="head">
                 <span class="keys" id="sampleKeys"></span>
                 <div>
-                    <div class="t">Spiegazione</div>
-                    <div class="m">Testo selezionato: <q>StreamingEnabled</q></div>
+                    <div class="t">Explanation</div>
+                    <div class="m">Selected text: <q>StreamingEnabled</q></div>
                 </div>
             </div>
-            <h3>Di cosa parla</h3>
-            <p><code>StreamingEnabled</code> fa caricare il mondo di gioco a pezzi, in base a dove si trova il giocatore, così le mappe grandi restano fluide<span class="cite">[1]</span>.</p>
-            <div class="bar"><span>Chiedi un approfondimento</span><b>Invia</b></div>
+            <h3>What it is about</h3>
+            <p><code>StreamingEnabled</code> makes the game world load in pieces, based on where the player is, so large maps stay smooth<span class="cite">[1]</span>.</p>
+            <div class="bar"><span>Ask for more detail</span><b>Send</b></div>
         </div>
         <p class="note" id="widthNote"></p>
     </aside>
@@ -504,12 +504,12 @@ const DATA = /*__DATA__*/null;
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
 
-let saved = { ...DATA.values };     // ciò che c'è in config.ini
-let values = { ...DATA.values };    // ciò che si vede nella pagina
+let saved = { ...DATA.values };     // what is stored in config.ini
+let values = { ...DATA.values };    // what is shown in the page
 
-/* ================= TASTI: nomi leggibili ================= */
+/* ================= KEYS: readable names ================= */
 
-const MOD_NAMES = { "^": "Ctrl", "!": "Alt", "+": "Maiusc", "#": "Win" };
+const MOD_NAMES = { "^": "Ctrl", "!": "Alt", "+": "Shift", "#": "Win" };
 
 function keyParts(hk) {
     const m = /^([\^!+#]*)(.+)$/.exec(hk || "");
@@ -532,7 +532,7 @@ function keycaps(container, hk, cls) {
     });
 }
 
-/* Da un evento della tastiera alla sintassi di AutoHotkey */
+/* From a keyboard event to AutoHotkey syntax */
 const CODE_NAMES = {
     PageUp: "PgUp", PageDown: "PgDn", End: "End", Home: "Home", Insert: "Ins", Delete: "Del",
     Pause: "Pause", ScrollLock: "ScrollLock", ContextMenu: "AppsKey", Space: "Space", Tab: "Tab",
@@ -549,21 +549,21 @@ function eventToHotkey(e) {
     if (!key && /^Key[A-Z]$/.test(e.code)) key = e.code.slice(3).toLowerCase();
     if (!key && /^Digit\d$/.test(e.code)) key = e.code.slice(5);
     if (!key && /^Numpad\d$/.test(e.code)) key = e.code;
-    if (!key) return { error: "Questo tasto non si può usare." };
+    if (!key) return { error: "This key cannot be used." };
     const mods = (e.ctrlKey ? "^" : "") + (e.altKey ? "!" : "") + (e.shiftKey ? "+" : "") + (e.metaKey ? "#" : "");
     if (!mods && !SPECIAL.has(key)) {
-        return { error: "Da solo serve per scrivere: usa un tasto come PgUp o F8, oppure aggiungi Ctrl o Alt." };
+        return { error: "Alone it is used for typing: use a key like PgUp or F8, or add Ctrl or Alt." };
     }
     return { hotkey: mods + key };
 }
 
-/* ================= ASPETTO DAL VIVO ================= */
+/* ================= LIVE APPEARANCE ================= */
 
 const THEME = { scuro: "dark", nero: "black", chiaro: "light", sistema: "auto" };
 const WIDTH_NOTE = {
-    stretta: "Colonna stretta: circa 60 caratteri per riga.",
-    normale: "Colonna normale: circa 68 caratteri per riga.",
-    ampia: "Colonna ampia: circa 80 caratteri per riga."
+    stretta: "Narrow column: about 60 characters per line.",
+    normale: "Normal column: about 68 characters per line.",
+    ampia: "Wide column: about 80 characters per line."
 };
 
 function applyLook() {
@@ -586,7 +586,7 @@ function applyLook() {
     });
 }
 
-/* ================= CONTROLLI ================= */
+/* ================= CONTROLS ================= */
 
 function render() {
     document.querySelectorAll("[role=radiogroup][data-name]").forEach((g) => {
@@ -661,7 +661,7 @@ document.querySelectorAll("input.text[data-name], select[data-name]").forEach((i
     i.addEventListener("change", () => set(i.dataset.name, i.value.trim()));
 });
 
-/* ---------- registrazione dei tasti ---------- */
+/* ---------- key recording ---------- */
 
 let listening = null;
 
@@ -681,7 +681,7 @@ document.querySelectorAll("[data-key]").forEach((f) => {
         listening = { field: f, rec };
         err.textContent = "";
         rec.classList.add("listening");
-        rec.textContent = "Premi il tasto, Esc per annullare";
+        rec.textContent = "Press the key, Esc to cancel";
     });
     rec.addEventListener("blur", () => { if (listening && listening.rec === rec) stopListening(); });
     f.querySelector("[data-reset]").addEventListener("click", () => {
@@ -702,13 +702,13 @@ document.addEventListener("keydown", (e) => {
     if (r.error) { err.textContent = r.error; return; }
     const other = ["tasti.correggi", "tasti.riassumi", "tasti.spiega"]
         .find((n) => n !== field.dataset.key && (values[n] || "").toLowerCase() === r.hotkey.toLowerCase());
-    if (other) { err.textContent = "Questo tasto è già usato da un'altra azione."; return; }
+    if (other) { err.textContent = "This key is already used by another action."; return; }
     err.textContent = "";
     values[field.dataset.key] = r.hotkey;
     stopListening();
 }, true);
 
-/* ================= SALVATAGGIO ================= */
+/* ================= SAVING ================= */
 
 const changed = () => Object.keys(values).filter((k) => String(values[k]) !== String(saved[k]));
 
@@ -719,7 +719,7 @@ function updateBar(message, kind) {
     const msg = $("msg");
     msg.className = "msg" + (kind ? " " + kind : "");
     if (message) msg.textContent = message;
-    else msg.textContent = n === 0 ? "Nessuna modifica." : (n === 1 ? "1 modifica da salvare." : n + " modifiche da salvare.");
+    else msg.textContent = n === 0 ? "No changes." : (n === 1 ? "1 change to save." : n + " changes to save.");
 }
 
 $("undo").addEventListener("click", () => {
@@ -731,7 +731,7 @@ $("undo").addEventListener("click", () => {
 $("defaults").addEventListener("click", () => {
     values = { ...values, ...DATA.defaults };
     render();
-    updateBar("Predefiniti pronti: premi Salva per usarli.");
+    updateBar("Defaults ready: press Save to use them.");
 });
 
 $("form").addEventListener("submit", async (e) => {
@@ -740,7 +740,7 @@ $("form").addEventListener("submit", async (e) => {
     changed().forEach((k) => (diff[k] = values[k]));
     if (!Object.keys(diff).length) return;
     $("save").disabled = true;
-    updateBar("Salvo…");
+    updateBar("Saving…");
     try {
         const res = await fetch("/api/save", {
             method: "POST",
@@ -754,17 +754,17 @@ $("form").addEventListener("submit", async (e) => {
                 const box = f?.querySelector(".error");
                 if (box) box.textContent = text;
             });
-            updateBar(out.errors.tasti || "Alcuni valori non vanno bene: controlla i campi segnati.", "error");
+            updateBar(out.errors.tasti || "Some values are not valid: check the marked fields.", "error");
             return;
         }
-        if (!res.ok) throw new Error(out.error || "Errore " + res.status);
+        if (!res.ok) throw new Error(out.error || "Error " + res.status);
         saved = { ...out.values };
         values = { ...out.values };
         render();
-        updateBar("Salvate. AI-Hotkeys le applica da solo tra un attimo.", "ok");
+        updateBar("Saved. AI-Hotkeys will apply them in a moment.", "ok");
     } catch (err) {
         updateBar(err.message === "Failed to fetch"
-            ? "Questa pagina non è più collegata: riaprila dal menu di AI-Hotkeys."
+            ? "This page is no longer connected: reopen it from the AI-Hotkeys menu."
             : err.message, "error");
         $("save").disabled = false;
     }
@@ -772,7 +772,7 @@ $("form").addEventListener("submit", async (e) => {
 
 window.addEventListener("beforeunload", (e) => { if (changed().length) { e.preventDefault(); e.returnValue = ""; } });
 
-/* ================= AVVIO ================= */
+/* ================= STARTUP ================= */
 
 render();
 

@@ -1,16 +1,16 @@
 """
-AI-Hotkeys — Viewer HTML con popup "✦ Chiedi a Qwen".
+AI-Hotkeys — HTML viewer with "✦ Ask Qwen" popup.
 
-Uso (chiamato da main.ahk):
-    python viewer.py <input.txt> <output.txt> "<Nome azione>" [rewrite|summarize|explain]
+Usage (called from main.ahk):
+    python viewer.py <input.txt> <output.txt> "<Action name>" [rewrite|summarize|explain]
 
-Come funziona:
-- Avvia un piccolo server locale (solo 127.0.0.1, porta casuale).
-- Apre la pagina nel browser.
-- Il popup della pagina invia le richieste aggiuntive a questo server,
-  che le inoltra a Ollama con il contesto completo:
-      testo originale + risultato corrente + nuova richiesta
-- Il server si chiude da solo qualche minuto dopo la chiusura della scheda.
+How it works:
+- Starts a small local server (127.0.0.1 only, random port).
+- Opens the page in the browser.
+- The page popup sends follow-up requests to this server,
+  which forwards them to Ollama with the full context:
+      original text + current result + new request
+- The server shuts down by itself a few minutes after the tab is closed.
 """
 
 import json
@@ -34,29 +34,29 @@ import websearch
 
 
 # =========================================================
-# CONFIGURAZIONE
+# CONFIGURATION
 # =========================================================
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
-# Secondi senza "ping" dalla pagina prima che il server si chiuda.
-# (I browser rallentano i timer delle schede in background fino a
-#  1 volta al minuto, quindi deve essere ben sopra i 60 secondi.)
+# Seconds without a "ping" from the page before the server shuts down.
+# (Browsers slow background-tab timers down to
+#  1 per minute, so this must be well above 60 seconds.)
 IDLE_TIMEOUT = 240
 
-# Quanti scambi domanda/risposta precedenti mandare a Qwen
-# nelle modalità Riassunto e Analisi.
+# How many previous question/answer turns to send to Qwen
+# in summarize and explain modes.
 HISTORY_TURNS = 6
 
-# Limiti anti-DoS sulle richieste HTTP (il server è locale, ma il token
-# potrebbe trapelare: niente corpi enormi né domande chilometriche).
+# Anti-DoS limits on HTTP requests (the server is local, but the token
+# could leak: no huge bodies or very long questions).
 MAX_BODY = 1_000_000
 MAX_QUESTION = 4000
 
 
 # =========================================================
-# MODALITÀ
+# MODES
 # =========================================================
 
 MODES = ("rewrite", "summarize", "explain")
@@ -78,7 +78,7 @@ def detect_mode(action_name, explicit=None):
 
 
 # =========================================================
-# STATO DELLA SESSIONE
+# SESSION STATE
 # =========================================================
 
 class Session:
@@ -87,13 +87,13 @@ class Session:
         self.mode = mode
         self.action_name = action_name
 
-        # Versioni del risultato (usate da Riscrittura).
+        # Result versions (used by rewrite).
         self.versions = [{"text": result, "request": None}]
 
-        # Conversazione (usata da Riassunto e Analisi).
+        # Conversation (used by summarize and explain).
         self.thread = []
 
-        # Fonti web trovate da End (SearXNG): servono anche alle domande dopo.
+        # Web sources found by End (SearXNG): also needed for follow-ups.
         self.sources = websearch.load_sources() if mode == "explain" else []
 
         self.lock = threading.Lock()
@@ -133,7 +133,7 @@ class Session:
 
 
 # =========================================================
-# SERVER HTTP
+# HTTP SERVER
 # =========================================================
 
 def make_handler(session, token, page_html):
@@ -232,15 +232,15 @@ def make_handler(session, token, page_html):
                 question = str(data.get("question", "")).strip()
                 base_index = int(data.get("base", 0))
             except Exception:
-                self._send_json(400, {"error": "Richiesta non valida."})
+                self._send_json(400, {"error": "Invalid request."})
                 return
 
             if not question:
-                self._send_json(400, {"error": "Scrivi una richiesta."})
+                self._send_json(400, {"error": "Write a request."})
                 return
 
             if len(question) > MAX_QUESTION:
-                self._send_json(400, {"error": f"Max {MAX_QUESTION} caratteri."})
+                self._send_json(400, {"error": f"Max {MAX_QUESTION} characters."})
                 return
 
             session.touch()
@@ -276,12 +276,12 @@ def make_handler(session, token, page_html):
                 response = qwen_client.open_stream(messages, session.mode, timeout=300)
             except urllib.error.URLError:
                 self._safe_emit({
-                    "error": "Impossibile contattare Ollama. "
-                             "Controlla che Ollama sia in esecuzione."
+                    "error": "Cannot reach Ollama. "
+                             "Check that Ollama is running."
                 })
                 return
             except Exception:
-                self._safe_emit({"error": "Errore interno, riprova."})
+                self._safe_emit({"error": "Internal error, try again."})
                 return
 
             try:
@@ -292,10 +292,10 @@ def make_handler(session, token, page_html):
                         session.touch()
 
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
-                # La pagina ha interrotto la generazione (pulsante stop).
+                # The page interrupted generation (stop button).
                 return
             except Exception:
-                self._safe_emit({"error": "Errore durante la generazione, riprova."})
+                self._safe_emit({"error": "Generation error, try again."})
                 return
 
             answer = qwen_client.clean_answer("".join(parts), session.mode)
@@ -303,7 +303,7 @@ def make_handler(session, token, page_html):
                 answer = websearch.linkify(answer, session.sources)
 
             if not answer:
-                self._safe_emit({"error": "Qwen ha restituito una risposta vuota."})
+                self._safe_emit({"error": "Qwen returned an empty answer."})
                 return
 
             index = session.save(question, answer, base_index)
@@ -319,11 +319,11 @@ def make_handler(session, token, page_html):
 
 
 # =========================================================
-# PAGINA
+# PAGE
 # =========================================================
 
 def read_meta():
-    """Dettagli dell'ultima elaborazione (scritti da qwen_client.run_action)."""
+    """Details of the last run (written by qwen_client.run_action)."""
     try:
         return json.loads((BASE_DIR / "work" / "meta.json").read_text(encoding="utf-8"))
     except Exception:
@@ -361,10 +361,10 @@ def build_page(session, token, key_label=""):
 
 def main():
     if len([a for a in sys.argv[1:] if not a.startswith("--")]) < 3:
-        print("Uso: viewer.py <input> <output> <nome azione> [modalità] [--key=End] [--no-browser]")
+        print("Usage: viewer.py <input> <output> <action name> [mode] [--key=End] [--no-browser]")
         sys.exit(1)
 
-    # Argomenti opzionali: --key=End (tasto premuto), --no-browser
+    # Optional args: --key=End (pressed key), --no-browser
     options = [a for a in sys.argv[1:] if a.startswith("--")]
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     key_label = next((a.split("=", 1)[1] for a in options if a.startswith("--key=")), "")
@@ -402,7 +402,7 @@ def main():
 
     if "--no-browser" in sys.argv:
         print(url, flush=True)
-        print("Avviso: l'URL contiene un token segreto, non condividerlo.", file=sys.stderr, flush=True)
+        print("Warning: the URL contains a secret token, do not share it.", file=sys.stderr, flush=True)
     else:
         webbrowser.open_new_tab(url)
 

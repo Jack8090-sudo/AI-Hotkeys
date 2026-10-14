@@ -1,11 +1,11 @@
 """
-AI-Hotkeys — pagina delle impostazioni.
+AI-Hotkeys — settings page.
 
-Avviata dal menu dell'icona ("Impostazioni"). Apre una pagina locale
-(solo 127.0.0.1) che legge e scrive config.ini. Quando config.ini cambia,
-AI-Hotkeys si ricarica da solo e applica i tasti nuovi.
+Started from the tray-icon menu ("Settings"). Opens a local page
+(127.0.0.1 only) that reads and writes config.ini. When config.ini changes,
+AI-Hotkeys reloads itself and applies the new hotkeys.
 
-Uso: python settings.py [--no-browser]
+Usage: python settings.py [--no-browser]
 """
 
 import json
@@ -28,15 +28,15 @@ BASE_DIR = Path(__file__).resolve().parent
 CONFIG_FILE = BASE_DIR / "config.ini"
 IDLE_TIMEOUT = 300
 
-# Tetto anti-DoS sul corpo delle richieste POST (locale, ma token-gated).
+# Anti-DoS cap on POST request bodies (local, but token-gated).
 MAX_BODY = 1_000_000
 
 
 # =========================================================
-# CAMPI: sezione, chiave, predefinito, controllo
+# FIELDS: section, key, default, control
 # =========================================================
 
-# tema, colore, larghezza, mostra_originale e testo: elenco unico in pages.py
+# tema, colore, larghezza, mostra_originale and testo: single list in pages.py
 CHOICES = {
     **{("aspetto", k): v for k, v in pages.LOOK.items()},
     ("aspetto", "avanzamento"): ("si", ["si", "no"]),
@@ -63,7 +63,7 @@ KEYS = {
     ("tasti", "spiega"): "End",
 }
 
-# Tasti ammessi senza Ctrl/Alt/Maiusc/Win: non servono per scrivere
+# Keys allowed without Ctrl/Alt/Shift/Win: not needed for typing
 SPECIAL_KEYS = {"PgUp", "PgDn", "End", "Home", "Ins", "Del", "Pause", "ScrollLock", "AppsKey",
                 *(f"F{i}" for i in range(1, 25))}
 KEY_RE = re.compile(r"^([\^!+#]*)([A-Za-z0-9]+)$")
@@ -80,7 +80,7 @@ def valid_hotkey(value):
     if len(set(mods)) != len(mods):
         return False
     if len(key) == 1:
-        return bool(mods) and key.isalnum()          # lettere e numeri solo con un modificatore
+        return bool(mods) and key.isalnum()          # letters and digits only with a modifier
     if key not in NAMED_KEYS:
         return False
     return bool(mods) or key in SPECIAL_KEYS
@@ -120,37 +120,37 @@ def defaults():
 
 
 def validate(data):
-    """Restituisce (aggiornamenti per config_edit, errori per campo)."""
+    """Returns (updates for config_edit, errors per field)."""
     updates, errors = {}, {}
     for name, value in data.items():
         sec, _, key = name.partition(".")
         value = str(value).strip()
         if (sec, key) in CHOICES:
             if value not in CHOICES[(sec, key)][1]:
-                errors[name] = "Valore non ammesso."
+                errors[name] = "Value not allowed."
                 continue
         elif (sec, key) in NUMBERS:
             _, lo, hi = NUMBERS[(sec, key)]
             if not value.lstrip("-").isdigit() or not lo <= int(value) <= hi:
-                errors[name] = f"Scegli un numero da {lo} a {hi}."
+                errors[name] = f"Choose a number from {lo} to {hi}."
                 continue
         elif (sec, key) in TEXTS:
             if not TEXTS[(sec, key)][1].match(value):
-                errors[name] = "Formato non valido."
+                errors[name] = "Invalid format."
                 continue
         elif (sec, key) in KEYS:
             if not valid_hotkey(value):
-                errors[name] = "Tasto non ammesso."
+                errors[name] = "Key not allowed."
                 continue
         else:
-            continue  # campi sconosciuti: ignorati
+            continue  # unknown fields: ignored
         updates.setdefault(sec, {})[key] = value
 
-    # Tasti nuovi più quelli già salvati: la pagina manda solo ciò che cambia
+    # New keys plus saved ones: the page only sends what changed
     current = current_values()
     keys = [updates.get("tasti", {}).get(k) or current[f"tasti.{k}"] for k in ("correggi", "riassumi", "spiega")]
     if len(keys) != len(set(k.lower() for k in keys)):
-        errors["tasti"] = "Due azioni hanno lo stesso tasto."
+        errors["tasti"] = "Two actions have the same key."
     return updates, errors
 
 
@@ -220,7 +220,7 @@ def make_handler(state, token):
                     self.send_error(403)
                     return
                 state.touch()
-                # La pagina si costruisce a ogni apertura: legge sempre il config attuale
+                # The page is built on every open: it always reads the current config
                 self._send(200, build_page(token).encode("utf-8"), "text/html; charset=utf-8")
                 return
             if pages.try_serve_font(self, url.path):
@@ -253,7 +253,7 @@ def make_handler(state, token):
                 if not isinstance(data, dict):
                     raise ValueError
             except Exception:
-                self._json(400, {"error": "Richiesta non valida."})
+                self._json(400, {"error": "Invalid request."})
                 return
 
             updates, errors = validate(data)
@@ -263,7 +263,7 @@ def make_handler(state, token):
             try:
                 config_edit.set_values(CONFIG_FILE, updates)
             except Exception:
-                self._json(500, {"error": "Impossibile salvare, riprova."})
+                self._json(500, {"error": "Cannot save, try again."})
                 return
             self._json(200, {"ok": True, "values": current_values()})
 

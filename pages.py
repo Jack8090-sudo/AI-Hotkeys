@@ -1,6 +1,6 @@
 """
-AI-Hotkeys — parti comuni alle pagine locali (risultati e impostazioni):
-caratteri, stile condiviso e impostazioni di aspetto da config.ini.
+AI-Hotkeys — shared parts of the local pages (results and settings):
+fonts, shared style and appearance settings from config.ini.
 """
 
 import json
@@ -13,14 +13,14 @@ FONTS_DIR = STATIC_DIR / "fonts"
 
 FONT_RE = re.compile(r"^/fonts/([a-z0-9-]+\.woff2)$")
 
-# Valori ammessi e predefiniti della sezione [aspetto]
+# Allowed values and defaults for the [aspetto] section
 LOOK = {
     "tema": ("scuro", ("scuro", "nero", "chiaro", "sistema")),
     "colore": ("ambra", ("ambra", "ghiaccio", "menta", "corallo", "viola", "neutro")),
     "larghezza": ("normale", ("stretta", "normale", "ampia")),
     "mostra_originale": ("si", ("si", "no")),
 }
-TEXT_SIZE = (16, 14, 20)   # predefinito, minimo, massimo (px)
+TEXT_SIZE = (16, 14, 20)   # default, minimum, maximum (px)
 
 
 def _yes_no(value):
@@ -33,7 +33,7 @@ def _yes_no(value):
 
 
 def look_settings(config):
-    """Impostazioni di aspetto validate, pronte per la pagina."""
+    """Validated appearance settings, ready for the page."""
     out = {}
     for key, (default, allowed) in LOOK.items():
         value = str(config.get(key, default)).strip().lower()
@@ -53,7 +53,7 @@ def theme_css():
 
 
 def script_json(data):
-    """JSON da mettere dentro <script>: niente "</script>" che chiude il tag."""
+    """JSON to put inside <script>: no "</script>" closing the tag."""
     return (
         json.dumps(data, ensure_ascii=False)
         .replace("</", "<\\/")
@@ -74,7 +74,7 @@ def html_escape(text):
 
 
 def try_serve_font(handler, path):
-    """Serve i caratteri da static/fonts. True se la richiesta era per un carattere."""
+    """Serve fonts from static/fonts. True if the request was for a font."""
     m = FONT_RE.match(path)
     if not m:
         return False

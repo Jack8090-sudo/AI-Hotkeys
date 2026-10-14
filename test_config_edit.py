@@ -1,6 +1,6 @@
-"""Test di config_edit.set_values: modifica config.ini senza rovinarlo.
+"""Test for config_edit.set_values: edit config.ini without breaking it.
 
-Uso: python test_config_edit.py
+Usage: python test_config_edit.py
 """
 
 import tempfile
@@ -10,9 +10,9 @@ from pathlib import Path
 import config_edit
 
 SAMPLE = (
-    "﻿; commento in cima\r\n"
+    "﻿; top comment\r\n"
     "[qwen]\r\n"
-    "; modello\r\n"
+    "; model\r\n"
     "model = qwen3.5:9b\r\n"
     "\r\n"
     "[aspetto]\r\n"
@@ -30,16 +30,16 @@ class SetValuesTest(unittest.TestCase):
             path.write_bytes(SAMPLE.encode("utf-8"))
 
             config_edit.set_values(path, {
-                "aspetto": {"tema": "chiaro", "colore": "menta"},   # cambia + nuova chiave
-                "tasti": {"spiega": "F8"},                          # sezione nuova
+                "aspetto": {"tema": "chiaro", "colore": "menta"},   # change + new key
+                "tasti": {"spiega": "F8"},                          # new section
             })
 
             raw = path.read_bytes()
             self.assertTrue(raw.startswith(config_edit.BOM))
-            self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))      # solo CRLF
+            self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))      # CRLF only
             text = raw.decode("utf-8-sig")
-            self.assertIn("; commento in cima", text)
-            self.assertIn("; modello", text)
+            self.assertIn("; top comment", text)
+            self.assertIn("; model", text)
 
             values = config_edit.read_values(path)
             self.assertEqual(values["aspetto"], {"tema": "chiaro", "colore": "menta"})
@@ -47,7 +47,7 @@ class SetValuesTest(unittest.TestCase):
             self.assertEqual(values["qwen"], {"model": "qwen3.5:9b"})
             self.assertEqual(values["obsidian"], {"window_title": "To-Do"})
 
-            # la chiave nuova sta dentro [aspetto], prima di [obsidian]
+            # the new key stays inside [aspetto], before [obsidian]
             self.assertLess(text.index("colore = menta"), text.index("[obsidian]"))
 
 

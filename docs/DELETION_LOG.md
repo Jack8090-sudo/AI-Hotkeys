@@ -22,7 +22,7 @@
 
 ### Remaining (manual review needed, DO NOT auto-remove)
 - `websearch.py::LAST_DECISION` — write-only diagnostic global (`make_queries` writes, nobody reads). Could be useful for debugging; needs owner decision.
-- `config.ini` missing keys present in `config.esempio.ini` (`[tasti]`, `aspetto.larghezza/mostra_originale/avanzamento`) — falls back to defaults in `settings.py`; verify whether example should be the source of truth.
+- `config.ini` missing keys present in `config.example.ini` (`[tasti]`, `aspetto.larghezza/mostra_originale/avanzamento`) — falls back to defaults in `settings.py`; verify whether example should be the source of truth.
 - `__pycache__/` dirs (`root`, `actions/`) — regenerable, gitignored presumably; not deleted in working tree.
 
 ### Impact

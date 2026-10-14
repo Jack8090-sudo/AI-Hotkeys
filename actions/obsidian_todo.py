@@ -1,16 +1,16 @@
 """
-AI-Hotkeys — Modalità speciale per "To-Do List.md" di Obsidian.
+AI-Hotkeys — special mode for Obsidian's "To-Do List.md".
 
-Uso:
-    python obsidian_todo.py [percorso del file]   (default: TODO_FILE)
+Usage:
+    python obsidian_todo.py [file path]   (default: TODO_FILE)
 
-Codici di uscita:
-    0 = file aggiornato
-    1 = errore (Ollama, file non trovato, ...)
-    2 = controllo di sicurezza fallito, file originale NON modificato
+Exit codes:
+    0 = file updated
+    1 = error (Ollama, file not found, ...)
+    2 = safety check failed, original file NOT modified
 
-L'esito viene scritto anche in work\\obsidian_status.txt
-(prima riga: OK oppure ERRORE), così AutoHotkey può mostrarlo.
+The outcome is also written to work\\obsidian_status.txt
+(first line: OK or ERRORE), so AutoHotkey can show it.
 """
 
 import os
@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import qwen_client
 
 
-# Il percorso si cambia in config.ini (todo_file = ...)
+# The path is changed in config.ini (todo_file = ...)
 TODO_FILE = qwen_client.todo_file()
 
 WORK_DIR = qwen_client.WORK_DIR
@@ -145,7 +145,7 @@ FILE ATTUALE:
 
 
 # =========================================================
-# ESITO
+# OUTCOME
 # =========================================================
 
 class SafetyError(Exception):
@@ -175,21 +175,21 @@ def ask_qwen(testo):
 
 
 # =========================================================
-# NORMALIZZAZIONE
+# NORMALIZATION
 # =========================================================
 
 def normalize(text):
     text = text.replace("\r\n", "\n").strip()
 
-    # Eventuale ragionamento del modello
+    # Possible model reasoning
     text = re.sub(r"(?s)^<think>.*?</think>\s*", "", text)
 
-    # Risultato racchiuso in ```markdown ... ```
+    # Result wrapped in ```markdown ... ```
     fence = re.match(r"(?s)^```[a-zA-Z]*\n(.*)\n```$", text)
     if fence:
         text = fence.group(1).strip()
 
-    # Titoli dei livelli: "## 🟢", "#🟢 " ... -> "# 🟢"
+    # Level headings: "## 🟢", "#🟢 " ... -> "# 🟢"
     for level in LEVELS:
         text = re.sub(
             rf"(?m)^#{{1,3}}[ \t]*{level}[ \t]*$",
@@ -197,7 +197,7 @@ def normalize(text):
             text,
         )
 
-    # Titoli delle categorie (anche senza il selettore emoji U+FE0F)
+    # Category headings (even without the U+FE0F emoji selector)
     text = re.sub(r"(?m)^#{2,4}[ \t]*🐛[ \t]*Bugs?[ \t]*$", "### 🐛 Bug", text)
     text = re.sub(r"(?m)^#{2,4}[ \t]*⚙\ufe0f?[ \t]*Game[ \t]*Design[ \t]*$", "### ⚙️ Game Design", text)
     text = re.sub(r"(?m)^#{2,4}[ \t]*💡[ \t]*Ide[ae][ \t]*$", "### 💡 Idea", text)
@@ -206,7 +206,7 @@ def normalize(text):
 
 
 # =========================================================
-# CONTROLLI DI SICUREZZA
+# SAFETY CHECKS
 # =========================================================
 
 TASK_RE = re.compile(r"(?m)^[ \t]*(?:[-*+]|\d+[.)])[ \t]+\[(.)\][ \t]")
@@ -225,14 +225,14 @@ def task_states(text):
 
 
 def missing(original_items, new_items):
-    """Elementi presenti nell'originale che mancano (o sono meno) nel nuovo."""
+    """Items present in the original that are missing (or fewer) in the new text."""
     orig = Counter(original_items)
     new = Counter(new_items)
     return sorted(k for k, n in orig.items() if new[k] < n)
 
 
 def strip_code(text):
-    # Nei blocchi di codice "#" non sono tag e i link non contano.
+    # Inside code blocks "#" are not tags and links do not count.
     text = re.sub(r"(?s)```.*?```", "", text)
     return re.sub(r"`[^`\n]*`", "", text)
 
@@ -245,7 +245,7 @@ def check_structure(text):
     for level in LEVELS:
         found = [i for i, line in enumerate(lines) if line.strip() == f"# {level}"]
         if len(found) != 1:
-            errors.append(f"il livello '# {level}' compare {len(found)} volte invece di 1")
+            errors.append(f"level '# {level}' appears {len(found)} times instead of 1")
         else:
             level_pos[level] = found[0]
 
@@ -254,14 +254,14 @@ def check_structure(text):
 
     order = [level_pos[l] for l in LEVELS]
     if order != sorted(order):
-        return ["i livelli non sono nell'ordine 🟢 → 🟡 → 🔴"]
+        return ["levels are not in order 🟢 → 🟡 → 🔴"]
 
     bounds = order + [len(lines)]
 
-    # Nessuna categoria prima del primo livello
+    # No category before the first level
     for line in lines[:bounds[0]]:
         if line.strip() in CATEGORIES:
-            errors.append(f"la categoria '{line.strip()}' si trova prima del livello 🟢")
+            errors.append(f"category '{line.strip()}' is before level 🟢")
 
     for i, level in enumerate(LEVELS):
         section = [l.strip() for l in lines[bounds[i] + 1:bounds[i + 1]]]
@@ -273,9 +273,9 @@ def check_structure(text):
                 n = found.count(cat)
                 if n != 1:
                     counted = True
-                    errors.append(f"sotto '# {level}' la categoria '{cat}' compare {n} volte invece di 1")
+                    errors.append(f"under '# {level}' category '{cat}' appears {n} times instead of 1")
             if not counted:
-                errors.append(f"sotto '# {level}' le categorie non sono nell'ordine Bug → Game Design → Idea")
+                errors.append(f"under '# {level}' categories are not in order Bug → Game Design → Idea")
 
     return errors
 
@@ -284,52 +284,52 @@ def validate(original, new):
     errors = check_structure(new)
 
     if re.search(r"(?m)^#+[ \t]*💡[ \t]*Idee[ \t]*$", new):
-        errors.append("trovata la categoria 'Idee' invece di 'Idea'")
+        errors.append("found category 'Idee' instead of 'Idea'")
 
-    # --- attività e checkbox ---
+    # --- tasks and checkboxes ---
     o_tasks, n_tasks = task_states(original), task_states(new)
     if sum(o_tasks.values()) != sum(n_tasks.values()):
         errors.append(
-            f"attività con checkbox: {sum(o_tasks.values())} nell'originale, "
-            f"{sum(n_tasks.values())} nel risultato"
+            f"checkbox tasks: {sum(o_tasks.values())} in the original, "
+            f"{sum(n_tasks.values())} in the result"
         )
     for state in sorted(set(o_tasks) | set(n_tasks)):
         if o_tasks[state] != n_tasks[state]:
-            label = {"x": "completate [x]", " ": "da fare [ ]"}.get(state, f"con stato [{state}]")
-            errors.append(f"attività {label}: {o_tasks[state]} prima, {n_tasks[state]} dopo")
+            label = {"x": "done [x]", " ": "to do [ ]"}.get(state, f"with state [{state}]")
+            errors.append(f"tasks {label}: {o_tasks[state]} before, {n_tasks[state]} after")
 
     o_list, n_list = len(LIST_RE.findall(original)), len(LIST_RE.findall(new))
     if n_list < o_list:
-        errors.append(f"elementi di elenco: {o_list} nell'originale, solo {n_list} nel risultato")
+        errors.append(f"list items: {o_list} in the original, only {n_list} in the result")
 
-    # --- link, immagini, URL, tag ---
+    # --- links, images, URLs, tags ---
     o_clean, n_clean = strip_code(original), strip_code(new)
 
     lost = missing(URL_RE.findall(o_clean), URL_RE.findall(n_clean))
     if lost:
-        errors.append("URL persi: " + ", ".join(lost[:5]))
+        errors.append("lost URLs: " + ", ".join(lost[:5]))
 
-    o_wiki = [("immagine " if e else "") + t.strip() for e, t in WIKILINK_RE.findall(o_clean)]
-    n_wiki = [("immagine " if e else "") + t.strip() for e, t in WIKILINK_RE.findall(n_clean)]
+    o_wiki = [("image " if e else "") + t.strip() for e, t in WIKILINK_RE.findall(o_clean)]
+    n_wiki = [("image " if e else "") + t.strip() for e, t in WIKILINK_RE.findall(n_clean)]
     lost = missing(o_wiki, n_wiki)
     if lost:
-        errors.append("link/immagini Obsidian persi o modificati: " + ", ".join(f"[[{x}]]" for x in lost[:5]))
+        errors.append("lost or changed Obsidian links/images: " + ", ".join(f"[[{x}]]" for x in lost[:5]))
 
-    o_md = [("immagine " if e else "") + t for e, t in MD_LINK_RE.findall(o_clean)]
-    n_md = [("immagine " if e else "") + t for e, t in MD_LINK_RE.findall(n_clean)]
+    o_md = [("image " if e else "") + t for e, t in MD_LINK_RE.findall(o_clean)]
+    n_md = [("image " if e else "") + t for e, t in MD_LINK_RE.findall(n_clean)]
     lost = missing(o_md, n_md)
     if lost:
-        errors.append("link/immagini Markdown persi o modificati: " + ", ".join(lost[:5]))
+        errors.append("lost or changed Markdown links/images: " + ", ".join(lost[:5]))
 
     lost = missing(TAG_RE.findall(o_clean), TAG_RE.findall(n_clean))
     if lost:
-        errors.append("tag persi: " + ", ".join("#" + t for t in lost[:5]))
+        errors.append("lost tags: " + ", ".join("#" + t for t in lost[:5]))
 
-    # --- risposta troncata ---
+    # --- truncated answer ---
     if len(original) > 300 and len(new) < len(original) * 0.6:
         errors.append(
-            f"il risultato è troppo corto ({len(new)} caratteri contro {len(original)}): "
-            "probabilmente è stato troncato"
+            f"result is too short ({len(new)} chars vs {len(original)}): "
+            "probably truncated"
         )
 
     return errors
@@ -344,7 +344,7 @@ def main():
     WORK_DIR.mkdir(parents=True, exist_ok=True)
 
     if not todo_file.exists():
-        write_status(False, [f"File non trovato: {todo_file}"])
+        write_status(False, [f"File not found: {todo_file}"])
         return 1
 
     raw = todo_file.read_bytes()
@@ -354,11 +354,11 @@ def main():
     try:
         risposta = ask_qwen(original)
     except Exception as e:
-        write_status(False, [f"Errore Ollama: {e}", "Il file originale NON è stato modificato."])
+        write_status(False, [f"Ollama error: {e}", "The original file was NOT modified."])
         return 1
 
     if not risposta.strip():
-        write_status(False, ["Qwen ha restituito una risposta vuota.", "Il file originale NON è stato modificato."])
+        write_status(False, ["Qwen returned an empty answer.", "The original file was NOT modified."])
         return 1
 
     risposta = normalize(risposta)
@@ -367,18 +367,18 @@ def main():
     errors = validate(original, risposta)
     if errors:
         write_status(False, (
-            ["Controllo di sicurezza fallito:"]
+            ["Safety check failed:"]
             + ["• " + e for e in errors[:8]]
-            + ["", "Il file originale NON è stato modificato.",
-               f"Il risultato di Qwen è in {OUTPUT_FILE}"]
+            + ["", "The original file was NOT modified.",
+               f"Qwen's output is in {OUTPUT_FILE}"]
         ))
         return 2
 
-    # Il file è stato modificato mentre Qwen lavorava? Allora non tocchiamo nulla.
+    # Was the file modified while Qwen was working? Then touch nothing.
     if todo_file.read_bytes() != raw:
         write_status(False, [
-            "Il file è stato modificato mentre Qwen lavorava.",
-            "Il file originale NON è stato modificato: premi di nuovo PgUp.",
+            "The file was modified while Qwen was working.",
+            "The original file was NOT modified: press PgUp again.",
         ])
         return 2
 
@@ -387,7 +387,7 @@ def main():
     backup_file = todo_file.with_name(f"{todo_file.stem}.backup_{timestamp}{todo_file.suffix}")
     shutil.copy2(todo_file, backup_file)
 
-    # Scrittura atomica: prima un file temporaneo, poi la sostituzione.
+    # Atomic write: first a temp file, then the replacement.
     tmp_file = todo_file.with_name("." + todo_file.name + ".tmp")
     with open(tmp_file, "w", encoding="utf-8", newline=newline) as f:
         f.write(risposta)
@@ -395,8 +395,8 @@ def main():
 
     tasks = sum(task_states(original).values())
     write_status(True, [
-        "To-Do List aggiornata.",
-        f"Attività controllate: {tasks}",
+        "To-Do List updated.",
+        f"Tasks checked: {tasks}",
         f"Backup: {backup_file.name}",
     ])
     return 0

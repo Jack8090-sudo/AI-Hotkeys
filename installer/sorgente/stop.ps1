@@ -1,4 +1,4 @@
-# Chiude AI-Hotkeys (AutoHotkey con main.ahk e Python del programma) prima di aggiornare/disinstallare
+# Closes AI-Hotkeys (AutoHotkey running main.ahk and the bundled Python) before updating/uninstalling
 param([string]$Dir)
 $main = (Join-Path $Dir 'main.ahk').ToLower()
 $py   = (Join-Path $Dir 'python').ToLower()

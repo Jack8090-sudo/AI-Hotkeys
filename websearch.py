@@ -1,14 +1,14 @@
 """
-AI-Hotkeys — ricerca web con SearXNG (in locale) per il tasto End.
+AI-Hotkeys — web search with local SearXNG for the End key.
 
-Flusso:
-  1. Qwen scrive 1-2 query di ricerca a partire dal testo selezionato.
-  2. SearXNG (http://127.0.0.1:8888) restituisce i risultati in JSON.
-  3. Delle prime pagine si legge anche il testo, non solo l'anteprima.
-  4. Le fonti vanno nel prompt numerate [1], [2]...; nella risposta le
-     citazioni diventano link e in fondo si aggiunge l'elenco "Fonti".
+Flow:
+  1. Qwen writes 1-2 search queries from the selected text.
+  2. SearXNG (http://127.0.0.1:8888) returns results as JSON.
+  3. The text of the top pages is read too, not just the snippet.
+  4. Sources go into the prompt numbered [1], [2]...; in the answer
+     citations become links and a "Sources" list is appended at the end.
 
-Se SearXNG non risponde, End funziona come prima (senza web).
+If SearXNG does not respond, End works as before (no web).
 """
 
 import json
@@ -41,7 +41,7 @@ def _int(value, default):
         return default
 
 
-# web_search: auto (cerca solo quando serve) · always (cerca sempre) · false
+# web_search: auto (search only when needed) · always (always search) · false
 _MODE = (CFG.get("web_search") or "auto").strip().lower()
 ENABLED = _MODE not in ("0", "false", "no", "off", "")
 ALWAYS = _MODE in ("always", "sempre")
@@ -50,8 +50,8 @@ SEARX_URL = (CFG.get("searxng_url") or "http://127.0.0.1:8888").rstrip("/")
 MAX_RESULTS = _int(CFG.get("results"), 5)
 PAGES_TO_READ = _int(CFG.get("pages_to_read"), 3)
 
-# Budget delle fonti nel prompt, in caratteri (4 caratteri ≈ 1 token):
-# con NUM_CTX = 16384 resta spazio per il testo selezionato e per la risposta.
+# Sources budget in the prompt, in characters (4 chars ≈ 1 token):
+# with NUM_CTX = 16384 there is room left for the selected text and the answer.
 SOURCES_BUDGET = 10000
 TOTAL_INPUT_CHARS = 36000
 
@@ -62,7 +62,7 @@ USER_AGENT = (
 
 
 # =========================================================
-# STATO (letto da main.ahk per il fumetto vicino al mouse)
+# STATUS (read by main.ahk for the tooltip near the mouse)
 # =========================================================
 
 def status(text):
@@ -79,7 +79,7 @@ def status(text):
 
 def _get(url, timeout):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    # Niente proxy di sistema per 127.0.0.1
+    # No system proxy for 127.0.0.1
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     return opener.open(req, timeout=timeout)
 
@@ -93,13 +93,13 @@ def is_running(timeout=1.5):
 
 
 def ensure_running(wait=25):
-    """Se SearXNG è spento prova ad avviarlo e aspetta che risponda."""
+    """If SearXNG is off, try to start it and wait until it responds."""
     if is_running():
         return True
     if not LAUNCHER.exists():
         return False
 
-    status("Avvio il motore di ricerca…")
+    status("Starting the search engine…")
     python = Path(sys.executable)
     pythonw = python.with_name("pythonw.exe")
     exe = str(pythonw if pythonw.exists() else python)
@@ -125,8 +125,8 @@ def ensure_running(wait=25):
         time.sleep(0.5)
         if is_running():
             return True
-        # Il lanciatore è uscito senza avviare niente (errore, o porta occupata
-        # da un altro programma): inutile aspettare. Dettagli in work\searxng.log
+        # The launcher exited without starting anything (error, or port taken
+        # by another program): no point waiting. Details in work\searxng.log
         if proc.poll() is not None:
             return is_running()
     return False
@@ -150,25 +150,25 @@ def searx_search(query, timeout=12):
 
 
 # =========================================================
-# TESTO DELLE PAGINE
+# PAGE TEXT
 # =========================================================
 
 class _TextExtractor(HTMLParser):
-    """Estrae il testo leggibile: paragrafi, titoli, elenchi, codice, tabelle.
+    """Extracts readable text: paragraphs, headings, lists, code, tables.
 
-    - Le tabelle diventano righe "cella | cella | cella" (le celle da sole
-      sono troppo corte e andrebbero perse).
-    - Se la pagina ha un contenuto principale (<main> o <article>) abbastanza
-      lungo, si tiene solo quello: menu, banner e barre laterali restano fuori.
-    - include_noscript: alcuni siti (es. il DevForum di Roblox, fatto con
-      Discourse) mettono tutto il testo dentro <noscript>.
+    - Tables become "cell | cell | cell" rows (bare cells
+      are too short and would be lost).
+    - If the page has a long enough main content (<main> or <article>),
+      only that is kept: menus, banners and sidebars stay out.
+    - include_noscript: some sites (e.g. the Roblox DevForum, built with
+      Discourse) put all the text inside <noscript>.
     """
 
     SKIP = {"script", "style", "nav", "footer", "header", "aside", "form", "svg",
             "button", "select", "template", "iframe", "dialog"}
     BLOCK = {"p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "blockquote",
              "dd", "dt", "figcaption", "summary", "caption"}
-    # Tag che separano parole: senza uno spazio "<li>A</li><li>B</li>" diventa "AB"
+    # Tags that separate words: without a space "<li>A</li><li>B</li>" becomes "AB"
     SPACE = {"br", "div", "li", "p", "td", "th", "dd", "dt", "tr", "img", "hr"}
 
     def __init__(self, include_noscript=False):
@@ -179,9 +179,9 @@ class _TextExtractor(HTMLParser):
         self.main = 0
         self.article = 0
         self.buf = []
-        self.row = None    # celle della riga di tabella in corso
-        self.cell = None   # testo della cella in corso
-        self.parts = []    # (testo, dentro_main, dentro_article)
+        self.row = None    # cells of the current table row
+        self.cell = None   # text of the current cell
+        self.parts = []    # (text, inside_main, inside_article)
 
     # -----------------------------------------------------
 
@@ -259,7 +259,7 @@ class _TextExtractor(HTMLParser):
     def _flush(self):
         text = " ".join("".join(self.buf).split())
         self.buf = []
-        # Scarta frammenti di menu e pulsanti
+        # Drop menu and button fragments
         if len(text) >= 40 or (text and text[-1:] in ".:?!"):
             self._add(text)
 
@@ -272,7 +272,7 @@ class _TextExtractor(HTMLParser):
         self._end_cell()
         if self.row:
             cells = [c for c in self.row if c]
-            # una riga con una sola cella corta è quasi sempre un'intestazione vuota
+            # a single short-cell row is almost always an empty header
             if len(cells) > 1 or (cells and len(cells[0]) >= 40):
                 self._add(" | ".join(cells))
         self.row = None
@@ -281,7 +281,7 @@ class _TextExtractor(HTMLParser):
         self._flush()
         self._end_row()
         parts = self.parts
-        for flag in (1, 2):   # prima <main>, poi <article>
+        for flag in (1, 2):   # <main> first, then <article>
             chosen = [p for p in parts if p[flag]]
             if sum(len(p[0]) for p in chosen) >= 500:
                 parts = chosen
@@ -294,7 +294,7 @@ class _TextExtractor(HTMLParser):
         return "\n".join(out)
 
 
-# Banner dei cookie, inviti a iscriversi, avvisi legali
+# Cookie banners, signup invites, legal notices
 BOILERPLATE_RE = re.compile(
     r"\b(cookies?|consent|consenso|privacy policy|informativa|user agreement|"
     r"terms of (?:service|use)|termini e condizioni|sign in|sign up|log in|"
@@ -317,7 +317,7 @@ def html_to_text(html):
         pass
     text = parser.text()
     if len(text) < 400 and "<noscript" in html:
-        # Discourse e simili: il contenuto per chi non ha JavaScript sta in <noscript>
+        # Discourse and similar: the content for users without JavaScript lives in <noscript>
         parser = _TextExtractor(include_noscript=True)
         try:
             parser.feed(html)
@@ -330,7 +330,7 @@ def html_to_text(html):
     return text
 
 
-# Pagine più lunghe di così non servono (e un PDF enorme non va scaricato)
+# Pages longer than this are not needed (and a huge PDF should not be downloaded)
 MAX_PAGE_BYTES = 3_000_000
 MAX_PAGE_TEXT = 60_000
 
@@ -338,8 +338,7 @@ _cffi_requests = None
 
 
 def _cffi():
-    """curl_cffi (incluso con SearXNG) si presenta come un vero Chrome: molti
-    siti bloccano le richieste di Python (errore 403) ma non quelle di un browser."""
+    """curl_cffi (bundled with SearXNG) poses as a real Chrome: many sites block Python requests (403 error) but not browser ones."""
     global _cffi_requests
     if _cffi_requests is None:
         lib = str(BASE_DIR / "searxng" / "lib")
@@ -359,7 +358,7 @@ def _charset(ctype, default="utf-8"):
 
 
 def _download(url, timeout):
-    """Restituisce (testo html o None, content-type)."""
+    """Returns (html text or None, content-type)."""
     cr = _cffi()
     if cr:
         try:
@@ -378,7 +377,7 @@ def _download(url, timeout):
             finally:
                 r.close()
         except Exception:
-            pass  # si riprova con urllib
+            pass  # retry with urllib
 
     try:
         with _get(url, timeout) as r:
@@ -392,7 +391,7 @@ def _download(url, timeout):
 
 
 def fetch_page_text(url, timeout=8):
-    """Tutto il testo leggibile della pagina ("" se non si riesce a leggerla)."""
+    """All readable text of the page ("" if it cannot be read)."""
     html, ctype = _download(url, timeout)
     if not html:
         return ""
@@ -401,7 +400,7 @@ def fetch_page_text(url, timeout=8):
 
 
 # =========================================================
-# SCELTA DEI PEZZI UTILI DI UNA PAGINA
+# PICKING THE USEFUL PARTS OF A PAGE
 # =========================================================
 
 _STOPWORDS = set("""
@@ -423,11 +422,11 @@ def _terms(text):
 
 
 def select_relevant(text, query_terms, text_terms, max_chars):
-    """Sceglie i paragrafi più utili invece dei primi max_chars caratteri.
+    """Pick the most useful paragraphs instead of the first max_chars characters.
 
-    Il primo paragrafo (di solito titolo o introduzione) resta sempre; poi
-    entrano i paragrafi con più parole in comune con le query (peso 2) e con
-    il testo selezionato (peso 1), rimessi nell'ordine della pagina.
+    The first paragraph (usually title or introduction) is always kept; then
+    paragraphs with the most words in common with the queries (weight 2) and with
+    the selected text (weight 1) are added, restored to page order.
     """
     paras = [p for p in text.split("\n") if p.strip()]
     if not paras:
@@ -462,7 +461,7 @@ def select_relevant(text, query_terms, text_terms, max_chars):
         chosen[i] = p
         budget -= len(p) + 1
 
-    # Se avanza spazio, il seguito dell'inizio della pagina
+    # If space remains, the rest from the start of the page
     i = 1
     while budget >= 80 and i < len(paras):
         if i not in chosen:
@@ -484,25 +483,25 @@ def select_relevant(text, query_terms, text_terms, max_chars):
 # QUERY
 # =========================================================
 
-# "NO", "**NO**", "No." e anche "NO, il testo si spiega da sé": una query
-# vera non comincia con la parola "no" ("node js" non viene toccato).
+# "NO", "**NO**", "No." and also "NO, il testo si spiega da sé": a real
+# query never starts with the word "no" ("node js" is untouched).
 NO_RE = re.compile(r"^\W*no\b", re.IGNORECASE)
 
 
 # ---------------------------------------------------------
-# Termini tecnici riconoscibili senza chiedere al modello
+# Technical terms recognizable without asking the model
 # ---------------------------------------------------------
-# Un testo con nomi come StreamingEnabled, DataStore:GetAsync(),
-# ServerScriptService.Main:42: o player_data parla di cose precise che si
-# trovano sul web: lì la ricerca si fa sempre. Il modello da solo tende a
-# dire NO anche per questi (lo hanno mostrato i test).
+# A text with names like StreamingEnabled, DataStore:GetAsync(),
+# ServerScriptService.Main:42: or player_data talks about specific things that
+# can be found on the web: there the search always runs. The model alone tends
+# to say NO even for these (as tests showed).
 
-# Nomi in CamelCase così comuni che da soli non meritano una ricerca
+# CamelCase names so common they alone do not deserve a search
 _COMMON_NAMES = {
     "youtube", "iphone", "ipad", "imac", "macbook", "airpods", "whatsapp", "tiktok",
     "linkedin", "playstation", "powerpoint", "onedrive", "chatgpt", "paypal", "facetime",
 }
-# Sigle di uso quotidiano
+# Everyday acronyms
 _COMMON_ACRONYMS = {
     "OK", "NO", "SI", "TV", "PC", "PDF", "USB", "CEO", "FAQ", "LOL", "BTW", "FYI", "ASAP",
     "DM", "PM", "AM", "GB", "MB", "KB", "TB", "HD", "FPS", "IVA", "UE", "USA", "UK", "ID",
@@ -510,19 +509,19 @@ _COMMON_ACRONYMS = {
 }
 
 _TECH_PATTERNS = [
-    # Errore con numero di riga: "Script:42: attempt to index nil" -> il messaggio
+    # Line-number error: "Script:42: attempt to index nil" -> the message
     re.compile(r"\w:\d+:\s*([^\n]{5,90})"),
-    # Accesso a membri con almeno una maiuscola: game:GetService, player.Name, Workspace.Car.Script
+    # Member access with at least one uppercase letter: game:GetService, player.Name, Workspace.Car.Script
     re.compile(r"\b[A-Za-z_]\w+(?:[.:][A-Za-z_]\w+)+"),
-    # Chiamata di funzione: GetAsync(, pcall(
+    # Function call: GetAsync(, pcall(
     re.compile(r"\b[A-Za-z_]\w{2,}\("),
     # CamelCase: StreamingEnabled, MemoryStoreService, gRPC, getAsync
     re.compile(r"\b(?:[A-Z][a-z0-9]+[A-Z]\w*|[a-z]+[A-Z]\w*)\b"),
     # snake_case: player_data, max_retries
     re.compile(r"\b[a-z][a-z0-9]*_[a-z0-9_]+\b"),
-    # Nomi di file di codice
+    # Code file names
     re.compile(r"\b\w+\.(?:lua|luau|py|js|ts|json|rbxl|rbxm|cs|cpp|java|go|rs|yml|yaml|toml)\b"),
-    # Sigle tecniche: LOD, TTL, HTTP, RTX
+    # Technical acronyms: LOD, TTL, HTTP, RTX
     re.compile(r"\b[A-Z][A-Z0-9]{1,5}\b"),
 ]
 
@@ -531,13 +530,13 @@ _KEYWORDS = {"function", "if", "for", "while", "return", "elseif", "and", "or", 
 
 
 def technical_terms(testo):
-    """I termini tecnici riconosciuti nel testo (lista vuota se nessuno)."""
+    """The technical terms found in the text (empty list if none)."""
     found = []
     for i, pattern in enumerate(_TECH_PATTERNS):
         for m in pattern.finditer(testo):
             tok = (m.group(1) if i == 0 else m.group(0)).strip().rstrip("(")
             if i == 1 and not re.search(r"[A-Z]", tok):
-                continue          # "www.sito.it", "e.g": niente maiuscole, niente codice
+                continue          # "www.sito.it", "e.g": no uppercase, no code
             if i == 1 and any(len(part) < 2 for part in re.split(r"[.:]", tok)):
                 continue          # "U.S", "p.es"
             if i == 2 and tok in _KEYWORDS:
@@ -552,9 +551,9 @@ def technical_terms(testo):
 
 
 def decide_queries(testo):
-    """Decide se cercare e con quali query. Restituisce un dizionario con
-    'query' (vuota = niente ricerca), 'via' (come si è deciso), 'termini'
-    e 'risposta' (la risposta grezza di Qwen)."""
+    """Decide whether to search and with which queries. Returns a dict with
+    'query' (empty = no search), 'via' (how it was decided), 'termini'
+    and 'risposta' (Qwen's raw answer)."""
     terms = technical_terms(testo)
     force = bool(terms) or ALWAYS
     try:
@@ -564,8 +563,8 @@ def decide_queries(testo):
     said_no, queries = parse_queries(answer)
 
     if force and not queries:
-        # Il modello ha detto NO lo stesso: si cerca con i termini trovati,
-        # o con l'inizio del testo
+        # The model said NO anyway: search with the found terms,
+        # or with the start of the text
         if terms:
             queries = [" ".join(terms[:5])]
         else:
@@ -575,24 +574,24 @@ def decide_queries(testo):
     return {"query": queries, "via": via, "termini": terms, "risposta": answer}
 
 
-LAST_DECISION = {}   # l'ultima decisione presa (per la diagnostica)
+LAST_DECISION = {}   # the last decision taken (for diagnostics)
 
 
 def make_queries(testo):
-    """Le query da cercare, o [] quando il testo si spiega da sé: per un
-    pensiero o un appunto personale le pagine trovate sarebbero fuori tema
-    e la spiegazione finirebbe per parlare d'altro."""
+    """The queries to search, or [] when the text explains itself: for a
+    personal thought or note the found pages would be off-topic
+    and the explanation would end up talking about something else."""
     global LAST_DECISION
     LAST_DECISION = decide_queries(testo)
     return LAST_DECISION["query"]
 
 
-# Etichette che il modello a volte ripete dagli esempi del prompt
+# Labels the model sometimes repeats from the prompt examples
 LABEL_RE = re.compile(r"^\s*(?:risposta|query(?:\s+di\s+ricerca)?|answer)\s*:\s*", re.IGNORECASE)
 
 
 def parse_queries(answer):
-    """Legge la risposta di Qwen. Restituisce (ha_detto_no, query)."""
+    """Reads Qwen's answer. Returns (said_no, queries)."""
     queries = []
     for line in answer.replace("\r", "").split("\n"):
         line = LABEL_RE.sub("", line)
@@ -610,17 +609,17 @@ def parse_queries(answer):
 
 
 # =========================================================
-# RICERCA COMPLETA
+# FULL SEARCH
 # =========================================================
 
 def gather_sources(testo):
-    """Restituisce (fonti, query). fonti = [] se la ricerca non è possibile."""
+    """Returns (sources, queries). sources = [] when searching is not possible."""
     if not ENABLED:
         return [], []
 
-    # Prima si decide se la ricerca serve: per un testo che si spiega da sé
-    # non si cerca niente (e non si avvia SearXNG per nulla).
-    status("Valuto se serve cercare…")
+    # First decide whether searching is needed: for a text that explains itself
+    # nothing is searched (and SearXNG is not started at all).
+    status("Checking whether a search is needed…")
     queries = make_queries(testo)
     if not queries:
         return [], []
@@ -628,7 +627,7 @@ def gather_sources(testo):
     if not ensure_running():
         return [], queries
 
-    status("Cerco sul web: " + queries[0][:60])
+    status("Searching the web: " + queries[0][:60])
     results, seen = [], set()
     per_query = []
     with ThreadPoolExecutor(max_workers=len(queries)) as ex:
@@ -639,7 +638,7 @@ def gather_sources(testo):
             except Exception:
                 per_query.append([])
 
-    # Alterna i risultati delle query: 1a della prima, 1a della seconda, ...
+    # Alternate query results: 1st of the first, 1st of the second, ...
     for i in range(max((len(r) for r in per_query), default=0)):
         for r in per_query:
             if i < len(r):
@@ -652,11 +651,11 @@ def gather_sources(testo):
     if not results:
         return [], queries
 
-    # Testo delle pagine, in parallelo. Se ne scaricano un paio in più:
-    # se una pagina è bloccata (403) o è un PDF, al suo posto entra la successiva.
+    # Page texts, in parallel. A couple extra are downloaded:
+    # if a page is blocked (403) or is a PDF, the next one takes its place.
     to_fetch = results[: min(len(results), PAGES_TO_READ + 2)]
     if to_fetch and PAGES_TO_READ > 0:
-        status(f"Leggo {min(len(to_fetch), PAGES_TO_READ)} pagine…")
+        status(f"Reading {min(len(to_fetch), PAGES_TO_READ)} pages…")
         with ThreadPoolExecutor(max_workers=len(to_fetch)) as ex:
             texts = list(ex.map(lambda r: fetch_page_text(r["url"]), to_fetch))
         read = 0
@@ -665,8 +664,8 @@ def gather_sources(testo):
                 r["text"] = t
                 read += 1
 
-    # Spazio nel prompt: le anteprime restano corte, le pagine lette si
-    # dividono il resto e ne entrano solo i pezzi più utili.
+    # Space in the prompt: snippets stay short, read pages
+    # share the rest and only the most useful parts go in.
     budget = min(SOURCES_BUDGET, max(2000, TOTAL_INPUT_CHARS - len(testo)))
     snippets = [r for r in results if not r.get("text")]
     pages = [r for r in results if r.get("text")]
@@ -686,14 +685,14 @@ def gather_sources(testo):
 
 
 # ---------------------------------------------------------
-# Tipo di fonte: un forum non vale quanto la documentazione
+# Source type: a forum is not worth as much as documentation
 # ---------------------------------------------------------
 
 _FORUM_HINTS = ("devforum.", "forum", "reddit.com", "stackoverflow.com", "stackexchange.com",
                 "superuser.com", "serverfault.com", "quora.com", "/t/", "community.", "answers.",
                 "discord.com", "discussions.")
-# Solo percorsi tipici della documentazione vera: "/guides/" o "/blog/"
-# li usano anche siti di terzi qualsiasi
+# Only typical real-documentation paths: "/guides/" or "/blog/"
+# are also used by random third-party sites
 _DOC_HINTS = ("/docs/", "/doc/", "/documentation", "/reference/", "/manual/", "/api/")
 _DOC_HOSTS = ("docs.", "developer.", "developers.", "learn.microsoft.com", "luau.org",
               "luau-lang.org", "lua.org", "devdocs.io")
@@ -719,8 +718,8 @@ def source_kind(url):
 
 
 def prefer_docs(results, n, window=10, max_docs=2):
-    """Tra i primi `window` risultati, fino a `max_docs` pagine di documentazione,
-    enciclopedia o siti istituzionali passano davanti; poi il resto in ordine."""
+    """Among the first `window` results, up to `max_docs` documentation,
+    encyclopedia or institutional-site pages go first; then the rest in order."""
     good = ("documentazione", "enciclopedia", "sito istituzionale")
     docs = [r for r in results[:window] if source_kind(r["url"]) in good][:max_docs]
     rest = [r for r in results if r not in docs]
@@ -736,7 +735,7 @@ def sources_block(sources):
 
 
 # =========================================================
-# CITAZIONI
+# CITATIONS
 # =========================================================
 
 CITE_RE = re.compile(r"\[(\d{1,2}(?:\s*[,;]\s*\d{1,2})*)\](?!\()")
@@ -744,13 +743,13 @@ CITE_WS_RE = re.compile(r"([ \t]*)\[(\d{1,2}(?:\s*[,;]\s*\d{1,2})*)\](?!\()")
 
 
 def linkify(text, sources):
-    """[1] → link alla fonte 1. Numeri inesistenti vengono tolti."""
+    """[1] → link to source 1. Non-existent numbers are removed."""
     by_n = {s["n"]: s for s in sources}
 
     def repl(m):
         nums = [int(x) for x in re.split(r"\s*[,;]\s*", m.group(2))]
         links = [f"[\\[{n}\\]]({by_n[n]['url']})" for n in nums if n in by_n]
-        # Citazione inventata: via anche lo spazio prima
+        # Invented citation: the space before it goes too
         return m.group(1) + "".join(links) if links else ""
 
     return CITE_WS_RE.sub(repl, text)
@@ -772,8 +771,8 @@ def _domain(url):
 
 
 def add_sources(text, sources):
-    """Link nelle citazioni + elenco in fondo: prima le fonti citate, poi le
-    altre pagine lette (anche se Qwen non le ha citate, i link servono)."""
+    """Links in citations + list at the end: first the cited sources, then the
+    other pages read (even if Qwen did not cite them, the links are useful)."""
     if not sources:
         return text
 
@@ -781,7 +780,7 @@ def add_sources(text, sources):
     cited = [n for n in cited_numbers(text) if n in by_n]
     read = [s["n"] for s in sources if s.get("text") and s["n"] not in cited]
 
-    # Il modello a volte scrive comunque una sua sezione "Fonti": la togliamo.
+    # The model sometimes still writes its own "Fonti" section: remove it.
     text = re.sub(r"(?ims)^#{1,4}\s*fonti\b.*\Z", "", text).rstrip()
     text = linkify(text, sources)
 
@@ -793,15 +792,15 @@ def add_sources(text, sources):
 
     lines = []
     if cited:
-        lines += ["", "", "## Fonti"] + [line(n) for n in sorted(cited)]
+        lines += ["", "", "## Sources"] + [line(n) for n in sorted(cited)]
     if read:
-        lines += ["", "", "## Altre pagine lette" if cited else "## Pagine lette"]
+        lines += ["", "", "## Other pages read" if cited else "## Pages read"]
         lines += [line(n) for n in sorted(read)]
     return text + "\n".join(lines)
 
 
 def save_sources(sources, queries):
-    # Il testo intero delle pagine non serve al viewer (usa "body")
+    # The viewer does not need full page text (it uses "body")
     light = [{k: v for k, v in s.items() if k != "text"} for s in sources]
     try:
         SOURCES_FILE.write_text(

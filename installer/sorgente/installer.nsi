@@ -1,7 +1,7 @@
 ; =========================================================
 ;  AI-Hotkeys — installer
-;  Installa: script, Python portatile, AutoHotkey v2.
-;  Controlla Ollama (lo installa se manca), NON scarica il modello.
+;  Installs: script, portable Python, AutoHotkey v2.
+;  Checks Ollama (installs it if missing), does NOT download the model.
 ; =========================================================
 
 Unicode true
@@ -23,9 +23,9 @@ ShowInstDetails show
 
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "${APP}"
-VIAddVersionKey "FileDescription" "Installer di ${APP}"
+VIAddVersionKey "FileDescription" "Installer of ${APP}"
 VIAddVersionKey "FileVersion" "${VERSION}"
-VIAddVersionKey "LegalCopyright" "Uso personale"
+VIAddVersionKey "LegalCopyright" "Personal use"
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
@@ -36,13 +36,13 @@ ${StrStr}
 !define MUI_UNICON "payload\app\icon.ico"
 !define MUI_ABORTWARNING
 
-!define MUI_WELCOMEPAGE_TITLE "Installazione di AI-Hotkeys"
-!define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys usa Qwen in locale tramite tre tasti:$\r$\n$\r$\n    PgUp  →  correggi il testo selezionato$\r$\n    PgDn  →  riassumi$\r$\n    End    →  spiega$\r$\n$\r$\nVerranno installati il programma, Python e AutoHotkey (versioni portatili, solo per AI-Hotkeys). Se manca, verrà installato anche Ollama.$\r$\n$\r$\nIl modello ${MODEL} NON viene scaricato: se non lo hai già, alla fine ti verrà indicato il comando."
+!define MUI_WELCOMEPAGE_TITLE "Installing AI-Hotkeys"
+!define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys uses local Qwen with three keys:$\r$\n$\r$\n    PgUp  →  fix the selected text$\r$\n    PgDn  →  summarize$\r$\n    End    →  explain$\r$\n$\r$\nThe program, Python and AutoHotkey will be installed (portable versions, only for AI-Hotkeys). If missing, Ollama will be installed too.$\r$\n$\r$\nThe ${MODEL} model is NOT downloaded: if you do not have it yet, you will be given the command at the end."
 
-!define MUI_FINISHPAGE_TITLE "AI-Hotkeys è installato"
-!define MUI_FINISHPAGE_TEXT "Seleziona del testo e premi PgUp, PgDn o End.$\r$\n$\r$\nSe non hai ancora il modello, apri il Prompt dei comandi ed esegui:$\r$\n    ollama pull ${MODEL}$\r$\n$\r$\nConfigurazione e prompt: tasto destro sull'icona ✦ nella barra delle applicazioni."
+!define MUI_FINISHPAGE_TITLE "AI-Hotkeys is installed"
+!define MUI_FINISHPAGE_TEXT "Select some text and press PgUp, PgDn or End.$\r$\n$\r$\nIf you do not have the model yet, open the Command Prompt and run:$\r$\n    ollama pull ${MODEL}$\r$\n$\r$\nConfiguration and prompts: right-click the ✦ icon in the taskbar."
 !define MUI_FINISHPAGE_RUN
-!define MUI_FINISHPAGE_RUN_TEXT "Avvia AI-Hotkeys ora"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch AI-Hotkeys now"
 !define MUI_FINISHPAGE_RUN_FUNCTION StartApp
 
 !insertmacro MUI_PAGE_WELCOME
@@ -54,26 +54,26 @@ ${StrStr}
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 
-!insertmacro MUI_LANGUAGE "Italian"
+!insertmacro MUI_LANGUAGE "English"
 
 
 ; ---------------------------------------------------------
-; Chiude le istanze in esecuzione (per poter sovrascrivere)
+; Closes the running instances (so files can be overwritten)
 ; ---------------------------------------------------------
 !macro StopRunning
     InitPluginsDir
     File "/oname=$PLUGINSDIR\stop.ps1" "stop.ps1"
-    DetailPrint "Chiusura di AI-Hotkeys se è in esecuzione…"
+    DetailPrint "Closing AI-Hotkeys if it is running…"
     nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\stop.ps1" -Dir "$INSTDIR"'
     Pop $0
 !macroend
 
 
 ; =========================================================
-; SEZIONI
+; SECTIONS
 ; =========================================================
 
-Section "AI-Hotkeys (obbligatorio)" SecMain
+Section "AI-Hotkeys (required)" SecMain
     SectionIn RO
 
     !insertmacro StopRunning
@@ -82,7 +82,7 @@ Section "AI-Hotkeys (obbligatorio)" SecMain
     SetOverwrite on
     File /r "payload\app\*.*"
 
-    ; config.ini: non sovrascrivere la configurazione esistente
+    ; config.ini: do not overwrite the existing configuration
     SetOverwrite off
     File "payload\config.ini"
     SetOverwrite on
@@ -95,14 +95,14 @@ Section "AI-Hotkeys (obbligatorio)" SecMain
 
     CreateDirectory "$INSTDIR\work"
 
-    ; Menu Start
+    ; Start Menu
     CreateDirectory "$SMPROGRAMS\${APP}"
     CreateShortCut "$SMPROGRAMS\${APP}\AI-Hotkeys.lnk" "$INSTDIR\ahk\AutoHotkey64.exe" '"$INSTDIR\main.ahk"' "$INSTDIR\icon.ico"
-    CreateShortCut "$SMPROGRAMS\${APP}\Configurazione.lnk" "notepad.exe" '"$INSTDIR\config.ini"'
-    CreateShortCut "$SMPROGRAMS\${APP}\Modifica i prompt.lnk" "notepad.exe" '"$INSTDIR\prompts.py"'
-    CreateShortCut "$SMPROGRAMS\${APP}\Disinstalla.lnk" "$INSTDIR\Uninstall.exe"
+    CreateShortCut "$SMPROGRAMS\${APP}\Configuration.lnk" "notepad.exe" '"$INSTDIR\config.ini"'
+    CreateShortCut "$SMPROGRAMS\${APP}\Edit prompts.lnk" "notepad.exe" '"$INSTDIR\prompts.py"'
+    CreateShortCut "$SMPROGRAMS\${APP}\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
 
-    ; Disinstallazione
+    ; Uninstallation
     WriteUninstaller "$INSTDIR\Uninstall.exe"
     WriteRegStr HKCU "Software\${APP}" "InstallDir" "$INSTDIR"
     WriteRegStr HKCU "${UNINSTKEY}" "DisplayName" "${APP}"
@@ -116,35 +116,35 @@ Section "AI-Hotkeys (obbligatorio)" SecMain
 SectionEnd
 
 
-Section "Avvia con Windows" SecStartup
+Section "Start with Windows" SecStartup
     CreateShortCut "$SMSTARTUP\AI-Hotkeys.lnk" "$INSTDIR\ahk\AutoHotkey64.exe" '"$INSTDIR\main.ahk"' "$INSTDIR\icon.ico"
 SectionEnd
 
 
-Section /o "Collegamento sul Desktop" SecDesktop
+Section /o "Desktop shortcut" SecDesktop
     CreateShortCut "$DESKTOP\AI-Hotkeys.lnk" "$INSTDIR\ahk\AutoHotkey64.exe" '"$INSTDIR\main.ahk"' "$INSTDIR\icon.ico"
 SectionEnd
 
 
-Section "Controlla Ollama (installalo se manca)" SecOllama
+Section "Check Ollama (install if missing)" SecOllama
     Call FindOllama
     Pop $1
 
     ${If} $1 == ""
-        MessageBox MB_YESNO|MB_ICONQUESTION "Ollama non è installato.$\r$\n$\r$\nVuoi installarlo adesso con winget? (download di circa 1 GB)$\r$\n$\r$\nScegli No per aprire la pagina di download." /SD IDNO IDNO ollama_page
+        MessageBox MB_YESNO|MB_ICONQUESTION "Ollama is not installed.$\r$\n$\r$\nDo you want to install it now with winget? (about 1 GB download)$\r$\n$\r$\nChoose No to open the download page." /SD IDNO IDNO ollama_page
 
-        DetailPrint "Installazione di Ollama con winget (può richiedere qualche minuto)…"
+        DetailPrint "Installing Ollama with winget (may take a few minutes)…"
         nsExec::ExecToLog 'winget install --id Ollama.Ollama -e --silent --accept-source-agreements --accept-package-agreements'
         Pop $0
 
         Call FindOllama
         Pop $1
         ${If} $1 != ""
-            DetailPrint "Ollama installato."
+            DetailPrint "Ollama installed."
             Goto check_model
         ${EndIf}
 
-        MessageBox MB_OK|MB_ICONEXCLAMATION "Non sono riuscito a installare Ollama automaticamente.$\r$\nSi aprirà la pagina di download: installalo e poi esegui  ollama pull ${MODEL}" /SD IDOK
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Could not install Ollama automatically.$\r$\nThe download page will open: install it and then run  ollama pull ${MODEL}" /SD IDOK
 
         ollama_page:
         ExecShell "open" "https://ollama.com/download"
@@ -152,26 +152,26 @@ Section "Controlla Ollama (installalo se manca)" SecOllama
     ${EndIf}
 
     check_model:
-    DetailPrint "Ollama trovato: $1"
+    DetailPrint "Ollama found: $1"
     nsExec::ExecToStack '"$1" list'
     Pop $0
     Pop $2
     ${StrStr} $3 $2 "${MODEL}"
     ${If} $3 == ""
-        DetailPrint "Il modello ${MODEL} non è ancora scaricato."
-        MessageBox MB_OK|MB_ICONINFORMATION "Ollama è installato, ma il modello ${MODEL} non è stato trovato.$\r$\n$\r$\nPer scaricarlo apri il Prompt dei comandi ed esegui:$\r$\n$\r$\n    ollama pull ${MODEL}$\r$\n$\r$\n(Se Ollama non era avviato, il modello potrebbe esserci comunque.)" /SD IDOK
+        DetailPrint "The ${MODEL} model is not downloaded yet."
+        MessageBox MB_OK|MB_ICONINFORMATION "Ollama is installed, but the ${MODEL} model was not found.$\r$\n$\r$\nTo download it open the Command Prompt and run:$\r$\n$\r$\n    ollama pull ${MODEL}$\r$\n$\r$\n(If Ollama was not running, the model may be there anyway.)" /SD IDOK
     ${Else}
-        DetailPrint "Modello ${MODEL} trovato."
+        DetailPrint "${MODEL} model found."
     ${EndIf}
 
     done:
 SectionEnd
 
 
-LangString DESC_Main    ${LANG_ITALIAN} "Script, prompt, pagina dei risultati, Python e AutoHotkey portatili."
-LangString DESC_Startup ${LANG_ITALIAN} "Attiva i tasti PgUp / PgDn / End automaticamente all'accensione del PC."
-LangString DESC_Desktop ${LANG_ITALIAN} "Icona sul Desktop per avviare AI-Hotkeys."
-LangString DESC_Ollama  ${LANG_ITALIAN} "Verifica che Ollama sia installato e che il modello ${MODEL} sia presente (il modello non viene scaricato)."
+LangString DESC_Main    ${LANG_ENGLISH} "Script, prompts, results page, portable Python and AutoHotkey."
+LangString DESC_Startup ${LANG_ENGLISH} "Enables the PgUp / PgDn / End keys automatically when the PC starts."
+LangString DESC_Desktop ${LANG_ENGLISH} "Desktop icon to launch AI-Hotkeys."
+LangString DESC_Ollama  ${LANG_ENGLISH} "Checks that Ollama is installed and that the ${MODEL} model is present (the model is not downloaded)."
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
     !insertmacro MUI_DESCRIPTION_TEXT ${SecMain}    $(DESC_Main)
@@ -182,10 +182,10 @@ LangString DESC_Ollama  ${LANG_ITALIAN} "Verifica che Ollama sia installato e ch
 
 
 ; =========================================================
-; FUNZIONI
+; FUNCTIONS
 ; =========================================================
 
-; Restituisce sullo stack il percorso di ollama.exe, oppure ""
+; Returns the ollama.exe path on the stack, or ""
 Function FindOllama
     ${If} ${FileExists} "$LOCALAPPDATA\Programs\Ollama\ollama.exe"
         Push "$LOCALAPPDATA\Programs\Ollama\ollama.exe"
@@ -199,7 +199,7 @@ Function FindOllama
     Pop $0
     Pop $R0
     ${If} $0 == 0
-        ; prima riga dell'output
+        ; first line of the output
         StrCpy $R1 0
         loop:
             StrCpy $R2 $R0 1 $R1
@@ -222,7 +222,7 @@ FunctionEnd
 
 
 ; =========================================================
-; DISINSTALLAZIONE
+; UNINSTALLATION
 ; =========================================================
 
 Section "Uninstall"
@@ -232,7 +232,7 @@ Section "Uninstall"
     Delete "$DESKTOP\AI-Hotkeys.lnk"
     RMDir /r "$SMPROGRAMS\${APP}"
 
-    ; Solo i file installati: backup e file tuoi restano
+    ; Only installed files: backups and your files are kept
     RMDir /r "$INSTDIR\python"
     RMDir /r "$INSTDIR\ahk"
     RMDir /r "$INSTDIR\static"
@@ -255,7 +255,7 @@ Section "Uninstall"
     Delete "$INSTDIR\icon.ico"
     Delete "$INSTDIR\Uninstall.exe"
 
-    MessageBox MB_YESNO|MB_ICONQUESTION "Vuoi eliminare anche la configurazione (config.ini) e i file temporanei (cartella work)?" /SD IDNO IDNO keep_data
+    MessageBox MB_YESNO|MB_ICONQUESTION "Do you also want to delete the configuration (config.ini) and temporary files (work folder)?" /SD IDNO IDNO keep_data
         Delete "$INSTDIR\config.ini"
         RMDir /r "$INSTDIR\work"
     keep_data:

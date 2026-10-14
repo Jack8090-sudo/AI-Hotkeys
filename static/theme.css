@@ -1,6 +1,6 @@
 /* =========================================================
-   AI-Hotkeys — stile condiviso (pagina dei risultati e impostazioni)
-   Il tema e il colore arrivano da config.ini, sezione [aspetto]:
+   AI-Hotkeys — shared style (results page and settings)
+   The theme and color come from config.ini, section [aspetto]:
    <html data-theme="dark|black|light|auto" data-accent="ambra|ghiaccio|...">
    ========================================================= */
 
@@ -17,16 +17,16 @@
 @font-face { font-family: "Plex Mono"; font-weight: 400; font-display: swap;
     src: url("/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); }
 
-/* ---------- colore della retroilluminazione (scuro / chiaro) ---------- */
+/* ---------- backlight color (dark / light) ---------- */
 
-:root                       { --acc-d: #F5A623; --acc-l: #A35A00; }   /* ambra */
+:root                       { --acc-d: #F5A623; --acc-l: #A35A00; }   /* amber */
 [data-accent="ghiaccio"]    { --acc-d: #62C9F2; --acc-l: #086B96; }
 [data-accent="menta"]       { --acc-d: #52D3A3; --acc-l: #0B7552; }
 [data-accent="corallo"]     { --acc-d: #FF8473; --acc-l: #B23A27; }
 [data-accent="viola"]       { --acc-d: #AC9EFF; --acc-l: #5843C4; }
 [data-accent="neutro"]      { --acc-d: #DCE1E8; --acc-l: #2C3542; }
 
-/* ---------- tema scuro (predefinito) ---------- */
+/* ---------- dark theme (default) ---------- */
 
 :root {
     color-scheme: dark;
@@ -59,7 +59,7 @@
     --f-code: "Plex Mono", "Cascadia Mono", Consolas, monospace;
 }
 
-/* ---------- tema nero (void black, per schermi OLED) ---------- */
+/* ---------- black theme (void black, for OLED screens) ---------- */
 
 [data-theme="black"] {
     color-scheme: dark;
@@ -79,7 +79,7 @@
     --shadow:    0 14px 34px rgba(0, 0, 0, .7);
 }
 
-/* ---------- tema chiaro ---------- */
+/* ---------- light theme ---------- */
 
 [data-theme="light"] {
     color-scheme: light;
@@ -157,7 +157,7 @@ body {
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ---------- il tasto: l'unica cosa illuminata ---------- */
+/* ---------- the key: the only lit thing ---------- */
 
 .keys { display: flex; align-items: flex-end; gap: 8px; }
 
@@ -179,7 +179,7 @@ body {
     user-select: none;
 }
 
-/* faccia superiore del tasto */
+/* top face of the key */
 .key::before {
     content: "";
     position: absolute;
@@ -191,7 +191,7 @@ body {
 
 .key span { position: relative; display: block; padding-top: 6px; }
 
-/* modificatori (Ctrl, Alt...): più piccoli e spenti */
+/* modifiers (Ctrl, Alt...): smaller and dimmed */
 .key.mod {
     min-width: 0;
     height: 50px;

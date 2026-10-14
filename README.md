@@ -20,7 +20,7 @@ uses a local SearXNG on `127.0.0.1:8888`.
 ## Usage
 
 1. Download a release or clone the sources.
-2. Copy `config.esempio.ini` to `config.ini` and set your Obsidian file:
+2. Copy `config.example.ini` to `config.ini` and set your Obsidian file:
    `todo_file = %USERPROFILE%\Documents\To-Do List.md`
    and the matching title prefix (`window_title = To-Do List -`).
 3. Run `main.ahk`, select some text and press PgUp / PgDn / End.
@@ -63,7 +63,7 @@ From source you need Python 3.x with stdlib modules only
   inactivity (240 s results, 300 s settings). Requests not from
   `127.0.0.1`/`localhost` → 403.
 - **Missing keys:** if `config.ini` lacks a key present in
-  `config.esempio.ini` (e.g. `[tasti]`, `aspetto.larghezza`), the code
+  `config.example.ini` (e.g. `[tasti]`, `aspetto.larghezza`), the code
   default applies — no error.
 
 ## Layout
@@ -76,7 +76,7 @@ From source you need Python 3.x with stdlib modules only
 - `ahk/` — versioned `license.txt` + local `AutoHotkey64.exe` (the binary ships with the setup, not via git)
 - `static/` — `viewer.html`, `settings.html`, `theme.css`, `marked.min.js`, `fonts/`
 - `searxng/` — only `avvia_searxng.py`, `settings.yml`, `LICENSE-searxng.txt`
-- `installer/sorgente/` — `installer.nsi`, `stop.ps1` (the setup builds its payload from `config.esempio.ini`, never from `config.ini`)
+- `installer/sorgente/` — `installer.nsi`, `stop.ps1` (the setup builds its payload from `config.example.ini`, never from `config.ini`)
 
 ## What is NOT in the repo (and why)
 
