@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="it" translate="no" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="referrer" content="no-referrer">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__TITLE__ - AI-Hotkeys</title>
+
+<style>/*__THEME__*/</style>
+
+<style>
+/* =========================================================
+   Pagina dei risultati
+   ========================================================= */
+
+.wrap {
+    width: min(100% - 48px, calc(300px + 56px + var(--measure)));
+    margin: 0 auto;
+}
+
+/* ---------- testata: il tasto premuto e l'azione ---------- */
+
+.top { padding: 36px 0 26px; border-bottom: 1px solid var(--line); }
+
+.top .wrap {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 22px;
+}
+
+.key { animation: press .55s var(--ease) .1s both; }
+
+@keyframes press {
+    0%   { transform: translateY(0); color: var(--muted); text-shadow: none; }
+    35%  { transform: translateY(3px); }
+    100% { transform: translateY(0); }
+}
+
+h1 {
+    margin: 0;
+    font-family: var(--f-ui);
+    font-weight: 600;
+    font-size: calc(var(--fs) * 2.4);
+    line-height: 1;
+    letter-spacing: .005em;
+}
+
+.meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: calc(var(--fs) * .84);
+}
+
+.meta q { color: var(--text-2); quotes: "«" "»"; }
+
+.tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* ---------- pulsanti ---------- */
+
+.btn {
+    height: 34px;
+    padding: 0 13px;
+    border: 1px solid var(--line-2);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    font: 500 calc(var(--fs) * .9)/1 var(--f-ui);
+    letter-spacing: .01em;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.btn:hover { background: var(--surface-2); }
+.btn.done { border-color: var(--accent); color: var(--accent); }
+.btn.toggle[aria-pressed="false"] { color: var(--muted); border-color: var(--line); }
+.btn.toggle[aria-pressed="true"] { background: var(--surface-2); }
+.btn[hidden] { display: none; }
+
+/* gruppo a due o più posizioni (Risultato / Modifiche, versioni) */
+.seg {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+}
+.seg[hidden] { display: none; }
+.seg button {
+    height: 28px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font: 500 calc(var(--fs) * .88)/1 var(--f-ui);
+    cursor: pointer;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
+
+/* ---------- corpo: testo selezionato a lato, risultato al centro ---------- */
+
+.page {
+    display: grid;
+    grid-template-columns: 300px minmax(0, var(--measure));
+    gap: 56px;
+    align-items: start;
+    padding: 34px 0 40px;
+}
+
+.page.no-rail { grid-template-columns: minmax(0, var(--measure)); }
+.page.no-rail .rail { display: none; }
+
+/* senza colonna a lato tutto si stringe sulla colonna di lettura */
+body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
+
+.rail {
+    position: sticky;
+    top: 24px;
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-2) transparent;
+}
+
+.rail h2 {
+    margin: 0 0 12px;
+    font: 500 calc(var(--fs) * .88)/1.2 var(--f-ui);
+    color: var(--muted);
+    letter-spacing: .01em;
+}
+
+.rail .md {
+    color: var(--text-2);
+    font-size: calc(var(--fs) * .875);
+    line-height: 1.6;
+    border-left: 2px solid var(--line-2);
+    padding-left: 14px;
+}
+
+.reading { min-width: 0; }
+.result, .turn .md { color: var(--body); }
+
+.result { animation: appear .35s var(--ease) .25s both; }
+@keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- testo formattato (Markdown) ---------- */
+
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+
+.md p { margin: 0 0 1em; }
+
+.md h1, .md h2, .md h3 {
+    font-family: var(--f-ui);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: .01em;
+    color: var(--text);
+}
+.md h1, .md h2 { margin: 1.9em 0 .55em; font-size: calc(var(--fs) * 1.3); }
+.md h3 { margin: 1.6em 0 .5em; font-size: calc(var(--fs) * 1.12); }
+.md h4, .md h5, .md h6 { margin: 1.4em 0 .4em; font-size: var(--fs); }
+
+.md strong { font-weight: 600; color: var(--text); }
+.md em { font-style: italic; }
+
+.md a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.md a:hover { text-decoration-thickness: 2px; }
+
+.md ul, .md ol { margin: .3em 0 1.1em; padding-left: 1.3em; }
+.md li { margin: .35em 0; }
+.md li::marker { color: var(--muted); }
+
+.md code {
+    padding: .12em .38em;
+    border-radius: 4px;
+    background: var(--surface-2);
+    font-family: var(--f-code);
+    font-size: .88em;
+    overflow-wrap: anywhere;
+}
+
+.md pre {
+    margin: 1.2em 0;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow-x: auto;
+}
+.md pre code { padding: 0; background: none; font-size: calc(var(--fs) * .82); line-height: 1.6; overflow-wrap: normal; }
+
+.md blockquote {
+    margin: 1.2em 0;
+    padding: 2px 0 2px 16px;
+    border-left: 2px solid var(--line-2);
+    color: var(--text-2);
+}
+
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+
+.md table { width: 100%; border-collapse: collapse; margin: 1.2em 0; font-size: .92em; display: block; overflow-x: auto; }
+.md th, .md td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.md th { font-family: var(--f-ui); font-weight: 600; color: var(--text); }
+
+.md li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
+.md input[type="checkbox"] { accent-color: var(--accent); margin: 0 .5em 0 0; }
+
+/* citazioni [1] nel testo */
+.md a.cite {
+    position: relative;
+    top: -.45em;
+    margin-left: 1px;
+    font: 600 .7em/1 var(--f-ui);
+    text-decoration: none;
+}
+.md a.cite:hover { text-decoration: underline; }
+
+/* "Termini tecnici": glossario */
+.md ul.terms { list-style: none; padding-left: 0; }
+.md ul.terms li { margin: 0 0 .7em; }
+.md ul.terms li > strong:first-child { font-family: var(--f-ui); font-weight: 600; font-size: 1.04em; }
+
+/* "Da tenere d'occhio": avvertenze */
+.md .watch {
+    margin: .2em 0 1.2em;
+    padding: 2px 0 2px 16px;
+    border-left: 2px solid var(--accent);
+}
+
+/* elenco delle fonti */
+.md ul.sources { list-style: none; padding: 0; margin-top: .4em; }
+.md ul.sources li {
+    display: grid;
+    grid-template-columns: 2.1em minmax(0, 1fr);
+    gap: 2px 6px;
+    margin: 0 0 .75em;
+    line-height: 1.4;
+}
+.md .src-n { font: 600 .9em/1.55 var(--f-ui); color: var(--accent); }
+.md .src-meta { grid-column: 2; color: var(--muted); font-size: .84em; }
+.md h2.sec-sources { font-size: calc(var(--fs) * 1.05); color: var(--text-2); }
+.md h2.sec-sources.other { color: var(--muted); }
+.md ul.sources.other a { color: var(--text-2); }
+.md ul.sources.other .src-n { color: var(--muted); }
+
+/* cursore mentre Qwen scrive */
+.md.streaming > :last-child::after {
+    content: "";
+    display: inline-block;
+    width: .5em;
+    height: 1.05em;
+    margin-left: 2px;
+    vertical-align: -.18em;
+    background: var(--accent);
+    animation: caret 1s steps(2, jump-none) infinite;
+}
+@keyframes caret { 50% { opacity: 0; } }
+
+/* confronto delle modifiche (PgUp) */
+.diff { white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff del { color: var(--danger); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.diff ins { text-decoration: none; background: var(--tint); color: var(--text); border-bottom: 1.5px solid var(--accent); }
+
+.note {
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: calc(var(--fs) * .86);
+}
+.note q { color: var(--text-2); quotes: "«" "»"; }
+.note[hidden] { display: none; }
+
+/* ---------- domande successive ---------- */
+
+.thread[hidden] { display: none; }
+
+.turn { margin-top: 44px; padding-top: 26px; border-top: 1px solid var(--line); }
+
+.ask-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 0 16px;
+}
+
+.ask-line p {
+    margin: 0;
+    padding-left: 14px;
+    border-left: 2px solid var(--accent);
+    color: var(--text);
+    font-family: var(--f-ui);
+    font-weight: 500;
+    font-size: calc(var(--fs) * 1.12);
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.waiting { color: var(--muted); }
+.error-text { color: var(--danger); }
+
+/* ---------- barra delle domande ---------- */
+
+.dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    margin-top: 40px;
+    padding: 14px 0 18px;
+    background: linear-gradient(to bottom, transparent, var(--bg) 14px);
+}
+
+.composer {
+    position: relative;
+    padding: 10px;
+    border: 1px solid var(--line-2);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.progress {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+}
+.composer.busy .progress { animation: work 1.6s var(--ease) infinite; }
+@keyframes work {
+    0%   { transform: scaleX(0); transform-origin: left; }
+    50%  { transform: scaleX(1); transform-origin: left; }
+    50.1%{ transform-origin: right; }
+    100% { transform: scaleX(0); transform-origin: right; }
+}
+
+.suggest { display: flex; gap: 6px; margin: 0 0 8px; overflow-x: auto; scrollbar-width: none; }
+.suggest::-webkit-scrollbar { display: none; }
+.suggest button {
+    flex: none;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-2);
+    font: 500 calc(var(--fs) * .84)/1 var(--f-ui);
+    cursor: pointer;
+}
+.suggest button:hover { border-color: var(--line-2); color: var(--text); background: var(--surface-2); }
+
+.row { display: flex; align-items: flex-end; gap: 8px; }
+
+.row textarea {
+    flex: 1;
+    min-height: 42px;
+    max-height: 180px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    line-height: 1.45;
+    resize: none;
+}
+.row textarea::placeholder { color: var(--muted); }
+.row textarea:focus { outline: none; border-color: var(--accent); }
+.row textarea:disabled { opacity: .6; }
+
+.send {
+    height: 42px;
+    min-width: 76px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font: 600 var(--fs)/1 var(--f-ui);
+    letter-spacing: .01em;
+    cursor: pointer;
+}
+.send:hover { filter: brightness(1.06); }
+.composer.busy .send { background: var(--surface-2); color: var(--text); }
+
+.status {
+    min-height: 0;
+    margin: 0;
+    color: var(--muted);
+    font-size: calc(var(--fs) * .82);
+}
+.status:not(:empty) { margin-top: 8px; }
+.status.error { color: var(--danger); }
+
+/* ---------- schermi stretti ---------- */
+
+@media (max-width: 900px) {
+    .wrap { width: min(100% - 28px, var(--measure)); }
+    .top { padding-top: 22px; }
+    .top .wrap { grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 16px; }
+    .tools { grid-column: 1 / -1; justify-content: flex-start; }
+    .page { grid-template-columns: minmax(0, 1fr); gap: 26px; padding-top: 24px; }
+    .rail { position: static; max-height: 40vh; }
+    h1 { font-size: calc(var(--fs) * 1.9); }
+    .key { min-width: 64px; height: 58px; font-size: 18px; }
+}
+</style>
+</head>
+
+<body>
+
+<header class="top">
+    <div class="wrap">
+        <div class="keys" id="keys" aria-hidden="true"></div>
+        <div>
+            <h1 id="title"></h1>
+            <p class="meta" id="meta"></p>
+        </div>
+        <div class="tools">
+            <div class="seg" id="viewSeg" role="group" aria-label="Vista" hidden>
+                <button type="button" data-view="result" aria-pressed="true">Risultato</button>
+                <button type="button" data-view="diff" aria-pressed="false">Modifiche</button>
+            </div>
+            <div class="seg" id="versions" role="group" aria-label="Versioni" hidden></div>
+            <button type="button" class="btn toggle" id="toggleRail" aria-controls="rail" aria-pressed="true" title="Mostra o nascondi il testo selezionato">Testo selezionato</button>
+            <button type="button" class="btn" id="copyResult">Copia</button>
+        </div>
+    </div>
+</header>
+
+<main class="wrap page" id="page">
+
+    <aside class="rail" id="rail">
+        <h2>Testo selezionato</h2>
+        <div class="md" id="original"></div>
+    </aside>
+
+    <div class="reading">
+        <p class="note" id="versionNote" hidden></p>
+        <article class="md result" id="result"></article>
+
+        <section class="thread" id="thread" aria-label="Domande successive" hidden></section>
+
+        <div class="dock">
+        <form class="composer" id="askForm" autocomplete="off">
+            <div class="progress" aria-hidden="true"></div>
+            <div class="suggest" id="suggest"></div>
+            <div class="row">
+                <label class="sr-only" for="askInput">Chiedi a Qwen</label>
+                <textarea id="askInput" rows="1" spellcheck="true"></textarea>
+                <button type="submit" class="send" id="askSend">Invia</button>
+            </div>
+            <p class="status" id="askStatus" role="status" aria-live="polite"></p>
+        </form>
+        </div>
+    </div>
+
+</main>
+
+
+<script>/*__MARKED__*/</script>
+
+<script>
+"use strict";
+
+const DATA = /*__DATA__*/null;
+
+/* ================= ASPETTO (da config.ini) ================= */
+
+const root = document.documentElement;
+const look = DATA.look || {};
+root.dataset.theme = { scuro: "dark", nero: "black", chiaro: "light", sistema: "auto" }[look.tema] || "dark";
+root.dataset.accent = look.colore || "ambra";
+root.dataset.width = look.larghezza || "normale";
+if (look.testo) root.style.setProperty("--fs", look.testo + "px");
+
+
+/* ================= TESTI PER MODALITÀ ================= */
+
+const MODE_UI = {
+    rewrite: {
+        title: "Correzione",
+        key: "PgUp",
+        placeholder: "Chiedi una modifica, per esempio: rendilo più formale",
+        busy: "Qwen sta scrivendo una nuova versione.",
+        suggest: [
+            ["Più formale", "Usa un tono più formale e professionale."],
+            ["Più breve", "Rendi il testo più breve e conciso, senza perdere informazioni importanti."],
+            ["Più semplice", "Rendi il testo più semplice da capire."],
+            ["A punti", "Organizza il testo in un elenco puntato chiaro."]
+        ]
+    },
+    summarize: {
+        title: "Riassunto",
+        key: "PgDn",
+        placeholder: "Chiedi qualcosa sul testo",
+        busy: "Qwen sta rispondendo.",
+        suggest: [
+            ["Il punto più importante", "Qual è il punto più importante?"],
+            ["Ancora più breve", "Fammi un riassunto ancora più breve, in 2-3 frasi."],
+            ["Cosa devo fare?", "Ci sono azioni o prossimi passi che devo fare? Elencali."],
+            ["Problemi descritti", "Quali problemi vengono descritti nel testo?"]
+        ]
+    },
+    explain: {
+        title: "Spiegazione",
+        key: "End",
+        placeholder: "Chiedi un approfondimento",
+        busy: "Qwen sta rispondendo.",
+        suggest: [
+            ["Un esempio pratico", "Fammi un esempio pratico."],
+            ["Più semplice", "Spiegamelo in modo ancora più semplice."],
+            ["Problemi principali", "Quali sono i problemi principali?"],
+            ["Cosa manca?", "Cosa manca o non è chiaro nel testo?"]
+        ]
+    }
+};
+
+const ui = MODE_UI[DATA.mode] || MODE_UI.rewrite;
+const isRewrite = DATA.mode === "rewrite";
+
+const $ = (id) => document.getElementById(id);
+const form = $("askForm");
+const askInput = $("askInput");
+const askSend = $("askSend");
+const askStatus = $("askStatus");
+const resultEl = $("result");
+
+const state = {
+    versions: [{ text: DATA.result, request: null }],
+    current: 0,
+    view: "result",
+    busy: false,
+    controller: null
+};
+
+
+/* ================= MARKDOWN ================= */
+
+const escapeHtml = (s) => String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+marked.use({
+    gfm: true,
+    breaks: true,
+    renderer: {
+        // Niente HTML grezzo: viene mostrato come testo.
+        html(html) { return escapeHtml(typeof html === "object" ? html.text : html); }
+    }
+});
+
+function renderMarkdown(el, text) {
+    el.innerHTML = marked.parse(text || "");
+    el.querySelectorAll("a[href]").forEach((a) => {
+        const href = a.getAttribute("href") || "";
+        if (!/^https?:\/\//i.test(href)) { a.removeAttribute("href"); return; }
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        if (/^\[\d+\]$/.test(a.textContent.trim())) {
+            a.classList.add("cite");
+            try { a.title = new URL(href).hostname.replace(/^www\./, ""); } catch (e) { a.title = href; }
+        }
+    });
+    el.querySelectorAll("img[src]").forEach((img) => {
+        const src = img.getAttribute("src") || "";
+        if (!/^https?:\/\//i.test(src)) { img.removeAttribute("src"); return; }
+        img.loading = "lazy";
+        img.referrerPolicy = "no-referrer";
+    });
+    shapeSections(el);
+}
+
+/* Le sezioni che Qwen scrive sempre hanno un aspetto proprio:
+   glossario per i termini, rientro colorato per le avvertenze,
+   elenco ordinato per le fonti. */
+function shapeSections(el) {
+    el.querySelectorAll("h2, h3").forEach((h) => {
+        const name = h.textContent.trim().toLowerCase();
+        const next = h.nextElementSibling;
+
+        if (/^termini/.test(name) && next && next.tagName === "UL") {
+            next.classList.add("terms");
+        }
+
+        if (/da tenere d.occhio/.test(name)) {
+            const box = document.createElement("div");
+            box.className = "watch";
+            let n = h.nextElementSibling;
+            while (n && !/^H[1-3]$/.test(n.tagName)) {
+                const following = n.nextElementSibling;
+                box.appendChild(n);
+                n = following;
+            }
+            h.after(box);
+        }
+
+        if (/^(fonti|altre pagine lette|pagine lette)$/.test(name) && next && next.tagName === "UL") {
+            const other = name !== "fonti";
+            h.classList.add("sec-sources");
+            next.classList.add("sources");
+            if (other) { h.classList.add("other"); next.classList.add("other"); }
+            next.querySelectorAll(":scope > li").forEach(shapeSource);
+        }
+    });
+}
+
+function shapeSource(li) {
+    const link = li.querySelector("a");
+    if (!link) return;
+    const strong = li.querySelector("strong");
+    const n = strong ? strong.textContent.replace(/[\[\]\s]/g, "") : "";
+    // dopo il link: "(dominio, tipo)" oppure il vecchio " · dominio · tipo"
+    const tail = li.textContent.split(link.textContent).pop()
+        .replace(/^[\s·(]+|[\s)]+$/g, "")
+        .replace(/\s*·\s*/g, ", ");
+    const num = document.createElement("span");
+    num.className = "src-n";
+    num.textContent = n;
+    const meta = document.createElement("span");
+    meta.className = "src-meta";
+    meta.textContent = tail;
+    const a = link.cloneNode(true);
+    li.replaceChildren(num, a, meta);
+}
+
+
+/* ================= TESTATA ================= */
+
+function keyLabels() {
+    const raw = (DATA.key || ui.key).trim();
+    return raw.split(/\s*\+\s*/).filter(Boolean);
+}
+
+function renderKeys() {
+    const box = $("keys");
+    const labels = keyLabels();
+    labels.forEach((label, i) => {
+        const k = document.createElement("span");
+        k.className = "key" + (i < labels.length - 1 ? " mod" : "");
+        const s = document.createElement("span");
+        s.textContent = label;
+        k.appendChild(s);
+        box.appendChild(k);
+    });
+}
+
+const ORIGINAL = (DATA.original || "").trim();
+const SHORT_ORIGINAL = ORIGINAL.length <= 120 && !ORIGINAL.includes("\n");
+
+function renderMeta() {
+    const m = DATA.meta || {};
+    const parts = [];
+    if (SHORT_ORIGINAL) {
+        const span = document.createElement("span");
+        span.append("Testo selezionato: ");
+        const q = document.createElement("q");
+        q.textContent = ORIGINAL;
+        span.append(q);
+        parts.push(span);
+    } else {
+        const chars = ORIGINAL.length;
+        parts.push(chars.toLocaleString("it-IT") + " caratteri selezionati");
+    }
+    if (m.query && m.query.length) {
+        const span = document.createElement("span");
+        span.append("Cercato sul web: ");
+        m.query.forEach((q, i) => {
+            if (i) span.append(" e ");
+            const qq = document.createElement("q");
+            qq.textContent = q;
+            span.append(qq);
+        });
+        parts.push(span);
+    } else if (DATA.mode === "explain" && m.web === false) {
+        parts.push("Senza ricerca web");
+    }
+    if (m.seconds) parts.push("Pronta in " + Math.round(m.seconds) + " s");
+    parts.push("Alle " + DATA.time);
+    const box = $("meta");
+    parts.forEach((p) => {
+        if (typeof p === "string") { const s = document.createElement("span"); s.textContent = p; box.append(s); }
+        else box.append(p);
+    });
+}
+
+document.title = ui.title + " - AI-Hotkeys";
+$("title").textContent = ui.title;
+renderKeys();
+renderMeta();
+renderMarkdown($("original"), DATA.original);
+renderMarkdown(resultEl, DATA.result);
+askInput.placeholder = ui.placeholder;
+
+
+/* ================= TESTO SELEZIONATO A LATO ================= */
+
+const page = $("page");
+const railBtn = $("toggleRail");
+
+function setRail(show) {
+    page.classList.toggle("no-rail", !show);
+    document.body.classList.toggle("narrow", !show);
+    railBtn.setAttribute("aria-pressed", String(show));
+}
+
+if (SHORT_ORIGINAL) {
+    // Testo breve: sta già nella testata, la colonna a lato non serve
+    setRail(false);
+    railBtn.hidden = true;
+} else {
+    setRail(look.mostra_originale !== "no");
+    railBtn.addEventListener("click", () => setRail(page.classList.contains("no-rail")));
+}
+
+
+/* ================= CORREZIONE: VERSIONI E MODIFICHE ================= */
+
+function tokens(s) { return s.match(/\s+|[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) || []; }
+
+/* Differenze parola per parola (sottosequenza comune più lunga). */
+function diffHtml(a, b) {
+    const x = tokens(a), y = tokens(b);
+    if (x.length * y.length > 4_000_000) return escapeHtml(b);
+    const n = x.length, m = y.length;
+    const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    for (let i = n - 1; i >= 0; i--)
+        for (let j = m - 1; j >= 0; j--)
+            dp[i][j] = x[i] === y[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    let i = 0, j = 0, out = "";
+    const del = [], ins = [];
+    const flush = () => {
+        if (del.length) out += "<del>" + escapeHtml(del.join("")) + "</del>";
+        if (ins.length) out += "<ins>" + escapeHtml(ins.join("")) + "</ins>";
+        del.length = 0; ins.length = 0;
+    };
+    while (i < n && j < m) {
+        if (x[i] === y[j]) { flush(); out += escapeHtml(x[i]); i++; j++; }
+        else if (dp[i + 1][j] >= dp[i][j + 1]) del.push(x[i++]);
+        else ins.push(y[j++]);
+    }
+    while (i < n) del.push(x[i++]);
+    while (j < m) ins.push(y[j++]);
+    flush();
+    return out;
+}
+
+function showCurrent() {
+    const v = state.versions[state.current];
+    if (isRewrite && state.view === "diff") {
+        resultEl.classList.add("diff");
+        resultEl.innerHTML = diffHtml(DATA.original.trim(), v.text.trim());
+    } else {
+        resultEl.classList.remove("diff");
+        renderMarkdown(resultEl, v.text);
+    }
+}
+
+function renderVersions() {
+    const bar = $("versions");
+    const note = $("versionNote");
+    if (!isRewrite || state.versions.length < 2) { bar.hidden = true; note.hidden = true; return; }
+
+    bar.replaceChildren();
+    state.versions.forEach((v, i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "v" + (i + 1);
+        b.title = v.request ? "Richiesta: " + v.request : "Prima versione";
+        b.setAttribute("aria-pressed", String(i === state.current));
+        b.addEventListener("click", () => {
+            if (state.busy) return;
+            state.current = i;
+            showCurrent();
+            renderVersions();
+        });
+        bar.appendChild(b);
+    });
+    bar.hidden = false;
+
+    const v = state.versions[state.current];
+    note.replaceChildren();
+    if (v.request) {
+        note.append("Versione " + (state.current + 1) + ", richiesta: ");
+        const q = document.createElement("q");
+        q.textContent = v.request;
+        note.append(q);
+        note.hidden = false;
+    } else {
+        note.hidden = true;
+    }
+}
+
+if (isRewrite) {
+    const seg = $("viewSeg");
+    seg.hidden = false;
+    seg.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+        if (state.busy) return;
+        state.view = b.dataset.view;
+        seg.querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+        showCurrent();
+    }));
+}
+
+
+/* ================= COPIA ================= */
+
+async function copyText(text, btn) {
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch (e) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+    }
+    if (btn) {
+        const label = btn.textContent;
+        btn.textContent = "Copiato";
+        btn.classList.add("done");
+        setTimeout(() => { btn.textContent = label; btn.classList.remove("done"); }, 1400);
+    }
+}
+
+$("copyResult").addEventListener("click", (e) => {
+    // La correzione si copia così com'è (pronta da incollare), il resto come testo
+    const text = isRewrite ? state.versions[state.current].text : resultEl.innerText;
+    copyText(text, e.currentTarget);
+});
+
+
+/* ================= BARRA DELLE DOMANDE ================= */
+
+function buildSuggestions() {
+    const box = $("suggest");
+    ui.suggest.forEach(([label, prompt]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        b.title = prompt;
+        b.addEventListener("click", () => {
+            if (state.busy) return;
+            askInput.value = prompt;
+            autoGrow();
+            submit();
+        });
+        box.appendChild(b);
+    });
+}
+buildSuggestions();
+
+function autoGrow() {
+    askInput.style.height = "auto";
+    askInput.style.height = Math.min(askInput.scrollHeight + 2, 180) + "px";
+}
+
+askInput.addEventListener("input", autoGrow);
+askInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
+});
+
+form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (state.busy) { stopGeneration(); return; }
+    submit();
+});
+
+document.addEventListener("keydown", (e) => {
+    const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
+    if (e.key === "Escape") {
+        if (state.busy) { stopGeneration(); return; }
+        if (typing) askInput.blur();
+        return;
+    }
+    if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
+        askInput.focus();
+    }
+});
+
+function setStatus(text, isError = false) {
+    askStatus.textContent = text || "";
+    askStatus.classList.toggle("error", !!isError);
+}
+
+function setBusy(busy) {
+    state.busy = busy;
+    form.classList.toggle("busy", busy);
+    askInput.disabled = busy;
+    askSend.textContent = busy ? "Ferma" : "Invia";
+    askSend.title = busy ? "Ferma (Esc)" : "Invia (Invio)";
+    if (busy) setStatus(ui.busy + " Esc per fermarlo.");
+}
+
+function stopGeneration() { if (state.controller) state.controller.abort(); }
+
+
+/* ================= CONVERSAZIONE ================= */
+
+function scheduleRender(el, getText) {
+    let pending = false;
+    return () => {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(() => { pending = false; renderMarkdown(el, getText()); });
+    };
+}
+
+function addTurn(question) {
+    const thread = $("thread");
+    thread.hidden = false;
+
+    const turn = document.createElement("section");
+    turn.className = "turn";
+    turn.innerHTML = `
+        <div class="ask-line"><p></p><button type="button" class="btn" data-copy>Copia</button></div>
+        <div class="md"><p class="waiting">Qwen sta leggendo la domanda.</p></div>`;
+    turn.querySelector(".ask-line p").textContent = question;
+    const content = turn.querySelector(".md");
+    turn.querySelector("[data-copy]").addEventListener("click", (e) => copyText(content.innerText, e.currentTarget));
+
+    thread.appendChild(turn);
+    requestAnimationFrame(() => turn.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return content;
+}
+
+async function submit() {
+    const question = askInput.value.trim();
+    if (!question || state.busy) return;
+
+    const base = state.current;
+    let text = "";
+    let target;
+
+    if (isRewrite) {
+        state.view = "result";
+        $("viewSeg").querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o.dataset.view === "result")));
+        resultEl.classList.remove("diff");
+        target = resultEl;
+        resultEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } else {
+        target = addTurn(question);
+    }
+
+    const rerender = scheduleRender(target, () => text);
+
+    askInput.value = "";
+    autoGrow();
+    setBusy(true);
+
+    const controller = new AbortController();
+    state.controller = controller;
+    let finished = false;
+    let errorMsg = null;
+
+    try {
+        const res = await fetch("/api/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Token": DATA.token },
+            body: JSON.stringify({ question, base }),
+            signal: controller.signal
+        });
+        if (!res.ok || !res.body) {
+            let msg = "Il server ha risposto con l'errore " + res.status + ".";
+            try { msg = (await res.json()).error || msg; } catch (e) {}
+            throw new Error(msg);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let first = true;
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let nl;
+            while ((nl = buffer.indexOf("\n")) >= 0) {
+                const line = buffer.slice(0, nl).trim();
+                buffer = buffer.slice(nl + 1);
+                if (!line) continue;
+                const msg = JSON.parse(line);
+                if (msg.error) { errorMsg = msg.error; continue; }
+                if (msg.t) {
+                    if (first) { first = false; target.classList.add("streaming"); }
+                    text += msg.t;
+                    rerender();
+                }
+                if (msg.done) { finished = true; text = msg.text; }
+            }
+        }
+    } catch (e) {
+        if (e.name === "AbortError") errorMsg = "__abort__";
+        else if (e instanceof TypeError) errorMsg = "Questa pagina non è più collegata a Qwen. Seleziona di nuovo il testo e premi il tasto.";
+        else errorMsg = e.message || String(e);
+    } finally {
+        state.controller = null;
+        target.classList.remove("streaming");
+        setBusy(false);
+    }
+
+    if (finished) {
+        renderMarkdown(target, text);
+        if (isRewrite) {
+            state.versions.push({ text, request: question });
+            state.current = state.versions.length - 1;
+            renderVersions();
+        }
+        setStatus("");
+        askInput.focus({ preventScroll: true });
+        return;
+    }
+
+    // Fermato o errore
+    if (isRewrite) {
+        showCurrent();
+        askInput.value = question;
+        autoGrow();
+    } else if (!text) {
+        target.innerHTML = '<p class="' + (errorMsg === "__abort__" ? "waiting" : "error-text") + '"></p>';
+        target.firstChild.textContent = errorMsg === "__abort__" ? "Fermato prima della risposta." : (errorMsg || "Nessuna risposta.");
+    } else {
+        renderMarkdown(target, text + (errorMsg === "__abort__" ? "\n\n*Fermato qui.*" : ""));
+    }
+
+    if (errorMsg === "__abort__") {
+        setStatus(isRewrite ? "Fermato. La versione attuale non è cambiata." : "Fermato.");
+        setTimeout(() => { if (!state.busy) setStatus(""); }, 2500);
+    } else {
+        setStatus(errorMsg || "Qwen non ha risposto. Controlla che Ollama sia acceso.", true);
+    }
+}
+
+
+/* ================= COLLEGAMENTO CON IL SERVER ================= */
+
+function ping() {
+    fetch("/api/ping", { headers: { "X-Token": DATA.token }, cache: "no-store" }).catch(() => {});
+}
+setInterval(ping, 15000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) ping(); });
+</script>
+
+</body>
+</html>

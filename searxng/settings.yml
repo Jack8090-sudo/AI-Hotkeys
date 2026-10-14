@@ -1,0 +1,62 @@
+# =========================================================
+#  SearXNG per AI-Hotkeys
+#  Parte dalle impostazioni predefinite di SearXNG e cambia
+#  solo quello che serve a un uso personale sul tuo PC.
+#
+#  Porta e indirizzo NON si cambiano qui: si cambiano in
+#  config.ini, sezione [searxng], riga "searxng_url".
+# =========================================================
+
+use_default_settings:
+  engines:
+    # Motori che su un PC normale non servono o non funzionano
+    # (ahmia e torch richiedono Tor).
+    remove:
+      - ahmia
+      - torch
+      - radio browser
+
+general:
+  instance_name: "SearXNG · AI-Hotkeys"
+  enable_metrics: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "auto"
+  # json serve ad AI-Hotkeys; html per usarlo anche dal browser
+  # (http://127.0.0.1:8888)
+  formats:
+    - html
+    - json
+
+server:
+  # Solo dal tuo PC: nessun altro sulla rete può usarlo.
+  bind_address: "127.0.0.1"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+
+ui:
+  default_locale: "it"
+  query_in_title: true
+
+engines:
+  # Provati dal tuo PC (ottobre 2026): rispondono bene Google (google cse),
+  # Startpage e Yahoo. DuckDuckGo chiede il CAPTCHA, Brave blocca per
+  # "troppe richieste", Wikidata va sempre in timeout: spenti.
+  - name: startpage
+    inactive: false
+    disabled: false
+  - name: yahoo
+    disabled: false
+  - name: duckduckgo
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: wikidata
+    disabled: true
+  # Caricato ma spento: si può usare dal browser con "!mjk"
+  - name: mojeek
+    inactive: false
+    disabled: true

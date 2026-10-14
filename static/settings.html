@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="it" translate="no" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="referrer" content="no-referrer">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Impostazioni di AI-Hotkeys</title>
+
+<style>/*__THEME__*/</style>
+
+<style>
+/* =========================================================
+   Impostazioni
+   ========================================================= */
+
+.wrap { width: min(100% - 48px, 1120px); margin: 0 auto; }
+
+.top { padding: 34px 0 26px; border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+
+h1 {
+    margin: 0;
+    font: 600 calc(var(--fs) * 2.4)/1 var(--f-ui);
+    letter-spacing: .005em;
+}
+.lead { margin: 8px 0 0; color: var(--muted); font-size: calc(var(--fs) * .9); }
+
+.layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: 56px;
+    align-items: start;
+    padding: 30px 0 0;
+}
+
+/* ---------- sezioni ---------- */
+
+.section { padding: 0 0 30px; margin: 0 0 30px; border-bottom: 1px solid var(--line); }
+.section:last-of-type { border-bottom: 0; }
+
+.section h2 {
+    margin: 0 0 4px;
+    font: 600 calc(var(--fs) * 1.3)/1.2 var(--f-ui);
+    letter-spacing: .01em;
+}
+.section > p { margin: 0 0 18px; color: var(--muted); font-size: calc(var(--fs) * .9); }
+
+.field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 24px;
+    align-items: center;
+    padding: 14px 0;
+}
+.field + .field { border-top: 1px solid var(--line); }
+
+.field .name { font-weight: 600; color: var(--text); }
+.field .hint { grid-column: 1; margin: 0; color: var(--muted); font-size: calc(var(--fs) * .86); line-height: 1.45; }
+.field .control { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
+.field .error { grid-column: 1 / -1; margin: 0; color: var(--danger); font-size: calc(var(--fs) * .86); }
+.field .error:empty { display: none; }
+
+.field.wide { grid-template-columns: minmax(0, 1fr); }
+.field.wide .control { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
+
+/* ---------- controlli ---------- */
+
+.seg {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+}
+.seg button {
+    height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font: 500 calc(var(--fs) * .9)/1 var(--f-ui);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-checked="true"] { background: var(--surface-2); color: var(--text); }
+
+.switch {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    border: 1px solid var(--line-2);
+    border-radius: 13px;
+    background: var(--bg);
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+.switch::after {
+    content: "";
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: transform .18s var(--ease), background .15s ease;
+}
+.switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.switch[aria-checked="true"]::after { transform: translateX(20px); background: var(--on-accent); }
+
+.swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+.swatch {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: 500 calc(var(--fs) * .8)/1 var(--f-ui);
+    cursor: pointer;
+}
+.swatch i {
+    display: block;
+    width: 44px;
+    height: 34px;
+    border-radius: 7px;
+    background: var(--cap-skirt);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    position: relative;
+}
+.swatch i::after {
+    content: "";
+    position: absolute;
+    left: 9px; top: 8px;
+    width: 14px; height: 4px;
+    border-radius: 2px;
+    background: var(--sw);
+}
+.swatch[aria-checked="true"] { color: var(--text); }
+.swatch[aria-checked="true"] i { box-shadow: inset 0 0 0 2px var(--sw); }
+
+.range { display: flex; align-items: center; gap: 12px; }
+.range input { width: 180px; accent-color: var(--accent); }
+.range output { min-width: 3.2em; font: 500 calc(var(--fs) * .9)/1 var(--f-ui); color: var(--text-2); }
+
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-2); border-radius: 8px; }
+.stepper button {
+    width: 34px; height: 34px;
+    border: 0; background: transparent; color: var(--text);
+    font: 500 18px/1 var(--f-ui); cursor: pointer;
+}
+.stepper button:hover { background: var(--surface-2); }
+.stepper button:disabled { color: var(--line-2); cursor: default; background: transparent; }
+.stepper output { min-width: 2.4em; text-align: center; font: 600 var(--fs)/1 var(--f-ui); }
+
+.text, .select {
+    height: 36px;
+    min-width: 240px;
+    padding: 0 11px;
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: calc(var(--fs) * .94);
+}
+.text:focus, .select:focus { outline: none; border-color: var(--accent); }
+
+/* tasto da registrare */
+.capture {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.capture .rec {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 132px;
+    min-height: 48px;
+    padding: 6px 8px;
+    border: 1px dashed var(--line-2);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font: 500 calc(var(--fs) * .86)/1.2 var(--f-ui);
+    cursor: pointer;
+    text-align: left;
+}
+.capture .rec:hover { border-color: var(--text-2); }
+.capture .rec.listening { border-style: solid; border-color: var(--accent); color: var(--text); }
+.capture .rec .key.small { color: var(--accent); height: 36px; font-size: 14px; padding: 5px 10px 0 9px; }
+.capture .rec .key.small.mod { color: var(--text-2); }
+.link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: 500 calc(var(--fs) * .84)/1 var(--f-ui);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+.link:hover { color: var(--text); }
+
+/* ---------- anteprima ---------- */
+
+.preview { position: sticky; top: 24px; }
+.preview h2 { margin: 0 0 12px; font: 500 calc(var(--fs) * .88)/1.2 var(--f-ui); color: var(--muted); }
+
+.sample {
+    padding: 22px 22px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--bg);
+    font-size: var(--pfs, 16px);
+}
+.sample .head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.sample .key { min-width: 60px; height: 54px; font-size: 17px; padding: 7px 12px 0 11px; }
+.sample .t { font: 600 1.6em/1 var(--f-ui); }
+.sample .m { margin-top: 6px; color: var(--muted); font-size: .8em; }
+.sample .m q { color: var(--text-2); quotes: "«" "»"; }
+.sample h3 { margin: 0 0 .45em; font: 600 1.15em/1.2 var(--f-ui); }
+.sample p { margin: 0 0 1em; color: var(--body); line-height: 1.6; }
+.sample code { padding: .1em .35em; border-radius: 4px; background: var(--surface-2); font-family: var(--f-code); font-size: .86em; }
+.sample .cite { position: relative; top: -.45em; font: 600 .7em/1 var(--f-ui); color: var(--accent); }
+.sample .bar { display: flex; gap: 6px; padding: 7px; border: 1px solid var(--line-2); border-radius: 9px; background: var(--surface); }
+.sample .bar span { flex: 1; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: .84em; }
+.sample .bar b { padding: 7px 12px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font: 600 .84em/1.4 var(--f-ui); }
+.preview .note { margin: 12px 0 0; color: var(--muted); font-size: calc(var(--fs) * .84); }
+
+/* ---------- barra di salvataggio ---------- */
+
+.savebar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin-top: 10px;
+    padding: 16px 0 20px;
+    background: linear-gradient(to bottom, transparent, var(--bg) 16px);
+}
+.savebar .inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px 10px 16px;
+    border: 1px solid var(--line-2);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+.savebar .msg { flex: 1; margin: 0; color: var(--muted); font-size: calc(var(--fs) * .88); }
+.savebar .msg.ok { color: var(--text-2); }
+.savebar .msg.error { color: var(--danger); }
+
+.btn {
+    height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: 500 calc(var(--fs) * .92)/1 var(--f-ui);
+    cursor: pointer;
+}
+.btn:hover { background: var(--surface-2); }
+.btn:disabled { color: var(--muted); cursor: default; background: transparent; }
+.btn.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.primary:disabled { border-color: var(--line-2); background: var(--surface-2); color: var(--muted); filter: none; }
+
+@media (max-width: 980px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .preview { position: static; order: -1; margin-bottom: 26px; }
+}
+@media (max-width: 620px) {
+    .wrap { width: min(100% - 28px, 1120px); }
+    .field { grid-template-columns: minmax(0, 1fr); }
+    .field .control { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
+    .text, .select { min-width: 0; width: 100%; }
+    .savebar .inner { flex-wrap: wrap; }
+}
+</style>
+</head>
+
+<body>
+
+<header class="top">
+    <div class="wrap">
+        <div class="keys" id="heroKeys" aria-hidden="true"></div>
+        <div>
+            <h1>Impostazioni</h1>
+            <p class="lead">Le modifiche valgono dalla prossima volta che premi un tasto.</p>
+        </div>
+    </div>
+</header>
+
+<main class="wrap layout">
+
+    <form id="form" novalidate>
+
+        <section class="section" aria-labelledby="s-look">
+            <h2 id="s-look">Aspetto</h2>
+            <p>Come appaiono la pagina dei risultati e questa pagina.</p>
+
+            <div class="field">
+                <span class="name" id="l-tema">Tema</span>
+                <p class="hint">«Nero» usa il nero puro, ideale sugli schermi OLED. «Come Windows» segue il tema chiaro o scuro del sistema.</p>
+                <div class="control seg" role="radiogroup" aria-labelledby="l-tema" data-name="aspetto.tema">
+                    <button type="button" role="radio" data-value="scuro">Scuro</button>
+                    <button type="button" role="radio" data-value="nero">Nero</button>
+                    <button type="button" role="radio" data-value="chiaro">Chiaro</button>
+                    <button type="button" role="radio" data-value="sistema">Come Windows</button>
+                </div>
+            </div>
+
+            <div class="field wide">
+                <span class="name" id="l-colore">Colore</span>
+                <p class="hint">Il colore del tasto illuminato, delle citazioni e dei pulsanti.</p>
+                <div class="control swatches" role="radiogroup" aria-labelledby="l-colore" data-name="aspetto.colore">
+                    <button type="button" class="swatch" role="radio" data-value="ambra" style="--sw:#F5A623"><i></i>Ambra</button>
+                    <button type="button" class="swatch" role="radio" data-value="ghiaccio" style="--sw:#62C9F2"><i></i>Ghiaccio</button>
+                    <button type="button" class="swatch" role="radio" data-value="menta" style="--sw:#52D3A3"><i></i>Menta</button>
+                    <button type="button" class="swatch" role="radio" data-value="corallo" style="--sw:#FF8473"><i></i>Corallo</button>
+                    <button type="button" class="swatch" role="radio" data-value="viola" style="--sw:#AC9EFF"><i></i>Viola</button>
+                    <button type="button" class="swatch" role="radio" data-value="neutro" style="--sw:#DCE1E8"><i></i>Neutro</button>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="name" for="f-testo">Dimensione del testo</label>
+                <p class="hint">Vale per i risultati e per le risposte alle domande.</p>
+                <div class="control range">
+                    <input type="range" id="f-testo" min="14" max="20" step="1" data-name="aspetto.testo">
+                    <output for="f-testo" id="o-testo"></output>
+                </div>
+            </div>
+
+            <div class="field">
+                <span class="name" id="l-larghezza">Larghezza della colonna di lettura</span>
+                <p class="hint">Righe più corte si leggono meglio, righe più lunghe fanno scorrere meno.</p>
+                <div class="control seg" role="radiogroup" aria-labelledby="l-larghezza" data-name="aspetto.larghezza">
+                    <button type="button" role="radio" data-value="stretta">Stretta</button>
+                    <button type="button" role="radio" data-value="normale">Normale</button>
+                    <button type="button" role="radio" data-value="ampia">Ampia</button>
+                </div>
+            </div>
+
+            <div class="field">
+                <span class="name" id="l-orig">Testo selezionato a lato</span>
+                <p class="hint">Mostra accanto al risultato il testo da cui è partito. Puoi sempre aprirlo o chiuderlo dalla pagina.</p>
+                <button type="button" class="control switch" role="switch" aria-labelledby="l-orig" data-name="aspetto.mostra_originale"></button>
+            </div>
+
+            <div class="field">
+                <span class="name" id="l-av">Avanzamento vicino al mouse</span>
+                <p class="hint">Un piccolo riquadro dice cosa sta facendo Qwen: ricerca, lettura delle pagine, scrittura.</p>
+                <button type="button" class="control switch" role="switch" aria-labelledby="l-av" data-name="aspetto.avanzamento"></button>
+            </div>
+        </section>
+
+        <section class="section" aria-labelledby="s-keys">
+            <h2 id="s-keys">Tasti</h2>
+            <p>Seleziona del testo in qualsiasi programma e premi il tasto dell'azione. Per cambiarlo, fai clic sul riquadro e premi il tasto o la combinazione nuova.</p>
+
+            <div class="field" data-key="tasti.correggi">
+                <span class="name">Correggi</span>
+                <p class="hint">Corregge errori e refusi del testo selezionato.</p>
+                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Predefinito</button></div>
+                <p class="error"></p>
+            </div>
+            <div class="field" data-key="tasti.riassumi">
+                <span class="name">Riassumi</span>
+                <p class="hint">Apre il riassunto nella pagina dei risultati.</p>
+                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Predefinito</button></div>
+                <p class="error"></p>
+            </div>
+            <div class="field" data-key="tasti.spiega">
+                <span class="name">Spiega</span>
+                <p class="hint">Spiega il testo e, quando serve, cerca sul web.</p>
+                <div class="control capture"><button type="button" class="rec"></button><button type="button" class="link" data-reset>Predefinito</button></div>
+                <p class="error"></p>
+            </div>
+        </section>
+
+        <section class="section" aria-labelledby="s-beh">
+            <h2 id="s-beh">Comportamento</h2>
+            <p>Dove compare il risultato e quanto è lungo.</p>
+
+            <div class="field">
+                <span class="name" id="l-sost">Correzione direttamente nel testo</span>
+                <p class="hint">In Blocco note, Obsidian, Word, VS Code e Notepad++ la correzione prende il posto del testo selezionato. Se lo spegni, si apre nella pagina come le altre azioni.</p>
+                <button type="button" class="control switch" role="switch" aria-labelledby="l-sost" data-name="comportamento.sostituisci_testo"></button>
+            </div>
+
+            <div class="field">
+                <span class="name" id="l-len">Lunghezza di riassunti e spiegazioni</span>
+                <p class="hint">La correzione resta lunga quanto il testo originale.</p>
+                <div class="control seg" role="radiogroup" aria-labelledby="l-len" data-name="comportamento.lunghezza">
+                    <button type="button" role="radio" data-value="breve">Breve</button>
+                    <button type="button" role="radio" data-value="normale">Normale</button>
+                    <button type="button" role="radio" data-value="dettagliata">Dettagliata</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" aria-labelledby="s-web">
+            <h2 id="s-web">Ricerca web</h2>
+            <p>Prima di spiegare, AI-Hotkeys può cercare con SearXNG sul tuo PC e leggere le pagine trovate.</p>
+
+            <div class="field">
+                <span class="name" id="l-web">Quando cercare</span>
+                <p class="hint">«Quando serve»: cerca per termini tecnici, nomi, errori; non per pensieri o messaggi personali.</p>
+                <div class="control seg" role="radiogroup" aria-labelledby="l-web" data-name="searxng.web_search">
+                    <button type="button" role="radio" data-value="auto">Quando serve</button>
+                    <button type="button" role="radio" data-value="always">Sempre</button>
+                    <button type="button" role="radio" data-value="false">Mai</button>
+                </div>
+            </div>
+
+            <div class="field">
+                <span class="name" id="l-res">Risultati da usare</span>
+                <p class="hint">Quante fonti passare a Qwen.</p>
+                <div class="control stepper" data-name="searxng.results" data-min="3" data-max="8" aria-labelledby="l-res">
+                    <button type="button" data-step="-1" aria-label="Meno">−</button><output></output><button type="button" data-step="1" aria-label="Più">+</button>
+                </div>
+            </div>
+
+            <div class="field">
+                <span class="name" id="l-pages">Pagine da leggere per intero</span>
+                <p class="hint">Delle altre fonti Qwen vede solo l'anteprima. Più pagine danno più contesto ma la risposta arriva più tardi.</p>
+                <div class="control stepper" data-name="searxng.pages_to_read" data-min="0" data-max="5" aria-labelledby="l-pages">
+                    <button type="button" data-step="-1" aria-label="Meno">−</button><output></output><button type="button" data-step="1" aria-label="Più">+</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" aria-labelledby="s-model">
+            <h2 id="s-model">Modello</h2>
+            <p>Il modello di Ollama che fa il lavoro.</p>
+
+            <div class="field">
+                <label class="name" for="f-model">Modello</label>
+                <p class="hint">Deve essere già scaricato, per esempio con <code>ollama pull qwen3.5:9b</code>.</p>
+                <input class="control text" id="f-model" data-name="qwen.model" spellcheck="false">
+                <p class="error"></p>
+            </div>
+
+            <div class="field">
+                <label class="name" for="f-keep">Resta in memoria</label>
+                <p class="hint">Finché è in memoria risponde subito ma occupa la VRAM. Non usa la GPU quando è fermo.</p>
+                <select class="control select" id="f-keep" data-name="qwen.keep_alive">
+                    <option value="5m">5 minuti</option>
+                    <option value="10m">10 minuti</option>
+                    <option value="30m">30 minuti</option>
+                    <option value="1h">1 ora</option>
+                    <option value="-1">Sempre</option>
+                    <option value="0">Si scarica subito</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label class="name" for="f-url">Indirizzo di Ollama</label>
+                <p class="hint">Cambialo solo se Ollama gira su un altro computer o su un'altra porta.</p>
+                <input class="control text" id="f-url" data-name="qwen.ollama_url" spellcheck="false">
+                <p class="error"></p>
+            </div>
+        </section>
+
+        <div class="savebar">
+            <div class="inner">
+                <p class="msg" id="msg" role="status" aria-live="polite">Nessuna modifica.</p>
+                <button type="button" class="btn" id="defaults">Ripristina i predefiniti</button>
+                <button type="button" class="btn" id="undo" disabled>Annulla le modifiche</button>
+                <button type="submit" class="btn primary" id="save" disabled>Salva</button>
+            </div>
+        </div>
+    </form>
+
+    <aside class="preview" aria-label="Anteprima">
+        <h2>Anteprima della pagina dei risultati</h2>
+        <div class="sample" id="sample">
+            <div class="head">
+                <span class="keys" id="sampleKeys"></span>
+                <div>
+                    <div class="t">Spiegazione</div>
+                    <div class="m">Testo selezionato: <q>StreamingEnabled</q></div>
+                </div>
+            </div>
+            <h3>Di cosa parla</h3>
+            <p><code>StreamingEnabled</code> fa caricare il mondo di gioco a pezzi, in base a dove si trova il giocatore, così le mappe grandi restano fluide<span class="cite">[1]</span>.</p>
+            <div class="bar"><span>Chiedi un approfondimento</span><b>Invia</b></div>
+        </div>
+        <p class="note" id="widthNote"></p>
+    </aside>
+
+</main>
+
+<script>
+"use strict";
+
+const DATA = /*__DATA__*/null;
+const $ = (id) => document.getElementById(id);
+const root = document.documentElement;
+
+let saved = { ...DATA.values };     // ciò che c'è in config.ini
+let values = { ...DATA.values };    // ciò che si vede nella pagina
+
+/* ================= TASTI: nomi leggibili ================= */
+
+const MOD_NAMES = { "^": "Ctrl", "!": "Alt", "+": "Maiusc", "#": "Win" };
+
+function keyParts(hk) {
+    const m = /^([\^!+#]*)(.+)$/.exec(hk || "");
+    if (!m) return [hk];
+    const mods = [...m[1]].map((c) => MOD_NAMES[c]);
+    const k = m[2].length === 1 ? m[2].toUpperCase() : m[2];
+    return [...mods, k];
+}
+
+function keycaps(container, hk, cls) {
+    container.replaceChildren();
+    const parts = keyParts(hk);
+    parts.forEach((p, i) => {
+        const k = document.createElement("span");
+        k.className = "key" + (cls ? " " + cls : "") + (i < parts.length - 1 ? " mod" : "");
+        const s = document.createElement("span");
+        s.textContent = p;
+        k.appendChild(s);
+        container.appendChild(k);
+    });
+}
+
+/* Da un evento della tastiera alla sintassi di AutoHotkey */
+const CODE_NAMES = {
+    PageUp: "PgUp", PageDown: "PgDn", End: "End", Home: "Home", Insert: "Ins", Delete: "Del",
+    Pause: "Pause", ScrollLock: "ScrollLock", ContextMenu: "AppsKey", Space: "Space", Tab: "Tab",
+    Enter: "Enter", Backspace: "Backspace", ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
+    NumpadAdd: "NumpadAdd", NumpadSubtract: "NumpadSub", NumpadMultiply: "NumpadMult",
+    NumpadDivide: "NumpadDiv", NumpadDecimal: "NumpadDot", NumpadEnter: "NumpadEnter"
+};
+const SPECIAL = new Set(["PgUp", "PgDn", "End", "Home", "Ins", "Del", "Pause", "ScrollLock", "AppsKey",
+    ...Array.from({ length: 24 }, (_, i) => "F" + (i + 1))]);
+
+function eventToHotkey(e) {
+    let key = CODE_NAMES[e.code];
+    if (!key && /^F\d{1,2}$/.test(e.code)) key = e.code;
+    if (!key && /^Key[A-Z]$/.test(e.code)) key = e.code.slice(3).toLowerCase();
+    if (!key && /^Digit\d$/.test(e.code)) key = e.code.slice(5);
+    if (!key && /^Numpad\d$/.test(e.code)) key = e.code;
+    if (!key) return { error: "Questo tasto non si può usare." };
+    const mods = (e.ctrlKey ? "^" : "") + (e.altKey ? "!" : "") + (e.shiftKey ? "+" : "") + (e.metaKey ? "#" : "");
+    if (!mods && !SPECIAL.has(key)) {
+        return { error: "Da solo serve per scrivere: usa un tasto come PgUp o F8, oppure aggiungi Ctrl o Alt." };
+    }
+    return { hotkey: mods + key };
+}
+
+/* ================= ASPETTO DAL VIVO ================= */
+
+const THEME = { scuro: "dark", nero: "black", chiaro: "light", sistema: "auto" };
+const WIDTH_NOTE = {
+    stretta: "Colonna stretta: circa 60 caratteri per riga.",
+    normale: "Colonna normale: circa 68 caratteri per riga.",
+    ampia: "Colonna ampia: circa 80 caratteri per riga."
+};
+
+function applyLook() {
+    root.dataset.theme = THEME[values["aspetto.tema"]] || "dark";
+    root.dataset.accent = values["aspetto.colore"];
+    $("sample").style.setProperty("--pfs", values["aspetto.testo"] + "px");
+    $("widthNote").textContent = WIDTH_NOTE[values["aspetto.larghezza"]] || "";
+    keycaps($("sampleKeys"), values["tasti.spiega"]);
+    const hero = $("heroKeys");
+    hero.replaceChildren();
+    ["tasti.correggi", "tasti.riassumi", "tasti.spiega"].forEach((name) => {
+        const parts = keyParts(values[name]);
+        const k = document.createElement("span");
+        k.className = "key";
+        const s = document.createElement("span");
+        s.textContent = parts[parts.length - 1];
+        k.appendChild(s);
+        k.title = parts.join("+");
+        hero.appendChild(k);
+    });
+}
+
+/* ================= CONTROLLI ================= */
+
+function render() {
+    document.querySelectorAll("[role=radiogroup][data-name]").forEach((g) => {
+        g.querySelectorAll("[role=radio]").forEach((b) => {
+            const on = b.dataset.value === String(values[g.dataset.name]);
+            b.setAttribute("aria-checked", String(on));
+            b.tabIndex = on ? 0 : -1;
+        });
+    });
+    document.querySelectorAll(".switch[data-name]").forEach((s) => {
+        s.setAttribute("aria-checked", String(values[s.dataset.name] === "si"));
+    });
+    const range = $("f-testo");
+    range.value = values["aspetto.testo"];
+    $("o-testo").textContent = values["aspetto.testo"] + " px";
+    document.querySelectorAll(".stepper[data-name]").forEach((st) => {
+        const v = Number(values[st.dataset.name]);
+        st.querySelector("output").textContent = v;
+        st.querySelector('[data-step="-1"]').disabled = v <= Number(st.dataset.min);
+        st.querySelector('[data-step="1"]').disabled = v >= Number(st.dataset.max);
+    });
+    document.querySelectorAll("input.text[data-name], select[data-name]").forEach((i) => {
+        if (document.activeElement !== i) i.value = values[i.dataset.name];
+    });
+    document.querySelectorAll("[data-key]").forEach((f) => {
+        const rec = f.querySelector(".rec");
+        if (!rec.classList.contains("listening")) keycaps(rec, values[f.dataset.key], "small");
+        f.querySelector("[data-reset]").hidden = values[f.dataset.key] === DATA.defaults[f.dataset.key];
+    });
+    applyLook();
+    updateBar();
+}
+
+function set(name, value) {
+    values[name] = value;
+    render();
+}
+
+document.querySelectorAll("[role=radiogroup][data-name]").forEach((g) => {
+    g.addEventListener("click", (e) => {
+        const b = e.target.closest("[role=radio]");
+        if (b) set(g.dataset.name, b.dataset.value);
+    });
+    g.addEventListener("keydown", (e) => {
+        if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) return;
+        e.preventDefault();
+        const items = [...g.querySelectorAll("[role=radio]")];
+        const i = items.findIndex((b) => b.dataset.value === String(values[g.dataset.name]));
+        const next = items[(i + (e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length];
+        set(g.dataset.name, next.dataset.value);
+        next.focus();
+    });
+});
+
+document.querySelectorAll(".switch[data-name]").forEach((s) => {
+    s.addEventListener("click", () => set(s.dataset.name, values[s.dataset.name] === "si" ? "no" : "si"));
+});
+
+$("f-testo").addEventListener("input", (e) => set("aspetto.testo", Number(e.target.value)));
+
+document.querySelectorAll(".stepper[data-name]").forEach((st) => {
+    st.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-step]");
+        if (!b) return;
+        const v = Number(values[st.dataset.name]) + Number(b.dataset.step);
+        set(st.dataset.name, Math.max(Number(st.dataset.min), Math.min(Number(st.dataset.max), v)));
+    });
+});
+
+document.querySelectorAll("input.text[data-name], select[data-name]").forEach((i) => {
+    i.addEventListener("input", () => { values[i.dataset.name] = i.value.trim(); updateBar(); });
+    i.addEventListener("change", () => set(i.dataset.name, i.value.trim()));
+});
+
+/* ---------- registrazione dei tasti ---------- */
+
+let listening = null;
+
+function stopListening() {
+    if (!listening) return;
+    listening.rec.classList.remove("listening");
+    listening = null;
+    render();
+}
+
+document.querySelectorAll("[data-key]").forEach((f) => {
+    const rec = f.querySelector(".rec");
+    const err = f.querySelector(".error");
+    rec.addEventListener("click", () => {
+        if (listening && listening.rec === rec) { stopListening(); return; }
+        stopListening();
+        listening = { field: f, rec };
+        err.textContent = "";
+        rec.classList.add("listening");
+        rec.textContent = "Premi il tasto, Esc per annullare";
+    });
+    rec.addEventListener("blur", () => { if (listening && listening.rec === rec) stopListening(); });
+    f.querySelector("[data-reset]").addEventListener("click", () => {
+        err.textContent = "";
+        set(f.dataset.key, DATA.defaults[f.dataset.key]);
+    });
+});
+
+document.addEventListener("keydown", (e) => {
+    if (!listening) return;
+    if (["Control", "Alt", "Shift", "Meta", "AltGraph"].includes(e.key)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const { field } = listening;
+    const err = field.querySelector(".error");
+    if (e.key === "Escape" && !e.ctrlKey && !e.altKey) { stopListening(); return; }
+    const r = eventToHotkey(e);
+    if (r.error) { err.textContent = r.error; return; }
+    const other = ["tasti.correggi", "tasti.riassumi", "tasti.spiega"]
+        .find((n) => n !== field.dataset.key && (values[n] || "").toLowerCase() === r.hotkey.toLowerCase());
+    if (other) { err.textContent = "Questo tasto è già usato da un'altra azione."; return; }
+    err.textContent = "";
+    values[field.dataset.key] = r.hotkey;
+    stopListening();
+}, true);
+
+/* ================= SALVATAGGIO ================= */
+
+const changed = () => Object.keys(values).filter((k) => String(values[k]) !== String(saved[k]));
+
+function updateBar(message, kind) {
+    const n = changed().length;
+    $("save").disabled = n === 0;
+    $("undo").disabled = n === 0;
+    const msg = $("msg");
+    msg.className = "msg" + (kind ? " " + kind : "");
+    if (message) msg.textContent = message;
+    else msg.textContent = n === 0 ? "Nessuna modifica." : (n === 1 ? "1 modifica da salvare." : n + " modifiche da salvare.");
+}
+
+$("undo").addEventListener("click", () => {
+    values = { ...saved };
+    document.querySelectorAll(".field .error").forEach((e) => (e.textContent = ""));
+    render();
+});
+
+$("defaults").addEventListener("click", () => {
+    values = { ...values, ...DATA.defaults };
+    render();
+    updateBar("Predefiniti pronti: premi Salva per usarli.");
+});
+
+$("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const diff = {};
+    changed().forEach((k) => (diff[k] = values[k]));
+    if (!Object.keys(diff).length) return;
+    $("save").disabled = true;
+    updateBar("Salvo…");
+    try {
+        const res = await fetch("/api/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Token": DATA.token },
+            body: JSON.stringify(diff)
+        });
+        const out = await res.json().catch(() => ({}));
+        if (res.status === 422 && out.errors) {
+            Object.entries(out.errors).forEach(([name, text]) => {
+                const f = document.querySelector(`[data-key="${name}"], [data-name="${name}"]`)?.closest(".field");
+                const box = f?.querySelector(".error");
+                if (box) box.textContent = text;
+            });
+            updateBar(out.errors.tasti || "Alcuni valori non vanno bene: controlla i campi segnati.", "error");
+            return;
+        }
+        if (!res.ok) throw new Error(out.error || "Errore " + res.status);
+        saved = { ...out.values };
+        values = { ...out.values };
+        render();
+        updateBar("Salvate. AI-Hotkeys le applica da solo tra un attimo.", "ok");
+    } catch (err) {
+        updateBar(err.message === "Failed to fetch"
+            ? "Questa pagina non è più collegata: riaprila dal menu di AI-Hotkeys."
+            : err.message, "error");
+        $("save").disabled = false;
+    }
+});
+
+window.addEventListener("beforeunload", (e) => { if (changed().length) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ================= AVVIO ================= */
+
+render();
+
+function ping() { fetch("/api/ping", { headers: { "X-Token": DATA.token }, cache: "no-store" }).catch(() => {}); }
+setInterval(ping, 20000);
+</script>
+
+</body>
+</html>

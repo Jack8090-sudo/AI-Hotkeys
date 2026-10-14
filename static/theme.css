@@ -1,0 +1,222 @@
+/* =========================================================
+   AI-Hotkeys — stile condiviso (pagina dei risultati e impostazioni)
+   Il tema e il colore arrivano da config.ini, sezione [aspetto]:
+   <html data-theme="dark|black|light|auto" data-accent="ambra|ghiaccio|...">
+   ========================================================= */
+
+@font-face { font-family: "Barlow SC"; font-weight: 500; font-display: swap;
+    src: url("/fonts/barlow-semi-condensed-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow SC"; font-weight: 600; font-display: swap;
+    src: url("/fonts/barlow-semi-condensed-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans"; font-weight: 400; font-display: swap;
+    src: url("/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans"; font-weight: 400; font-style: italic; font-display: swap;
+    src: url("/fonts/ibm-plex-sans-latin-400-italic.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans"; font-weight: 600; font-display: swap;
+    src: url("/fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plex Mono"; font-weight: 400; font-display: swap;
+    src: url("/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); }
+
+/* ---------- colore della retroilluminazione (scuro / chiaro) ---------- */
+
+:root                       { --acc-d: #F5A623; --acc-l: #A35A00; }   /* ambra */
+[data-accent="ghiaccio"]    { --acc-d: #62C9F2; --acc-l: #086B96; }
+[data-accent="menta"]       { --acc-d: #52D3A3; --acc-l: #0B7552; }
+[data-accent="corallo"]     { --acc-d: #FF8473; --acc-l: #B23A27; }
+[data-accent="viola"]       { --acc-d: #AC9EFF; --acc-l: #5843C4; }
+[data-accent="neutro"]      { --acc-d: #DCE1E8; --acc-l: #2C3542; }
+
+/* ---------- tema scuro (predefinito) ---------- */
+
+:root {
+    color-scheme: dark;
+    --bg:        #131821;
+    --surface:   #19202A;
+    --surface-2: #212A36;
+    --line:      #29323F;
+    --line-2:    #3A4555;
+    --text:      #E4E8EE;
+    --text-2:    #B8C0CC;
+    --body:      #D3D9E2;
+    --muted:     #8691A2;
+    --danger:    #F27A68;
+    --accent:    var(--acc-d);
+    --on-accent: #15110A;
+    --glow:      color-mix(in srgb, var(--accent) 50%, transparent);
+    --tint:      color-mix(in srgb, var(--accent) 13%, transparent);
+    --cap-skirt: #0E1219;
+    --cap-top-1: #2A3341;
+    --cap-top-2: #202834;
+    --cap-edge:  rgba(255, 255, 255, .07);
+    --shadow:    0 14px 34px rgba(0, 0, 0, .42);
+
+    --fs: 16px;
+    --measure: 68ch;
+    --ease: cubic-bezier(.2, .7, .2, 1);
+
+    --f-ui:   "Barlow SC", "Bahnschrift", "Segoe UI", system-ui, sans-serif;
+    --f-text: "Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --f-code: "Plex Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+/* ---------- tema nero (void black, per schermi OLED) ---------- */
+
+[data-theme="black"] {
+    color-scheme: dark;
+    --bg:        #000000;
+    --surface:   #07080A;
+    --surface-2: #0E1013;
+    --line:      #16191E;
+    --line-2:    #262A31;
+    --text:      #E6E8EB;
+    --text-2:    #B3B8C0;
+    --body:      #D0D4DA;
+    --muted:     #7C838E;
+    --cap-skirt: #000000;
+    --cap-top-1: #17191D;
+    --cap-top-2: #0D0E11;
+    --cap-edge:  rgba(255, 255, 255, .06);
+    --shadow:    0 14px 34px rgba(0, 0, 0, .7);
+}
+
+/* ---------- tema chiaro ---------- */
+
+[data-theme="light"] {
+    color-scheme: light;
+    --bg:        #EDF0F4;
+    --surface:   #F8F9FB;
+    --surface-2: #E3E7ED;
+    --line:      #D3D9E1;
+    --line-2:    #B8C1CD;
+    --text:      #141920;
+    --text-2:    #39424F;
+    --body:      #1E252F;
+    --muted:     #636E7F;
+    --danger:    #B23A27;
+    --accent:    var(--acc-l);
+    --on-accent: #FFFFFF;
+    --glow:      transparent;
+    --tint:      color-mix(in srgb, var(--accent) 12%, transparent);
+    --cap-skirt: #C9D0DA;
+    --cap-top-1: #FBFCFD;
+    --cap-top-2: #EDF0F4;
+    --cap-edge:  rgba(255, 255, 255, .9);
+    --shadow:    0 12px 30px rgba(30, 40, 60, .14);
+}
+
+@media (prefers-color-scheme: light) {
+    [data-theme="auto"] {
+        color-scheme: light;
+        --bg:        #EDF0F4;
+        --surface:   #F8F9FB;
+        --surface-2: #E3E7ED;
+        --line:      #D3D9E1;
+        --line-2:    #B8C1CD;
+        --text:      #141920;
+        --text-2:    #39424F;
+        --body:      #1E252F;
+        --muted:     #636E7F;
+        --danger:    #B23A27;
+        --accent:    var(--acc-l);
+        --on-accent: #FFFFFF;
+        --glow:      transparent;
+        --tint:      color-mix(in srgb, var(--accent) 12%, transparent);
+        --cap-skirt: #C9D0DA;
+        --cap-top-1: #FBFCFD;
+        --cap-top-2: #EDF0F4;
+        --cap-edge:  rgba(255, 255, 255, .9);
+        --shadow:    0 12px 30px rgba(30, 40, 60, .14);
+    }
+}
+
+[data-width="stretta"] { --measure: 60ch; }
+[data-width="ampia"]   { --measure: 80ch; }
+
+/* ---------- base ---------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--f-text);
+    font-size: var(--fs);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: color-mix(in srgb, var(--accent) 32%, transparent); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- il tasto: l'unica cosa illuminata ---------- */
+
+.keys { display: flex; align-items: flex-end; gap: 8px; }
+
+.key {
+    position: relative;
+    display: inline-block;
+    min-width: 78px;
+    height: 70px;
+    padding: 9px 16px 0 14px;
+    border-radius: 12px;
+    background: var(--cap-skirt);
+    box-shadow: var(--shadow);
+    font-family: var(--f-ui);
+    font-weight: 600;
+    font-size: 21px;
+    line-height: 1;
+    color: var(--accent);
+    text-shadow: 0 0 12px var(--glow);
+    user-select: none;
+}
+
+/* faccia superiore del tasto */
+.key::before {
+    content: "";
+    position: absolute;
+    inset: 3px 5px 9px;
+    border-radius: 9px;
+    background: linear-gradient(180deg, var(--cap-top-1), var(--cap-top-2));
+    box-shadow: inset 0 1px 0 var(--cap-edge);
+}
+
+.key span { position: relative; display: block; padding-top: 6px; }
+
+/* modificatori (Ctrl, Alt...): più piccoli e spenti */
+.key.mod {
+    min-width: 0;
+    height: 50px;
+    padding: 7px 12px 0 11px;
+    font-size: 15px;
+    color: var(--text-2);
+    text-shadow: none;
+}
+.key.mod span { padding-top: 3px; }
+
+.key.small {
+    min-width: 0;
+    height: 34px;
+    padding: 4px 9px 0 8px;
+    border-radius: 7px;
+    font-size: 13px;
+    box-shadow: none;
+}
+.key.small::before { inset: 2px 3px 5px; border-radius: 5px; }
+.key.small span { padding-top: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}

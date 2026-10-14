@@ -1,0 +1,38 @@
+# Configurazione personale (contiene percorsi locali)
+config.ini
+
+# Runtime / file generati
+work/
+*.log
+*.pid
+*.flag
+*.tmp
+.*.tmp
+.backup_*
+*.backup_*.md
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Output di analisi locale
+graphify-out/
+
+# Interprete Python portatile (bundled, ~31 MB) — vedi README per i requisiti
+python/
+
+# SearXNG vendored (~82 MB) — solo wrapper e settings sono versionati
+searxng/app/
+searxng/lib/
+searxng/log/
+
+# Installer: build output e payload assemblato
+installer/AI-Hotkeys/
+installer/*.exe
+installer/*.rar
+installer/sorgente/payload/
+
+# Binari (AutoHotkey, Uninstall generato da NSIS)
+*.exe
+*.rar
