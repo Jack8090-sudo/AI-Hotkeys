@@ -6,14 +6,14 @@ Tasti globali per usare un LLM in locale su qualsiasi testo selezionato:
 - **PgDn** → riassumi
 - **End** → spiega (con ricerca web opzionale)
 
-Stack: AutoHotkey v2 (hotkey + UI) → Python → Ollama → Qwen. La ricerca web
+Stack: AutoHotkey v2 (hotkey + UI) → Python → Ollama → Gemma. La ricerca web
 usa SearXNG in locale su `127.0.0.1:8888`.
 
 ## Requisiti
 
 - Windows 10/11 a 64 bit
-- [Ollama](https://ollama.com/download) + modello `qwen3.5:9b` (~6.6 GB, Q4_K_M):
-  `ollama pull qwen3.5:9b` (scheda da ~12 GB consigliata)
+- [Ollama](https://ollama.com/download) + modello `gemma4:12b-it-qat` (~7.2 GB, 4 bit QAT):
+  `ollama pull gemma4:12b-it-qat` (scheda da ~12 GB consigliata)
 - AutoHotkey v2 (incluso nel setup, oppure installato a parte per l'uso da sorgente)
 - SearXNG solo per la ricerca web di End (codice wrapper in `searxng/`, opzionale)
 
@@ -31,7 +31,7 @@ Da sorgente è richiesto un Python 3.x con i soli moduli standard
 
 ## Comportamento
 
-- **Annulla con Esc:** tieni premuto Esc per 2 secondi mentre Qwen lavora
+- **Annulla con Esc:** tieni premuto Esc per 2 secondi mentre Gemma lavora
   per uccidere il processo Python e pulire i file a metà in `work\`.
   La pressione breve di Esc resta normale.
 - **PgUp in Obsidian con To-Do List.md aperto** non corregge il testo
@@ -45,7 +45,7 @@ Da sorgente è richiesto un Python 3.x con i soli moduli standard
   serve (il modello decide dalle query, i termini tecnici riconosciuti
   forzano comunque la ricerca), `always` cerca sempre, `false` mai.
   Le fonti diventano citazioni `[1] [2]…` cliccabili + elenco in fondo.
-- **Chiedi a Qwen:** la pagina dei risultati ha un popup per domande
+- **Chiedi a Gemma:** la pagina dei risultati ha un popup per domande
   successive (riscrittura iterativa in modalità correzione, Q&A con le
   ultime 6 coppie domanda/risposta nelle altre modalità, fonti riusate).
 - **Lunghezza:** `[comportamento] lunghezza = breve | normale | dettagliata`

@@ -2,7 +2,7 @@
 #SingleInstance Force
 
 ; =========================================================
-;  AI-Hotkeys — AutoHotkey → Python → Ollama → Qwen 3.5 9B
+;  AI-Hotkeys — AutoHotkey → Python → Ollama → Gemma 4 12B
 ; =========================================================
 ;  Impostazioni: icona nella barra delle applicazioni → Impostazioni
 ;  (oppure config.ini). Quando config.ini cambia, lo script si ricarica da solo.
@@ -41,9 +41,9 @@ global toastPos   := ""
 ; doing   = cosa mostra il riquadro di avanzamento
 
 global ACTIONS := CIMap(
-    "rewrite",   {script: BASE "\actions\rewrite.py",   name: "Correzione",  mode: "rewrite",   replace: true, doing: "Qwen corregge il testo"},
-    "summarize", {script: BASE "\actions\summarize.py", name: "Riassunto",   mode: "summarize", doing: "Qwen scrive il riassunto"},
-    "explain",   {script: BASE "\actions\explain.py",   name: "Spiegazione", mode: "explain",   doing: "Qwen prepara la spiegazione"},
+    "rewrite",   {script: BASE "\actions\rewrite.py",   name: "Correzione",  mode: "rewrite",   replace: true, doing: "Gemma corregge il testo"},
+    "summarize", {script: BASE "\actions\summarize.py", name: "Riassunto",   mode: "summarize", doing: "Gemma scrive il riassunto"},
+    "explain",   {script: BASE "\actions\explain.py",   name: "Spiegazione", mode: "explain",   doing: "Gemma prepara la spiegazione"},
 
     ; Azione speciale: riorganizza TUTTO il file To-Do List.md
     "obsidian_todo", {special: "obsidian_todo", name: "Riorganizza To-Do List"}
@@ -180,7 +180,7 @@ Dispatch(slot, *)
 
     if busy
     {
-        Flash("Qwen sta ancora lavorando", KeyLabel(KEYS[slot]))
+        Flash("Gemma sta ancora lavorando", KeyLabel(KEYS[slot]))
         return
     }
 
@@ -265,7 +265,7 @@ RunSelectionAction(action, hk)
 
     keyLbl := KeyLabel(hk)
 
-    ; Ricordiamo la finestra di partenza: Qwen può metterci un po'
+    ; Ricordiamo la finestra di partenza: Gemma può metterci un po'
     ; e nel frattempo potresti cambiare finestra.
     try
     {
@@ -360,7 +360,7 @@ RunSelectionAction(action, hk)
             ToastShow("Annullato", keyLbl, 2000)
             return
         }
-        MsgBox "Qwen non ha risposto.`nControlla che Ollama sia acceso e che il modello sia scaricato.", "AI-Hotkeys", "Iconx"
+        MsgBox "Gemma non ha risposto.`nControlla che Ollama sia acceso e che il modello sia scaricato.", "AI-Hotkeys", "Iconx"
         return
     }
 
@@ -368,7 +368,7 @@ RunSelectionAction(action, hk)
 
     if Trim(risposta) = ""
     {
-        MsgBox "Qwen ha restituito una risposta vuota.", "AI-Hotkeys", "Icon!"
+        MsgBox "Gemma ha restituito una risposta vuota.", "AI-Hotkeys", "Icon!"
         return
     }
 
@@ -419,7 +419,7 @@ RunObsidianTodo(keyLbl)
     if FileExist(statusFile)
         FileDelete(statusFile)
 
-    ToastShow("Qwen riorganizza la To-Do List, può volerci qualche minuto  ·  Esc 2 s = annulla", keyLbl)
+    ToastShow("Gemma riorganizza la To-Do List, può volerci qualche minuto  ·  Esc 2 s = annulla", keyLbl)
 
     comando := PYTHON ' "' BASE '\actions\obsidian_todo.py"'
 

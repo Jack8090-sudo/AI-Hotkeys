@@ -2,7 +2,7 @@
 AI-Hotkeys — ricerca web con SearXNG (in locale) per il tasto End.
 
 Flusso:
-  1. Qwen scrive 1-2 query di ricerca a partire dal testo selezionato.
+  1. Gemma scrive 1-2 query di ricerca a partire dal testo selezionato.
   2. SearXNG (http://127.0.0.1:8888) restituisce i risultati in JSON.
   3. Delle prime pagine si legge anche il testo, non solo l'anteprima.
   4. Le fonti vanno nel prompt numerate [1], [2]...; nella risposta le
@@ -554,7 +554,7 @@ def technical_terms(testo):
 def decide_queries(testo):
     """Decide se cercare e con quali query. Restituisce un dizionario con
     'query' (vuota = niente ricerca), 'via' (come si è deciso), 'termini'
-    e 'risposta' (la risposta grezza di Qwen)."""
+    e 'risposta' (la risposta grezza di Gemma)."""
     terms = technical_terms(testo)
     force = bool(terms) or ALWAYS
     try:
@@ -571,7 +571,7 @@ def decide_queries(testo):
         else:
             queries = [" ".join(" ".join(testo.split()).split(" ")[:10])]
 
-    via = "termini tecnici" if terms else ("sempre" if ALWAYS else "decide Qwen")
+    via = "termini tecnici" if terms else ("sempre" if ALWAYS else "decide Gemma")
     return {"query": queries, "via": via, "termini": terms, "risposta": answer}
 
 
@@ -592,7 +592,7 @@ LABEL_RE = re.compile(r"^\s*(?:risposta|query(?:\s+di\s+ricerca)?|answer)\s*:\s*
 
 
 def parse_queries(answer):
-    """Legge la risposta di Qwen. Restituisce (ha_detto_no, query)."""
+    """Legge la risposta di Gemma. Restituisce (ha_detto_no, query)."""
     queries = []
     for line in answer.replace("\r", "").split("\n"):
         line = LABEL_RE.sub("", line)
@@ -773,7 +773,7 @@ def _domain(url):
 
 def add_sources(text, sources):
     """Link nelle citazioni + elenco in fondo: prima le fonti citate, poi le
-    altre pagine lette (anche se Qwen non le ha citate, i link servono)."""
+    altre pagine lette (anche se Gemma non le ha citate, i link servono)."""
     if not sources:
         return text
 

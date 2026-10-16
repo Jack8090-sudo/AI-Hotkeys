@@ -22,7 +22,7 @@ CONFIG_FILE = BASE_DIR / "config.ini"
 # =========================================================
 
 DEFAULTS = {
-    "model": "qwen3.5:9b",
+    "model": "gemma4:12b-it-qat",
     "ollama_url": "http://localhost:11434",
     "keep_alive": "30m",
     "todo_file": r"%USERPROFILE%\Documents\To-Do List.md",
@@ -147,8 +147,10 @@ INTRO_RE = re.compile(
 def clean_answer(text, mode=None):
     text = text.replace("\r\n", "\n").strip()
 
-    # Eventuale ragionamento
+    # Eventuale ragionamento (Gemma 4 a volte lascia un blocco vuoto
+    # anche con think = False)
     text = re.sub(r"(?s)^<think>.*?</think>\s*", "", text)
+    text = re.sub(r"(?s)^<\|channel>thought.*?<channel\|>\s*", "", text)
 
     # Tutto racchiuso in ```...```
     fence = re.match(r"(?s)^```[a-zA-Z]*\n(.*)\n```$", text)
@@ -215,7 +217,7 @@ def run_action(mode, argv):
             fonti = []
         websearch.save_sources(fonti, query)
         meta.update({"web": bool(fonti), "query": query if fonti else [], "fonti": len(fonti)})
-        websearch.status("Qwen scrive la spiegazione…" + (f" ({len(fonti)} fonti)" if fonti else " (senza web)"))
+        websearch.status("Gemma scrive la spiegazione…" + (f" ({len(fonti)} fonti)" if fonti else " (senza web)"))
 
     try:
         fonti_txt = websearch.sources_block(fonti) if fonti else None

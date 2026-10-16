@@ -355,7 +355,7 @@ h1 {
 
             <div class="field">
                 <span class="name" id="l-av">Avanzamento vicino al mouse</span>
-                <p class="hint">Un piccolo riquadro dice cosa sta facendo Qwen: ricerca, lettura delle pagine, scrittura.</p>
+                <p class="hint">Un piccolo riquadro dice cosa sta facendo Gemma: ricerca, lettura delle pagine, scrittura.</p>
                 <button type="button" class="control switch" role="switch" aria-labelledby="l-av" data-name="aspetto.avanzamento"></button>
             </div>
         </section>
@@ -421,7 +421,7 @@ h1 {
 
             <div class="field">
                 <span class="name" id="l-res">Risultati da usare</span>
-                <p class="hint">Quante fonti passare a Qwen.</p>
+                <p class="hint">Quante fonti passare a Gemma.</p>
                 <div class="control stepper" data-name="searxng.results" data-min="3" data-max="8" aria-labelledby="l-res">
                     <button type="button" data-step="-1" aria-label="Meno">−</button><output></output><button type="button" data-step="1" aria-label="Più">+</button>
                 </div>
@@ -429,7 +429,7 @@ h1 {
 
             <div class="field">
                 <span class="name" id="l-pages">Pagine da leggere per intero</span>
-                <p class="hint">Delle altre fonti Qwen vede solo l'anteprima. Più pagine danno più contesto ma la risposta arriva più tardi.</p>
+                <p class="hint">Delle altre fonti Gemma vede solo l'anteprima. Più pagine danno più contesto ma la risposta arriva più tardi.</p>
                 <div class="control stepper" data-name="searxng.pages_to_read" data-min="0" data-max="5" aria-labelledby="l-pages">
                     <button type="button" data-step="-1" aria-label="Meno">−</button><output></output><button type="button" data-step="1" aria-label="Più">+</button>
                 </div>
@@ -442,7 +442,7 @@ h1 {
 
             <div class="field">
                 <label class="name" for="f-model">Modello</label>
-                <p class="hint">Deve essere già scaricato, per esempio con <code>ollama pull qwen3.5:9b</code>.</p>
+                <p class="hint">Deve essere già scaricato, per esempio con <code>ollama pull gemma4:12b-it-qat</code>.</p>
                 <input class="control text" id="f-model" data-name="qwen.model" spellcheck="false">
                 <p class="error"></p>
             </div>

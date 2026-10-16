@@ -358,7 +358,7 @@ def main():
         return 1
 
     if not risposta.strip():
-        write_status(False, ["Qwen ha restituito una risposta vuota.", "Il file originale NON è stato modificato."])
+        write_status(False, ["Gemma ha restituito una risposta vuota.", "Il file originale NON è stato modificato."])
         return 1
 
     risposta = normalize(risposta)
@@ -370,14 +370,14 @@ def main():
             ["Controllo di sicurezza fallito:"]
             + ["• " + e for e in errors[:8]]
             + ["", "Il file originale NON è stato modificato.",
-               f"Il risultato di Qwen è in {OUTPUT_FILE}"]
+               f"Il risultato di Gemma è in {OUTPUT_FILE}"]
         ))
         return 2
 
-    # Il file è stato modificato mentre Qwen lavorava? Allora non tocchiamo nulla.
+    # Il file è stato modificato mentre Gemma lavorava? Allora non tocchiamo nulla.
     if todo_file.read_bytes() != raw:
         write_status(False, [
-            "Il file è stato modificato mentre Qwen lavorava.",
+            "Il file è stato modificato mentre Gemma lavorava.",
             "Il file originale NON è stato modificato: premi di nuovo PgUp.",
         ])
         return 2

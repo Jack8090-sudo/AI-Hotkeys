@@ -249,7 +249,7 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
 .md ul.sources.other a { color: var(--text-2); }
 .md ul.sources.other .src-n { color: var(--muted); }
 
-/* cursore mentre Qwen scrive */
+/* cursore mentre Gemma scrive */
 .md.streaming > :last-child::after {
     content: "";
     display: inline-block;
@@ -454,7 +454,7 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
             <div class="progress" aria-hidden="true"></div>
             <div class="suggest" id="suggest"></div>
             <div class="row">
-                <label class="sr-only" for="askInput">Chiedi a Qwen</label>
+                <label class="sr-only" for="askInput">Chiedi a Gemma</label>
                 <textarea id="askInput" rows="1" spellcheck="true"></textarea>
                 <button type="submit" class="send" id="askSend">Invia</button>
             </div>
@@ -490,7 +490,7 @@ const MODE_UI = {
         title: "Correzione",
         key: "PgUp",
         placeholder: "Chiedi una modifica, per esempio: rendilo più formale",
-        busy: "Qwen sta scrivendo una nuova versione.",
+        busy: "Gemma sta scrivendo una nuova versione.",
         suggest: [
             ["Più formale", "Usa un tono più formale e professionale."],
             ["Più breve", "Rendi il testo più breve e conciso, senza perdere informazioni importanti."],
@@ -502,7 +502,7 @@ const MODE_UI = {
         title: "Riassunto",
         key: "PgDn",
         placeholder: "Chiedi qualcosa sul testo",
-        busy: "Qwen sta rispondendo.",
+        busy: "Gemma sta rispondendo.",
         suggest: [
             ["Il punto più importante", "Qual è il punto più importante?"],
             ["Ancora più breve", "Fammi un riassunto ancora più breve, in 2-3 frasi."],
@@ -514,7 +514,7 @@ const MODE_UI = {
         title: "Spiegazione",
         key: "End",
         placeholder: "Chiedi un approfondimento",
-        busy: "Qwen sta rispondendo.",
+        busy: "Gemma sta rispondendo.",
         suggest: [
             ["Un esempio pratico", "Fammi un esempio pratico."],
             ["Più semplice", "Spiegamelo in modo ancora più semplice."],
@@ -578,7 +578,7 @@ function renderMarkdown(el, text) {
     shapeSections(el);
 }
 
-/* Le sezioni che Qwen scrive sempre hanno un aspetto proprio:
+/* Le sezioni che Gemma scrive sempre hanno un aspetto proprio:
    glossario per i termini, rientro colorato per le avvertenze,
    elenco ordinato per le fonti. */
 function shapeSections(el) {
@@ -923,7 +923,7 @@ function addTurn(question) {
     turn.className = "turn";
     turn.innerHTML = `
         <div class="ask-line"><p></p><button type="button" class="btn" data-copy>Copia</button></div>
-        <div class="md"><p class="waiting">Qwen sta leggendo la domanda.</p></div>`;
+        <div class="md"><p class="waiting">Gemma sta leggendo la domanda.</p></div>`;
     turn.querySelector(".ask-line p").textContent = question;
     const content = turn.querySelector(".md");
     turn.querySelector("[data-copy]").addEventListener("click", (e) => copyText(content.innerText, e.currentTarget));
@@ -999,7 +999,7 @@ async function submit() {
         }
     } catch (e) {
         if (e.name === "AbortError") errorMsg = "__abort__";
-        else if (e instanceof TypeError) errorMsg = "Questa pagina non è più collegata a Qwen. Seleziona di nuovo il testo e premi il tasto.";
+        else if (e instanceof TypeError) errorMsg = "Questa pagina non è più collegata a Gemma. Seleziona di nuovo il testo e premi il tasto.";
         else errorMsg = e.message || String(e);
     } finally {
         state.controller = null;
@@ -1035,7 +1035,7 @@ async function submit() {
         setStatus(isRewrite ? "Fermato. La versione attuale non è cambiata." : "Fermato.");
         setTimeout(() => { if (!state.busy) setStatus(""); }, 2500);
     } else {
-        setStatus(errorMsg || "Qwen non ha risposto. Controlla che Ollama sia acceso.", true);
+        setStatus(errorMsg || "Gemma non ha risposto. Controlla che Ollama sia acceso.", true);
     }
 }
 

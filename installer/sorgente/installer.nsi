@@ -11,7 +11,7 @@ RequestExecutionLevel user
 
 !define APP      "AI-Hotkeys"
 !define VERSION  "1.0.0"
-!define MODEL    "qwen3.5:9b"
+!define MODEL    "gemma4:12b-it-qat"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP}"
 
 Name "${APP}"
@@ -37,7 +37,7 @@ ${StrStr}
 !define MUI_ABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "Installazione di AI-Hotkeys"
-!define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys usa Qwen in locale tramite tre tasti:$\r$\n$\r$\n    PgUp  →  correggi il testo selezionato$\r$\n    PgDn  →  riassumi$\r$\n    End    →  spiega$\r$\n$\r$\nVerranno installati il programma, Python e AutoHotkey (versioni portatili, solo per AI-Hotkeys). Se manca, verrà installato anche Ollama.$\r$\n$\r$\nIl modello ${MODEL} NON viene scaricato: se non lo hai già, alla fine ti verrà indicato il comando."
+!define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys usa Gemma in locale tramite tre tasti:$\r$\n$\r$\n    PgUp  →  correggi il testo selezionato$\r$\n    PgDn  →  riassumi$\r$\n    End    →  spiega$\r$\n$\r$\nVerranno installati il programma, Python e AutoHotkey (versioni portatili, solo per AI-Hotkeys). Se manca, verrà installato anche Ollama.$\r$\n$\r$\nIl modello ${MODEL} NON viene scaricato: se non lo hai già, alla fine ti verrà indicato il comando."
 
 !define MUI_FINISHPAGE_TITLE "AI-Hotkeys è installato"
 !define MUI_FINISHPAGE_TEXT "Seleziona del testo e premi PgUp, PgDn o End.$\r$\n$\r$\nSe non hai ancora il modello, apri il Prompt dei comandi ed esegui:$\r$\n    ollama pull ${MODEL}$\r$\n$\r$\nConfigurazione e prompt: tasto destro sull'icona ✦ nella barra delle applicazioni."

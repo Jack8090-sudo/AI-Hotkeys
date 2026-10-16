@@ -1,16 +1,16 @@
 """
-AI-Hotkeys — TUTTI i prompt per Qwen in un unico file.
+AI-Hotkeys — TUTTI i prompt per Gemma in un unico file.
 
 Puoi modificare liberamente i testi qui sotto: le azioni (PgUp, PgDn, End)
-e il popup "Chiedi a Qwen" li leggono da qui.
+e il popup "Chiedi a Gemma" li leggono da qui.
 
-Note su Qwen 3.5 9B (dalla scheda ufficiale del modello):
+Note su Gemma 4 12B (dalla scheda ufficiale del modello):
 - Usiamo la modalità "senza ragionamento" (think = False): è molto più veloce.
-- Parametri consigliati per questa modalità: temperature 0.7, top_p 0.8,
-  top_k 20. Per compiti di fedeltà al testo (correggere, riassumere)
-  abbassiamo la temperature: il modello inventa meno.
-- presence_penalty alto riduce le ripetizioni ma "può causare
-  mescolamento di lingue": per questo lo teniamo basso.
+- Parametri consigliati: temperature 1.0, top_p 0.95, top_k 64.
+  Teniamo top_p e top_k consigliati, ma per compiti di fedeltà al testo
+  (correggere, riassumere) abbassiamo la temperature: il modello inventa meno.
+- presence_penalty alto riduce le ripetizioni ma può far cambiare
+  lingua a metà risposta: per questo lo teniamo basso.
 - Un modello piccolo segue meglio un FORMATO DI USCITA preciso che una
   lunga lista di regole (con la lista tende a creare una sezione per regola).
 """
@@ -293,33 +293,34 @@ FOLLOWUP_WHAT = {
 # =========================================================
 
 # Stessa dimensione di contesto per tutte le chiamate: se cambia,
-# Ollama deve ricaricare il modello (più lento). Qwen 3.5 usa
-# un'attenzione "ibrida", quindi 16K costano poca memoria in più.
+# Ollama deve ricaricare il modello (più lento). Gemma 4 alterna
+# attenzione locale (finestra corta) e globale, quindi 16K costano
+# poca memoria in più.
 NUM_CTX = 16384
 
 OPTIONS = {
     "rewrite": {
-        "temperature": 0.3, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.3, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 4096,
     },
     "summarize": {
-        "temperature": 0.5, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.5, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.2, "num_predict": 2048,
     },
     # explain deve ripetere gli stessi quattro titoli ogni volta: la penalità
     # sulle ripetizioni lavorerebbe contro il formato. Temperature bassa
     # perché qui conta la fedeltà al testo, non la varietà.
     "explain": {
-        "temperature": 0.4, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.4, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 4096,
     },
     # Query per SearXNG: brevi e prevedibili
     "query": {
-        "temperature": 0.2, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.2, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 60,
     },
     "obsidian_todo": {
-        "temperature": 0.2, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.2, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 8192,
     },
 }

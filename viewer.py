@@ -1,5 +1,5 @@
 """
-AI-Hotkeys — Viewer HTML con popup "✦ Chiedi a Qwen".
+AI-Hotkeys — Viewer HTML con popup "✦ Chiedi a Gemma".
 
 Uso (chiamato da main.ahk):
     python viewer.py <input.txt> <output.txt> "<Nome azione>" [rewrite|summarize|explain]
@@ -45,7 +45,7 @@ STATIC_DIR = BASE_DIR / "static"
 #  1 volta al minuto, quindi deve essere ben sopra i 60 secondi.)
 IDLE_TIMEOUT = 240
 
-# Quanti scambi domanda/risposta precedenti mandare a Qwen
+# Quanti scambi domanda/risposta precedenti mandare a Gemma
 # nelle modalità Riassunto e Analisi.
 HISTORY_TURNS = 6
 
@@ -303,7 +303,7 @@ def make_handler(session, token, page_html):
                 answer = websearch.linkify(answer, session.sources)
 
             if not answer:
-                self._safe_emit({"error": "Qwen ha restituito una risposta vuota."})
+                self._safe_emit({"error": "Gemma ha restituito una risposta vuota."})
                 return
 
             index = session.save(question, answer, base_index)
