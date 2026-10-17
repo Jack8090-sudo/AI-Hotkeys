@@ -1,0 +1,3 @@
+# Build caches (downloads, extracted upstream sources) and build output: never committed.
+cache/
+out/
