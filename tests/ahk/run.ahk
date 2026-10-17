@@ -10,6 +10,7 @@
 ;  No hotkeys are registered.
 
 #Include %A_ScriptDir%\..\..\lib\Util.ahk
+#Include %A_ScriptDir%\..\..\lib\Proc.ahk
 
 global failures := 0, passes := 0
 global TMP := A_Temp "\aihk-ahk-tests-" ProcessExist() "-" A_TickCount
@@ -17,7 +18,11 @@ global REPO := RegExReplace(A_ScriptDir, "\\tests\\ahk$")
 
 DirCreate(TMP)
 ; Each group runs on its own: an exception fails that group, the others still run
-for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToColorRef, TestCIMap]
+for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToColorRef, TestCIMap,
+             TestIsAppPageTitle, TestIsConsoleClass, TestParseClipWaitMs, TestSelectionMatches,
+             TestParsePidRecord, TestIsConfiguredPython, TestSearxngPidIsOurs, TestProcHelpers,
+             TestErrorFileLine1, TestWarningSummary, TestHotkeyId, TestResolveKeys,
+             TestPromptsUserTemplate, TestProcExitCode]
 {
     try
         test()
@@ -287,4 +292,244 @@ TestCIMap()
     Assert("CIMap get, different case", m["*|CORREGGI"], "rewrite")
     Assert("CIMap missing key", m.Has("Code.exe"), false)
     Assert("CIMap() empty", CIMap().Count, 0)
+}
+
+
+; ---------------------------------------------------------
+; S8b1: own-page titles (C04), consoles (C03), ClipWait (D12), re-copy (C05)
+; ---------------------------------------------------------
+
+TestIsAppPageTitle()
+{
+    yes := ["Fix - AI-Hotkeys - Google Chrome", "Summary - AI-Hotkeys - Personal - Microsoft Edge",
+            "Explanation - AI-Hotkeys - Mozilla Firefox", "Fix - AI-Hotkeys", "Fix - AI-Hotkeys - ",
+            "AI-Hotkeys Settings", "AI-Hotkeys Settings - Google Chrome", "ai-hotkeys settings - Brave",
+            "Riassunto - AI-Hotkeys - Opera"]
+    no := ["", "AI-Hotkeys", "AI-Hotkeys - Google Chrome", "Fix - AI-Hotkeys2 - Chrome",
+           "Fix - AI-HotkeysX", "Fix -AI-Hotkeys - Chrome", "My AI-Hotkeys notes - Notepad",
+           "Fix - ai-hotkeys - Chrome", "C:\AI-Hotkeys", "Fix - AI-Hotkeys-dev - Chrome"]
+    for t in yes
+        Assert("IsAppPageTitle(" Show(t) ") true", !!IsAppPageTitle(t), true)
+    for t in no
+        Assert("IsAppPageTitle(" Show(t) ") false", !!IsAppPageTitle(t), false)
+}
+
+TestIsConsoleClass()
+{
+    for c in ["ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS", "mintty", "consolewindowclass"]
+        Assert("IsConsoleClass(" Show(c) ") true", !!IsConsoleClass(c), true)
+    for c in ["", "Notepad", "Chrome_WidgetWin_1", "MozillaWindowClass", "OpusApp", "Console", "minttyx"]
+        Assert("IsConsoleClass(" Show(c) ") false", !!IsConsoleClass(c), false)
+}
+
+TestParseClipWaitMs()
+{
+    cases := [["", 2000], ["500", 500], [" 300 ", 300], ["300`r", 300], ["100", 100], ["10000", 10000],
+              ["99", 2000], ["0", 2000], ["10001", 2000], ["-5", 2000], ["0.5", 2000], ["abc", 2000],
+              ["500ms", 2000], ["123456", 2000], ["0300", 300]]
+    for c in cases
+        Assert("ParseClipWaitMs(" Show(c[1]) ")", ParseClipWaitMs(c[1]), c[2])
+    Assert("ParseClipWaitMs custom default", ParseClipWaitMs("x", 750), 750)
+}
+
+TestSelectionMatches()
+{
+    Assert("SelectionMatches identical", !!SelectionMatches("ciao mondo", "ciao mondo"), true)
+    Assert("SelectionMatches CRLF vs LF", !!SelectionMatches("a`r`nb", "a`nb"), true)
+    Assert("SelectionMatches CR vs LF", !!SelectionMatches("a`rb", "a`nb"), true)
+    Assert("SelectionMatches different text", !!SelectionMatches("ciao", "ciao!"), false)
+    Assert("SelectionMatches case differs", !!SelectionMatches("Ciao", "ciao"), false)
+    Assert("SelectionMatches recopy empty", !!SelectionMatches("ciao", ""), false)
+    Assert("SelectionMatches original empty", !!SelectionMatches("", ""), false)
+    Assert("SelectionMatches whole line copied instead", !!SelectionMatches("word", "a word here`r`n"), false)
+}
+
+
+; ---------------------------------------------------------
+; S8b2: SearXNG pid file (K5, C20) and process helpers
+; ---------------------------------------------------------
+
+TestParsePidRecord()
+{
+    r := ParsePidRecord("1234 133700000000000000")
+    Assert("ParsePidRecord K5 pid", r.pid, 1234)
+    Assert("ParsePidRecord K5 ctime", r.ctime, 133700000000000000)
+    r := ParsePidRecord("  42`t133700000000000001`r`n")
+    Assert("ParsePidRecord tab and CRLF pid", r.pid, 42)
+    Assert("ParsePidRecord tab and CRLF ctime", r.ctime, 133700000000000001)
+    r := ParsePidRecord("5678`n")
+    Assert("ParsePidRecord legacy pid", r.pid, 5678)
+    Assert("ParsePidRecord legacy ctime = 0", r.ctime, 0)
+    r := ParsePidRecord("7 9223372036854775807")
+    Assert("ParsePidRecord max Int64 ctime", r.ctime, 9223372036854775807)
+    for bad in ["", "   ", "0", "0 123", "-5", "12 -3", "abc", "12 abc", "12 34 56", "12,34", "1.5",
+                "12345678901", "7 9223372036854775808", "7 99999999999999999999", "４２"]
+        Assert("ParsePidRecord(" Show(bad) ") rejected", ParsePidRecord(bad), "")
+}
+
+TestIsConfiguredPython()
+{
+    exe := "C:\Program Files\AI-Hotkeys\python\pythonw.exe"
+    Assert("IsConfiguredPython same path", !!IsConfiguredPython(exe, exe), true)
+    Assert("IsConfiguredPython case-insensitive", !!IsConfiguredPython("c:\program files\ai-hotkeys\PYTHON\PythonW.EXE", exe), true)
+    Assert("IsConfiguredPython python.exe sibling", !!IsConfiguredPython("C:\Program Files\AI-Hotkeys\python\python.exe", exe), true)
+    Assert("IsConfiguredPython other folder", !!IsConfiguredPython("C:\Python313\pythonw.exe", exe), false)
+    Assert("IsConfiguredPython subfolder", !!IsConfiguredPython("C:\Program Files\AI-Hotkeys\python\x\pythonw.exe", exe), false)
+    Assert("IsConfiguredPython other exe same folder", !!IsConfiguredPython("C:\Program Files\AI-Hotkeys\python\notepad.exe", exe), false)
+    Assert("IsConfiguredPython lookalike name", !!IsConfiguredPython("C:\Program Files\AI-Hotkeys\python\pythonw.exe.exe", exe), false)
+    Assert("IsConfiguredPython empty path", !!IsConfiguredPython("", exe), false)
+    Assert("IsConfiguredPython system pythonw: name only", !!IsConfiguredPython("C:\Python313\pythonw.exe", "pythonw"), true)
+    Assert("IsConfiguredPython system pythonw: other exe", !!IsConfiguredPython("C:\Windows\notepad.exe", "pythonw"), false)
+}
+
+TestSearxngPidIsOurs()
+{
+    exe := "C:\AI-Hotkeys\python\pythonw.exe"
+    k5 := {pid: 100, ctime: 133700000000000000}
+    legacy := {pid: 100, ctime: 0}
+    Assert("SearxngPidIsOurs K5 match", !!SearxngPidIsOurs(k5, exe, 133700000000000000, exe), true)
+    Assert("SearxngPidIsOurs K5 ctime differs (pid reused)", !!SearxngPidIsOurs(k5, exe, 133700000000000001, exe), false)
+    Assert("SearxngPidIsOurs K5 ctime unknown", !!SearxngPidIsOurs(k5, exe, 0, exe), false)
+    Assert("SearxngPidIsOurs K5 other python", !!SearxngPidIsOurs(k5, "C:\Python313\python.exe", 133700000000000000, exe), false)
+    Assert("SearxngPidIsOurs K5 unrelated exe", !!SearxngPidIsOurs(k5, "C:\Windows\explorer.exe", 133700000000000000, exe), false)
+    Assert("SearxngPidIsOurs process gone", !!SearxngPidIsOurs(k5, "", 0, exe), false)
+    Assert("SearxngPidIsOurs legacy, path matches", !!SearxngPidIsOurs(legacy, exe, 133700000000000000, exe), true)
+    Assert("SearxngPidIsOurs legacy, unrelated python", !!SearxngPidIsOurs(legacy, "C:\Python313\python.exe", 1, exe), false)
+    Assert("SearxngPidIsOurs legacy, system pythonw (no path to match)", !!SearxngPidIsOurs(legacy, "C:\Python313\pythonw.exe", 1, "pythonw"), false)
+    Assert("SearxngPidIsOurs K5, system pythonw, ctime matches", !!SearxngPidIsOurs(k5, "C:\Python313\pythonw.exe", 133700000000000000, "pythonw"), true)
+    Assert("SearxngPidIsOurs unreadable record", !!SearxngPidIsOurs("", exe, 1, exe), false)
+}
+
+TestProcHelpers()
+{
+    me := ProcessExist()
+    Assert("ProcessCreationTime(self) > 0", ProcessCreationTime(me) > 0, true)
+    Assert("ProcessCreationTime(self) stable", ProcessCreationTime(me) = ProcessCreationTime(me), true)
+    ; FILETIME of a process started this century: after 2000-01-01 (125911584000000000)
+    Assert("ProcessCreationTime(self) plausible FILETIME", ProcessCreationTime(me) > 125911584000000000, true)
+    Assert("ProcessCreationTime(0) = 0", ProcessCreationTime(0), 0)
+    Assert("ProcessPathOf(self) = A_AhkPath", ProcessPathOf(me) = A_AhkPath, true)
+    Assert("ProcessPathOf(0) empty", ProcessPathOf(0), "")
+    ; A short-lived child: once it has ended, both helpers report "gone"
+    Run(A_ComSpec " /c exit 0", , "Hide", &pid)
+    ProcessWaitClose(pid, 10)
+    Assert("ProcessCreationTime(ended child) = 0", ProcessCreationTime(pid), 0)
+    Assert("ProcessPathOf(ended child) empty", ProcessPathOf(pid), "")
+    ; The pid-file check end to end on this very process
+    rec := ParsePidRecord(me " " ProcessCreationTime(me))
+    Assert("K5 record of self verifies against A_AhkPath",
+        !!(rec.ctime = ProcessCreationTime(me) && ProcessPathOf(rec.pid) = A_AhkPath), true)
+}
+
+
+; ---------------------------------------------------------
+; S8b3: error file (K1), config warnings (K6), keys (C26), prompts (D4)
+; ---------------------------------------------------------
+
+TestErrorFileLine1()
+{
+    Assert("ErrorFileLine1 LF", ErrorFileLine1("Ollama is not running: start Ollama.`ndetail`n"), "Ollama is not running: start Ollama.")
+    Assert("ErrorFileLine1 CRLF", ErrorFileLine1("msg`r`ndetail"), "msg")
+    Assert("ErrorFileLine1 BOM + spaces", ErrorFileLine1(Chr(0xFEFF) "  msg  `n"), "msg")
+    Assert("ErrorFileLine1 keeps inner double space", ErrorFileLine1("run  ollama pull x`n"), "run  ollama pull x")
+    Assert("ErrorFileLine1 no newline", ErrorFileLine1("only"), "only")
+    Assert("ErrorFileLine1 empty", ErrorFileLine1(""), "")
+    Assert("ErrorFileLine1 empty first line", ErrorFileLine1("`nsecond"), "")
+    long := ""
+    Loop 300
+        long .= "x"
+    Assert("ErrorFileLine1 capped at 200", StrLen(ErrorFileLine1(long "`nd")), 200)
+}
+
+TestWarningSummary()
+{
+    Assert("WarningSummary empty", WarningSummary(""), "")
+    Assert("WarningSummary blank lines only", WarningSummary("`r`n  `n"), "")
+    Assert("WarningSummary one", WarningSummary("line 3: 'model' appears twice in [qwen]`n"), "line 3: 'model' appears twice in [qwen]")
+    Assert("WarningSummary CRLF, BOM, blanks", WarningSummary(Chr(0xFEFF) "a`r`n`r`nb`r`n"), "a`nb")
+    Assert("WarningSummary 3 lines kept", WarningSummary("a`nb`nc"), "a`nb`nc")
+    Assert("WarningSummary more than 3", WarningSummary("a`nb`nc`nd`ne"), "a`nb`nc`n(+2 more)")
+    Assert("WarningSummary custom max", WarningSummary("a`nb`nc", 1), "a`n(+2 more)")
+}
+
+TestHotkeyId()
+{
+    Assert("HotkeyId modifier order", HotkeyId("!^r"), HotkeyId("^!r"))
+    Assert("HotkeyId letter case", HotkeyId("^!R"), HotkeyId("^!r"))
+    Assert("HotkeyId named key", HotkeyId("PgUp"), "pgup")
+    Assert("HotkeyId all modifiers", HotkeyId("#+!^F5"), "^!+#f5")
+    Assert("HotkeyId differs by modifier", HotkeyId("^PgUp") = HotkeyId("PgUp"), false)
+}
+
+TestResolveKeys()
+{
+    defs := Map("correggi", "PgUp", "riassumi", "PgDn", "spiega", "End")
+    names := Map("correggi", "Fix", "riassumi", "Summarize", "spiega", "Explain")
+    keysOf(r) => r.keys["correggi"] "|" r.keys["riassumi"] "|" r.keys["spiega"]
+
+    r := ResolveKeys(Map(), defs, names)
+    Assert("ResolveKeys nothing set -> defaults", keysOf(r), "PgUp|PgDn|End")
+    Assert("ResolveKeys nothing set -> no warning", r.warnings.Length, 0)
+
+    r := ResolveKeys(Map("correggi", "^!r", "riassumi", "", "spiega", "F8"), defs, names)
+    Assert("ResolveKeys custom keys", keysOf(r), "^!r|PgDn|F8")
+    Assert("ResolveKeys custom keys -> no warning", r.warnings.Length, 0)
+
+    r := ResolveKeys(Map("correggi", "pgup"), defs, names)
+    Assert("ResolveKeys invalid -> default", keysOf(r), "PgUp|PgDn|End")
+    Assert("ResolveKeys invalid -> one warning", r.warnings.Length, 1)
+    Assert("ResolveKeys invalid warning text", r.warnings[1], 'Fix: "pgup" is not a valid key, using PgUp')
+
+    r := ResolveKeys(Map("correggi", "^!r", "riassumi", "!^R"), defs, names)
+    Assert("ResolveKeys duplicate -> second falls back", keysOf(r), "^!r|PgDn|End")
+    Assert("ResolveKeys duplicate warning", r.warnings[1], "Summarize: Alt+Ctrl+R is already used by Fix, using PgDn")
+
+    ; A key set by the user wins over another slot's default
+    r := ResolveKeys(Map("correggi", "PgDn"), defs, names)
+    Assert("ResolveKeys user key takes a default -> that slot has no key", keysOf(r), "PgDn||End")
+    Assert("ResolveKeys no-key warning", r.warnings[1], "Summarize: PgDn is used by Fix: no key")
+
+    ; Swapped defaults: both explicit, no conflict
+    r := ResolveKeys(Map("correggi", "PgDn", "riassumi", "PgUp"), defs, names)
+    Assert("ResolveKeys swapped keys", keysOf(r), "PgDn|PgUp|End")
+    Assert("ResolveKeys swapped keys -> no warning", r.warnings.Length, 0)
+
+    ; Duplicate whose default is also taken
+    r := ResolveKeys(Map("correggi", "End", "spiega", "End"), defs, names)
+    Assert("ResolveKeys duplicate and default taken", keysOf(r), "End|PgDn|")
+    Assert("ResolveKeys duplicate and default taken warning", r.warnings[1],
+        "Explain: End is already used by Fix, and End is used by Fix: no key")
+    Assert("ResolveKeys value is trimmed", ResolveKeys(Map("spiega", "  F8 "), defs, names).keys["spiega"], "F8")
+}
+
+TestPromptsUserTemplate()
+{
+    src := Chr(0xFEFF) 'x = """a`r`n`r`nb"""`r`nY = 1`r`n'
+    out := PromptsUserTemplate(src)
+    Assert("PromptsUserTemplate header", InStr(out, "# AI-Hotkeys — your own prompts (prompts_user.py).") = 1, true)
+    Assert("PromptsUserTemplate commented copy", InStr(out, '# x = """a`n#`n# b"""`n# Y = 1`n') > 0, true)
+    bad := 0
+    Loop Parse, out, "`n"
+        if (A_LoopField != "" && SubStr(A_LoopField, 1, 1) != "#")
+            bad++
+    Assert("PromptsUserTemplate every non-empty line is a comment", bad, 0)
+    Assert("PromptsUserTemplate no BOM inside", InStr(out, Chr(0xFEFF)), 0)
+    Assert("PromptsUserTemplate no CR", InStr(out, "`r"), 0)
+}
+
+TestProcExitCode()
+{
+    Run(A_ComSpec " /c exit 3", , "Hide", &pid)
+    h := ProcOpen(pid)
+    Assert("ProcOpen(child) handle", h != 0, true)
+    Loop 100
+    {
+        if (ProcExitCode(h) != 259)
+            break
+        Sleep 50
+    }
+    Assert("ProcExitCode(child) = 3", ProcExitCode(h), 3)
+    ProcClose(h)
+    Assert("ProcExitCode(0) = -1", ProcExitCode(0), -1)
+    Assert("ProcOpen(0) = 0", ProcOpen(0), 0)
 }

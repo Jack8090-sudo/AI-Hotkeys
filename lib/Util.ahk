@@ -121,3 +121,256 @@ CIMap(pairs*)
         m.Set(pairs*)
     return m
 }
+
+
+; =========================================================
+;  Capture and routing (S8b1)
+; =========================================================
+
+; True for the window titles of AI-Hotkeys' own pages, where the hotkeys
+; must keep their native function (scrolling, hotkey recording):
+;   results page  "<Fix|Summary|Explanation> - AI-Hotkeys - <Browser>"
+;                 (static\viewer.html: <title>__TITLE__ - AI-Hotkeys</title>
+;                  and document.title = ui.title + " - AI-Hotkeys")
+;   settings page "AI-Hotkeys Settings"  (static\settings.html <title>)
+; The browser appends its own name, so " - AI-Hotkeys" must be followed by
+; " - " or the end of the title. S10 must keep both titles.
+IsAppPageTitle(title)
+{
+    static RESULTS_TITLE_RE := "D)\s-\sAI-Hotkeys(?:\s-\s|$)"
+    static SETTINGS_TITLE   := "AI-Hotkeys Settings"
+    return RegExMatch(title, RESULTS_TITLE_RE) > 0 || InStr(title, SETTINGS_TITLE) > 0
+}
+
+; True for console/terminal window classes: "^c" would interrupt the
+; running program there (SIGINT), so the hotkeys stay native.
+;   ConsoleWindowClass             conhost (cmd, PowerShell)
+;   CASCADIA_HOSTING_WINDOW_CLASS  Windows Terminal
+;   mintty                         Git Bash, Cygwin, MSYS2
+IsConsoleClass(cls)
+{
+    static CLASSES := CIMap("ConsoleWindowClass", true, "CASCADIA_HOSTING_WINDOW_CLASS", true, "mintty", true)
+    return CLASSES.Has(cls)
+}
+
+; [comportamento] clip_wait_ms → milliseconds to wait for "^c" (decision D12).
+; Whole numbers from 100 to 10000 are accepted; anything else gives the default.
+ParseClipWaitMs(value, default := 2000)
+{
+    value := Trim(value, " `t`r`n")
+    if !RegExMatch(value, "D)^\d{1,5}$")
+        return default
+    n := Integer(value)
+    return (n >= 100 && n <= 10000) ? n : default
+}
+
+; True if a re-copy of the selection still matches the text sent to Qwen
+; (direct replace, C05). Line endings are ignored; everything else must match.
+SelectionMatches(original, recopied)
+{
+    if (original = "")
+        return false
+    norm(s) => StrReplace(StrReplace(s, "`r`n", "`n"), "`r", "`n")
+    return norm(original) == norm(recopied)
+}
+
+
+; =========================================================
+;  Process lifecycle (S8b2)
+; =========================================================
+
+; Parses work\searxng.pid (contract K5): "<pid> <creation FILETIME>", or the
+; legacy "<pid>". Returns {pid, ctime} (ctime = 0 for the legacy form), or ""
+; for anything else. Same rules as avvia_searxng.parse_pid_record.
+ParsePidRecord(text)
+{
+    text := Trim(text, " `t`r`n")
+    if !RegExMatch(text, "D)^(\d{1,10})(?:[ \t]+(\d{1,19}))?$", &m)
+        return ""
+    pid := Integer(m[1])
+    if (pid <= 0 || pid > 0xFFFFFFFF)
+        return ""
+    ctime := 0
+    if (m[2] != "")
+    {
+        ; FILETIME fits in a signed 64-bit integer until the year 30828
+        if (StrLen(m[2]) = 19 && StrCompare(m[2], "9223372036854775807") > 0)
+            return ""
+        ctime := Integer(m[2])
+    }
+    return {pid: pid, ctime: ctime}
+}
+
+; True if exePath is the configured interpreter (pythonExe, unquoted) or its
+; python.exe / pythonw.exe sibling (websearch.py starts SearXNG with the
+; pythonw.exe next to sys.executable). When pythonExe has no folder (system
+; "pythonw"), only the file name can be compared.
+IsConfiguredPython(exePath, pythonExe)
+{
+    if (exePath = "" || pythonExe = "")
+        return false
+    SplitPath(exePath, &name, &dir)
+    if !(name = "python.exe" || name = "pythonw.exe")
+        return false
+    if !InStr(pythonExe, "\")
+        return true
+    SplitPath(pythonExe, , &wantDir)
+    return (dir = wantDir)
+}
+
+; C20: may StopSearxng kill the process named by the pid file?
+;   record     ParsePidRecord result ("" = unreadable → never)
+;   exePath    ProcessGetPath of record.pid ("" = gone or not accessible → never)
+;   ctime      creation FILETIME of record.pid (0 = unknown)
+;   pythonExe  the configured interpreter, unquoted
+; K5 record: the interpreter must match and the creation time must be equal.
+; Legacy record (no creation time): the full interpreter path must match.
+SearxngPidIsOurs(record, exePath, ctime, pythonExe)
+{
+    if !IsObject(record) || exePath = ""
+        return false
+    if !IsConfiguredPython(exePath, pythonExe)
+        return false
+    if record.ctime
+        return (ctime != 0 && ctime = record.ctime)
+    return InStr(pythonExe, "\") > 0
+}
+
+
+; =========================================================
+;  Error surfacing and UX (S8b3)
+; =========================================================
+
+; Line 1 of work\error.txt (contract K1): the user-facing message.
+; BOM, surrounding spaces and the detail lines are dropped; at most 200
+; characters. "" when there is nothing to show.
+ErrorFileLine1(text)
+{
+    text := LTrim(text, Chr(0xFEFF))
+    text := StrReplace(text, "`r", "`n")
+    nl := InStr(text, "`n")
+    line := Trim(nl ? SubStr(text, 1, nl - 1) : text, " `t")
+    return SubStr(line, 1, 200)
+}
+
+; work\config_warning.txt (contract K6, one warning per line) → toast text:
+; the first maxLines non-empty lines, plus "(+N more)". "" if none.
+WarningSummary(text, maxLines := 3)
+{
+    text := StrReplace(StrReplace(LTrim(text, Chr(0xFEFF)), "`r`n", "`n"), "`r", "`n")
+    lines := []
+    Loop Parse, text, "`n"
+    {
+        line := Trim(A_LoopField, " `t")
+        if (line != "")
+            lines.Push(SubStr(line, 1, 200))
+    }
+    out := ""
+    for i, line in lines
+    {
+        if (i > maxLines)
+        {
+            out .= "`n(+" (lines.Length - maxLines) " more)"
+            break
+        }
+        out .= (out = "" ? "" : "`n") line
+    }
+    return out
+}
+
+; Identity of a hotkey for duplicate detection: "!^r" and "^!R" are the
+; same key. Modifiers in a fixed order, key name lower-cased.
+HotkeyId(hk)
+{
+    i := 1
+    while (i <= StrLen(hk) && InStr("^!+#", SubStr(hk, i, 1)))
+        i++
+    mods := SubStr(hk, 1, i - 1), out := ""
+    for c in ["^", "!", "+", "#"]
+        if InStr(mods, c)
+            out .= c
+    return out StrLower(SubStr(hk, i))
+}
+
+; C26: decides which key each slot gets, before anything is registered.
+;   wanted   Map slot → the [tasti] value ("" = not set)
+;   defaults Map slot → default key (I1)
+;   names    Map slot → name for the messages ("Fix", ...)
+; Valid keys the user set win over defaults; a key set for two slots goes
+; to the first slot (in the order of defaults) and the other one falls back
+; to its default. A slot whose default is taken too gets no key ("").
+; Returns {keys: Map slot → key or "", warnings: [text, ...]}.
+ResolveKeys(wanted, defaults, names)
+{
+    keys := Map(), owner := Map(), problem := Map(), warnings := []
+    ; 1) keys set by the user
+    for slot, def in defaults
+    {
+        raw := wanted.Has(slot) ? Trim(wanted[slot], " `t") : ""
+        if (raw = "")
+            continue
+        if !ValidHotkey(raw)
+        {
+            problem[slot] := '"' raw '" is not a valid key'
+            continue
+        }
+        id := HotkeyId(raw)
+        if owner.Has(id)
+        {
+            problem[slot] := KeyLabel(raw) " is already used by " names[owner[id]]
+            continue
+        }
+        keys[slot] := raw, owner[id] := slot
+    }
+    ; 2) defaults for the rest
+    for slot, def in defaults
+    {
+        if keys.Has(slot)
+            continue
+        id := HotkeyId(def)
+        if !owner.Has(id)
+        {
+            keys[slot] := def, owner[id] := slot
+            if problem.Has(slot)
+                warnings.Push(names[slot] ": " problem[slot] ", using " KeyLabel(def))
+            continue
+        }
+        keys[slot] := ""
+        warnings.Push(names[slot] ": " (problem.Has(slot) ? problem[slot] ", and " : "")
+            . KeyLabel(def) " is used by " names[owner[id]] ": no key")
+    }
+    return {keys: keys, warnings: warnings}
+}
+
+; Text for a new prompts_user.py (decision D4): a header, then prompts.py
+; with every line commented out. Uncommented names override prompts.py;
+; anything left commented keeps coming from prompts.py (prompt_loader).
+PromptsUserTemplate(promptsText)
+{
+    header := "
+    (
+# AI-Hotkeys — your own prompts (prompts_user.py).
+#
+# This file is never shipped or overwritten by an update. prompt_loader.py
+# uses every name defined here instead of the one in prompts.py; anything
+# you do not define keeps coming from prompts.py, so new prompts added by
+# an update keep working.
+#
+# Below is a commented-out copy of prompts.py. To change a prompt, remove
+# the '# ' in front of ALL the lines of that assignment (the name, every
+# line of the text and the closing quotes), then edit it.
+# Note: REWRITE_SYSTEM and the others are built from BASE_RULES inside
+# prompts.py. If you change BASE_RULES here, also uncomment the names that
+# use it, so they are rebuilt from your version.
+#
+# If this file has an error, prompts.py is used and a warning is shown
+# after the next reload. Delete this file to go back to the standard prompts.
+# =========================================================================
+
+    )"
+    text := StrReplace(StrReplace(LTrim(promptsText, Chr(0xFEFF)), "`r`n", "`n"), "`r", "`n")
+    out := header
+    Loop Parse, text, "`n"
+        out .= (A_LoopField = "" ? "#" : "# " A_LoopField) "`n"
+    return out
+}
