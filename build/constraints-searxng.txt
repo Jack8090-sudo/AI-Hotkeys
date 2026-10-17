@@ -1,0 +1,34 @@
+# Versions vendored in the v1.0.0 runtime (C:\AI-Hotkeys\searxng\lib), used as
+# constraints so the lock reproduces the tested set instead of floating transitives.
+annotated-doc==0.0.5
+async-timeout==5.0.1
+babel==2.18.0
+blinker==1.9.0
+certifi==2026.7.22
+cffi==2.1.1
+click==8.5.0
+curl_cffi==0.16.3
+Flask==3.1.3
+flask-babel==4.0.0
+isodate==0.7.2
+itsdangerous==2.2.0
+Jinja2==3.1.6
+lxml==6.1.3
+markdown-it-py==4.2.0
+MarkupSafe==3.0.4
+mdurl==0.1.2
+msgspec==0.22.0
+pycparser==3.1
+Pygments==2.21.0
+python-dateutil==2.9.0.post0
+pytz==2026.5
+PyYAML==6.0.3
+rich==15.0.0
+shellingham==1.5.4
+six==1.17.0
+typer==0.27.2
+typing_extensions==4.16.0
+tzdata==2026.5
+valkey==6.1.1
+Werkzeug==3.1.9
+whitenoise==6.12.0

@@ -1,0 +1,25 @@
+# SearXNG runtime dependencies at the pinned commit (see build/pins.json).
+# Copied verbatim from upstream requirements.txt @ 6671d89bede8c9fc108b17bb98916170f5657650.
+# curl_cffi is already listed upstream (AI-Hotkeys websearch.py reuses it, I14).
+# Regenerate the lock with build/lock-searxng.ps1.
+certifi==2026.7.22
+babel==2.18.0
+flask-babel==4.0.0
+flask==3.1.3
+jinja2==3.1.6
+lxml==6.1.3
+pygments==2.21.0
+python-dateutil==2.9.0.post0
+pyyaml==6.0.3
+curl_cffi==0.16.3
+valkey==6.1.1
+markdown-it-py==4.2.0
+msgspec==0.22.0
+typer==0.27.2
+isodate==0.7.2
+whitenoise==6.12.0
+typing-extensions==4.16.0
+
+# AI-Hotkeys addition (not upstream): searx uses zoneinfo (time_zone plugin,
+# weather, bilibili) and Windows has no system tz database. v1.0.0 vendored it too.
+tzdata==2026.5

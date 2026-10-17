@@ -1,0 +1,42 @@
+{
+  "_comment": "Upstream pins for build/build.ps1. Every artifact is downloaded from its official upstream into build/cache/downloads and must match sha256, or the build fails. Hashes were cross-checked against the upstream-published digests (see docs/changes/pending/S11.md).",
+  "python": {
+    "version": "3.13.16",
+    "url": "https://www.python.org/ftp/python/3.13.16/python-3.13.16-embed-amd64.zip",
+    "file": "python-3.13.16-embed-amd64.zip",
+    "sha256": "97dae5274cc54867065e8d5a3226e48c35017ed332a0fdb0e27d5b5821961297",
+    "verified_against": "python.org release API (release_file sha256_sum)"
+  },
+  "autohotkey": {
+    "version": "2.0.19",
+    "url": "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.19/AutoHotkey_2.0.19.zip",
+    "file": "AutoHotkey_2.0.19.zip",
+    "sha256": "4e0d0e65655066a646a210951320feaef0729a3597177131adaec4066bef5869",
+    "verified_against": "https://www.autohotkey.com/download/2.0/AutoHotkey_2.0.19.zip.sha256"
+  },
+  "searxng": {
+    "commit": "6671d89bede8c9fc108b17bb98916170f5657650",
+    "version_string": "2026.10.7+6671d89",
+    "docker_tag": "2026.10.7-6671d89",
+    "git_url": "https://github.com/searxng/searxng",
+    "git_branch": "master",
+    "url": "https://github.com/searxng/searxng/archive/6671d89bede8c9fc108b17bb98916170f5657650.tar.gz",
+    "file": "searxng-6671d89bede8c9fc108b17bb98916170f5657650.tar.gz",
+    "sha256": "fabb3759cba4a165d704b7a3ed8b67e114d36c99186a73cc407f3564788cf980",
+    "verified_against": "content diff of searx/ against the vendored v1.0.0 tree (H17); GitHub does not guarantee archive byte-stability, so on a mismatch re-verify the tree and re-pin"
+  },
+  "nsis": {
+    "version": "3.11",
+    "url": "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.11/nsis-3.11.zip",
+    "file": "nsis-3.11.zip",
+    "sha256": "c7d27f780ddb6cffb4730138cd1591e841f4b7edb155856901cdf5f214394fa1",
+    "verified_against": "SourceForge file listing sha1 ef7ff767e5cbd9edd22add3a32c9b8f4500bb10d"
+  },
+  "pypi": {
+    "index_url": "https://pypi.org/simple",
+    "requirements": "build/requirements-searxng.txt",
+    "python_version": "3.13",
+    "platform": "win_amd64",
+    "abi": "cp313"
+  }
+}
