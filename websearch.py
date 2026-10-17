@@ -11,14 +11,20 @@ Flow:
 If SearXNG does not respond, End works as before (no web).
 """
 
+import http.client
+import ipaddress
 import json
 import re
+import socket
+import ssl
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeout
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -46,9 +52,20 @@ _MODE = (CFG.get("web_search") or "auto").strip().lower()
 ENABLED = _MODE not in ("0", "false", "no", "off", "")
 ALWAYS = _MODE in ("always", "sempre")
 
+def _clamp(value, low, high):
+    return max(low, min(high, value))
+
+
 SEARX_URL = (CFG.get("searxng_url") or "http://127.0.0.1:8888").rstrip("/")
-MAX_RESULTS = _int(CFG.get("results"), 5)
-PAGES_TO_READ = _int(CFG.get("pages_to_read"), 3)
+MAX_RESULTS = _clamp(_int(CFG.get("results"), 5), 1, 10)
+PAGES_TO_READ = _clamp(_int(CFG.get("pages_to_read"), 3), 0, 5)
+
+# Wall-clock limits (seconds) for reading result pages: each page, redirects
+# included, and the whole parallel fetch phase.
+PAGE_DEADLINE = 12.0
+FETCH_DEADLINE = 15.0
+# Ollama preflight before any web search (C22)
+PREFLIGHT_TIMEOUT = 2.0
 
 # Sources budget in the prompt, in characters (4 chars ≈ 1 token):
 # with NUM_CTX = 16384 there is room left for the selected text and the answer.
@@ -357,40 +374,339 @@ def _charset(ctype, default="utf-8"):
     return m.group(1) if m else default
 
 
-def _download(url, timeout):
-    """Returns (html text or None, content-type)."""
-    cr = _cffi()
-    if cr:
+# =========================================================
+# SSRF GUARD (C11)
+# =========================================================
+# Result URLs come from the internet (via SearXNG): a page must never make this
+# PC fetch something on itself or on the local network (router admin pages,
+# other local services, cloud metadata endpoints). Only the SearXNG URL itself
+# (127.0.0.1) is contacted locally, and it does not go through this guard.
+#
+# Every hop of a redirect chain is checked again, and the connection goes to
+# the very IP address that was checked (pinned), so a DNS answer that changes
+# between check and connect (DNS rebinding) cannot redirect it:
+#   - curl_cffi path: CURLOPT_RESOLVE host:port:ip, system proxies disabled;
+#   - stdlib path: the socket is opened to the checked IP by hand
+#     (Host header and TLS SNI/certificate check still use the host name).
+# There is deliberately no configuration switch to turn this off.
+
+ALLOWED_PORTS = (80, 443)
+MAX_REDIRECTS = 5
+_REDIRECT_CODES = (301, 302, 303, 307, 308)
+
+_BLOCKED_HOSTS = {
+    "localhost", "metadata", "metadata.google.internal", "metadata.goog",
+    "instance-data", "instance-data.ec2.internal",
+}
+_BLOCKED_NETS = [ipaddress.ip_network(n) for n in (
+    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+    "172.16.0.0/12", "192.0.0.0/24", "192.168.0.0/16", "198.18.0.0/15", "224.0.0.0/4",
+    "240.0.0.0/4", "255.255.255.255/32",
+    "::/128", "::1/128", "fc00::/7", "fe80::/10", "fec0::/10", "ff00::/8",
+)]
+# Cloud metadata addresses (most are also inside the ranges above)
+_METADATA_IPS = {ipaddress.ip_address(a) for a in (
+    "169.254.169.254", "169.254.170.2", "100.100.100.200", "192.0.0.192", "fd00:ec2::254",
+)}
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+# Test seam: ports on 127.0.0.1 that the test suite may fetch from its local
+# fixture servers. Always empty in the application.
+_TEST_LOOPBACK_PORTS = frozenset()
+
+
+class Target:
+    """A URL that passed safe_url(): where to connect and what to ask for."""
+
+    __slots__ = ("url", "scheme", "host", "port", "ip", "path")
+
+    def __init__(self, url, scheme, host, port, ip, path):
+        self.url, self.scheme, self.host, self.port, self.ip, self.path = url, scheme, host, port, ip, path
+
+    def __repr__(self):
+        return f"Target({self.url!r} -> {self.ip}:{self.port})"
+
+
+def _embedded_v4(ip):
+    """IPv4 address hidden inside an IPv6 one (mapped, compatible, NAT64, 6to4)."""
+    if ip.version != 6:
+        return None
+    if ip.ipv4_mapped:
+        return ip.ipv4_mapped
+    if ip.sixtofour:
+        return ip.sixtofour
+    if ip in _NAT64 or int(ip) >> 32 == 0:      # 64:ff9b::a.b.c.d, ::a.b.c.d
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return None
+
+
+def ip_blocked(ip, port=None):
+    """True when the address is not a public internet address."""
+    if isinstance(ip, str):
+        ip = ipaddress.ip_address(ip.split("%")[0])
+    inner = _embedded_v4(ip)
+    if inner is not None and ip_blocked(inner, port):
+        return True
+    if ip.is_loopback and port in _TEST_LOOPBACK_PORTS and str(ip) == "127.0.0.1":
+        return False
+    if ip in _METADATA_IPS or any(ip in net for net in _BLOCKED_NETS if net.version == ip.version):
+        return True
+    return (ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast
+            or ip.is_unspecified or ip.is_reserved or not ip.is_global)
+
+
+def _looks_numeric(host):
+    """Hosts the URL standard parses as an IPv4 number: 2130706433, 0x7f.1, 127.1…"""
+    last = host.rstrip(".").rsplit(".", 1)[-1]
+    return bool(re.fullmatch(r"\d+|0[xX][0-9a-fA-F]*", last))
+
+
+def _resolve(host, port):
+    """All addresses of a host name (test seam)."""
+    infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    return [info[4][0] for info in infos]
+
+
+def safe_url(url):
+    """A Target when `url` may be fetched, otherwise None.
+
+    Only http(s) on ports 80/443; the host must resolve exclusively to public
+    addresses (no loopback, private/ULA, link-local, CGNAT, multicast,
+    unspecified, reserved, IPv4-mapped forms of those, or cloud metadata).
+    """
+    try:
+        parts = urllib.parse.urlsplit(url)
+        scheme = parts.scheme.lower()
+        host = (parts.hostname or "").lower()
+        port = parts.port
+    except (ValueError, AttributeError):
+        return None
+    if scheme not in ("http", "https") or not host:
+        return None
+    if parts.username is not None or parts.password is not None:
+        return None
+    if port is None:
+        port = 443 if scheme == "https" else 80
+    if port not in ALLOWED_PORTS and port not in _TEST_LOOPBACK_PORTS:
+        return None
+    if "%" in host or any(c.isspace() for c in host):
+        return None
+    bare = host.rstrip(".")
+    if bare in _BLOCKED_HOSTS or bare.endswith(".localhost"):
+        return None
+
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is None and _looks_numeric(host):
+        return None             # decimal / hex / octal / short IPv4 forms: never legitimate here
+
+    if literal is not None:
+        addresses = [str(literal)]
+    else:
         try:
-            r = cr.get(url, impersonate="chrome", timeout=timeout, stream=True, allow_redirects=True)
+            addresses = _resolve(host, port)
+        except (OSError, UnicodeError):
+            return None
+    if not addresses:
+        return None
+    try:
+        if any(ip_blocked(a, port) for a in addresses):
+            return None         # one internal address is enough to refuse
+    except ValueError:
+        return None
+    if port not in ALLOWED_PORTS and any(a != "127.0.0.1" for a in addresses):
+        return None             # test ports are only for the 127.0.0.1 fixtures
+
+    path = parts.path or "/"
+    if parts.query:
+        path += "?" + parts.query
+    return Target(url, scheme, host, port, addresses[0].split("%")[0], path)
+
+
+# =========================================================
+# DOWNLOAD (redirects by hand, per-page deadline: C11 + C23)
+# =========================================================
+
+class _DeadlineExceeded(Exception):
+    pass
+
+
+def _remaining(deadline):
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise _DeadlineExceeded()
+    return left
+
+
+def _next_hop(url, location):
+    if not location:
+        return None
+    return urllib.parse.urljoin(url, location.strip())
+
+
+def _download_cffi(cr, url, deadline):
+    """curl_cffi: (html or None, content-type). Raises on transport errors (urllib retries)."""
+    from curl_cffi import CurlOpt
+
+    for _hop in range(MAX_REDIRECTS + 1):
+        target = safe_url(url)
+        if not target:
+            return None, ""
+        ip = f"[{target.ip}]" if ":" in target.ip else target.ip
+        session = cr.Session(curl_options={
+            CurlOpt.RESOLVE: [f"{target.host}:{target.port}:{ip}"],
+            CurlOpt.NOPROXY: "*",
+        })
+        try:
+            r = session.get(url, impersonate="chrome", timeout=_remaining(deadline),
+                            stream=True, allow_redirects=False)
             try:
+                if r.status_code in _REDIRECT_CODES:
+                    url = _next_hop(url, r.headers.get("location"))
+                    if not url:
+                        return None, ""
+                    continue
                 ctype = r.headers.get("content-type", "")
                 if r.status_code != 200 or ("html" not in ctype and "text/plain" not in ctype):
                     return None, ctype
                 chunks, size = [], 0
                 for chunk in r.iter_content():
+                    _remaining(deadline)
                     chunks.append(chunk)
                     size += len(chunk)
                     if size > MAX_PAGE_BYTES:
                         break
+                _remaining(deadline)
                 return b"".join(chunks).decode(_charset(ctype), errors="replace"), ctype
             finally:
                 r.close()
-        except Exception:
-            pass  # retry with urllib
+        finally:
+            session.close()
+    return None, ""     # too many redirects
 
+
+_SSL_CONTEXT = None
+
+
+def _ssl_context():
+    global _SSL_CONTEXT
+    if _SSL_CONTEXT is None:
+        _SSL_CONTEXT = ssl.create_default_context()
+    return _SSL_CONTEXT
+
+
+class _Watchdog:
+    """Shuts the socket down at the deadline: a server that drips one byte at a
+    time (headers included) cannot hold the read open past it."""
+
+    def __init__(self, sock, deadline):
+        self.sock = sock
+        self.timer = threading.Timer(max(0.0, deadline - time.monotonic()), self._fire)
+        self.timer.daemon = True
+        self.timer.start()
+
+    def _fire(self):
+        try:
+            socket.socket.shutdown(self.sock, socket.SHUT_RDWR)
+        except Exception:
+            pass
+
+    def cancel(self):
+        self.timer.cancel()
+
+
+def _open_pinned(target, deadline):
+    """GET target.path over a socket opened to the checked IP. Returns (sock, response, watchdog).
+
+    The response is read straight from our own socket (http.client would close
+    it after the headers of a "Connection: close" answer), so the per-read
+    timeout and the watchdog keep working on the body.
+    """
+    timeout = _remaining(deadline)
+    sock = socket.create_connection((target.ip, target.port), timeout=timeout)
+    watchdog = _Watchdog(sock, deadline)
     try:
-        with _get(url, timeout) as r:
-            ctype = r.headers.get("Content-Type", "")
-            if "html" not in ctype and "text/plain" not in ctype:
+        if target.scheme == "https":
+            sock = _ssl_context().wrap_socket(sock, server_hostname=target.host)
+            watchdog.sock = sock
+            conn = http.client.HTTPSConnection(target.host, target.port, timeout=timeout)
+        else:
+            conn = http.client.HTTPConnection(target.host, target.port, timeout=timeout)
+        conn.sock = sock
+        conn.request("GET", target.path, headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5",
+            "Connection": "close",
+        })
+        response = http.client.HTTPResponse(sock, method="GET")
+        response.begin()
+        return sock, response, watchdog
+    except BaseException:
+        watchdog.cancel()
+        try:
+            sock.close()
+        except Exception:
+            pass
+        raise
+
+
+def _download_stdlib(url, deadline):
+    """Standard library: (html or None, content-type)."""
+    for _hop in range(MAX_REDIRECTS + 1):
+        target = safe_url(url)
+        if not target:
+            return None, ""
+        sock, r, watchdog = _open_pinned(target, deadline)
+        try:
+            if r.status in _REDIRECT_CODES:
+                url = _next_hop(url, r.getheader("Location"))
+                if not url:
+                    return None, ""
+                continue
+            ctype = r.getheader("Content-Type", "") or ""
+            if r.status != 200 or ("html" not in ctype and "text/plain" not in ctype):
                 return None, ctype
-            raw = r.read(MAX_PAGE_BYTES)
+            chunks, size = [], 0
+            while size <= MAX_PAGE_BYTES:
+                sock.settimeout(_remaining(deadline))
+                chunk = r.read1(65536)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                size += len(chunk)
+            _remaining(deadline)
+            raw = b"".join(chunks)[:MAX_PAGE_BYTES]
             return raw.decode(r.headers.get_content_charset() or "utf-8", errors="replace"), ctype
+        finally:
+            watchdog.cancel()
+            r.close()
+            sock.close()
+    return None, ""     # too many redirects
+
+
+def _download(url, timeout=None):
+    """Returns (html text or None, content-type). `timeout` is the wall-clock
+    budget for the whole page, redirects included (default PAGE_DEADLINE)."""
+    deadline = time.monotonic() + (PAGE_DEADLINE if timeout is None else timeout)
+    if not safe_url(url):
+        return None, ""
+    cr = _cffi()
+    if cr:
+        try:
+            return _download_cffi(cr, url, deadline)
+        except _DeadlineExceeded:
+            return None, ""
+        except Exception:
+            pass  # retry with the standard library
+    try:
+        return _download_stdlib(url, deadline)
     except Exception:
         return None, ""
 
 
-def fetch_page_text(url, timeout=8):
+def fetch_page_text(url, timeout=None):
     """All readable text of the page ("" if it cannot be read)."""
     html, ctype = _download(url, timeout)
     if not html:
@@ -612,6 +928,53 @@ def parse_queries(answer):
 # FULL SEARCH
 # =========================================================
 
+def ollama_ready(timeout=None):
+    """Fast check that Ollama answers (C22): without it the search is wasted work."""
+    opener = getattr(qwen_client, "_OPENER", None) or urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(qwen_client.OLLAMA_URL + "/api/tags",
+                         timeout=PREFLIGHT_TIMEOUT if timeout is None else timeout) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _usable(text):
+    return bool(text) and len(text) >= 200
+
+
+def fetch_pages(urls):
+    """Page texts {index: text}, read in parallel.
+
+    Stops as soon as PAGES_TO_READ usable pages are in, and in any case at
+    FETCH_DEADLINE; pages still downloading are abandoned (each one ends by
+    itself within PAGE_DEADLINE).
+    """
+    texts = {}
+    if not urls:
+        return texts
+    ex = ThreadPoolExecutor(max_workers=len(urls))
+    try:
+        futures = {ex.submit(fetch_page_text, u): i for i, u in enumerate(urls)}
+        usable = 0
+        try:
+            for f in as_completed(futures, timeout=FETCH_DEADLINE):
+                try:
+                    t = f.result()
+                except Exception:
+                    t = ""
+                texts[futures[f]] = t
+                if _usable(t):
+                    usable += 1
+                    if usable >= PAGES_TO_READ:
+                        break
+        except FuturesTimeout:
+            pass
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    return texts
+
+
 def gather_sources(testo):
     """Returns (sources, queries). sources = [] when searching is not possible."""
     if not ENABLED:
@@ -620,6 +983,9 @@ def gather_sources(testo):
     # First decide whether searching is needed: for a text that explains itself
     # nothing is searched (and SearXNG is not started at all).
     status("Checking whether a search is needed…")
+    # Ollama down: no search at all, the final call reports the error (C22)
+    if not ollama_ready():
+        return [], []
     queries = make_queries(testo)
     if not queries:
         return [], []
@@ -656,11 +1022,11 @@ def gather_sources(testo):
     to_fetch = results[: min(len(results), PAGES_TO_READ + 2)]
     if to_fetch and PAGES_TO_READ > 0:
         status(f"Reading {min(len(to_fetch), PAGES_TO_READ)} pages…")
-        with ThreadPoolExecutor(max_workers=len(to_fetch)) as ex:
-            texts = list(ex.map(lambda r: fetch_page_text(r["url"]), to_fetch))
+        texts = fetch_pages([r["url"] for r in to_fetch])
         read = 0
-        for r, t in zip(to_fetch, texts):
-            if t and len(t) >= 200 and read < PAGES_TO_READ:
+        for i, r in enumerate(to_fetch):     # search-rank order among the pages that arrived
+            t = texts.get(i, "")
+            if _usable(t) and read < PAGES_TO_READ:
                 r["text"] = t
                 read += 1
 
