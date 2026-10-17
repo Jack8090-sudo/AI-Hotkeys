@@ -36,3 +36,7 @@ installer/sorgente/payload/
 # Binari (AutoHotkey, Uninstall generato da NSIS)
 *.exe
 *.rar
+
+# Personal prompts (kept across updates)
+prompts_user.py
+prompts.py.bak-*
