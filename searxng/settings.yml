@@ -25,13 +25,15 @@ search:
   autocomplete: ""
   default_lang: "auto"
   # json is for AI-Hotkeys; html to also use it from the browser
-  # (http://127.0.0.1:8888)
+  # (http://127.0.0.1:8888 or http://localhost:8888: the launcher answers
+  # 403 to any other Host name, which blocks DNS-rebinding pages)
   formats:
     - html
     - json
 
 server:
   # From your PC only: nobody else on the network can use it.
+  # (avvia_searxng.py always binds 127.0.0.1 itself, exclusively.)
   bind_address: "127.0.0.1"
   limiter: false
   public_instance: false
