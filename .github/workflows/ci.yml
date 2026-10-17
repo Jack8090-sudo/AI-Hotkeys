@@ -1,0 +1,209 @@
+# CI baseline (plan step S2). Windows images, because AI-Hotkeys is Windows-only.
+# Every action is pinned by full commit SHA; every downloaded tool is checked against a pinned SHA-256.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHON_VERSION: "3.13"
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  lint:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dev tools (requirements-dev.txt)
+        run: python -m pip install -r requirements-dev.txt
+      - name: ruff check
+        run: python -m ruff check --output-format=github .
+      - name: compileall (project files only)
+        env:
+          # compileall always writes .pyc files; keep them out of the tree.
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}\pycache
+        run: |
+          python -m compileall -q -x '^\.[\\/](\.git|\.claude|python|searxng[\\/](app|lib|log)|build[\\/](cache|out)|work|graphify-out)([\\/]|$)' .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  unit:
+    name: unit (${{ matrix.os }}${{ matrix.coverage && ', coverage' || '' }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            coverage: true
+          - os: windows-2022
+            coverage: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Unit tests
+        if: ${{ !matrix.coverage }}
+        run: python -m unittest discover -s tests -t . -v
+      - name: Install coverage (requirements-dev.txt)
+        if: ${{ matrix.coverage }}
+        run: python -m pip install -r requirements-dev.txt
+      - name: Unit tests with coverage
+        if: ${{ matrix.coverage }}
+        # Baseline measured locally for S2: 74.6% total (branch). Ratchet = baseline - 2.
+        # The tests run the app from %TEMP%\aihk-test-*; coverage_remap.py maps that data back onto the repo.
+        run: |
+          python -m coverage run --rcfile=scripts/ci/coverage.ini -m unittest discover -s tests -t . -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/ci/coverage_remap.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m coverage xml --rcfile=scripts/ci/coverage.ini
+          python -m coverage report --rcfile=scripts/ci/coverage.ini --fail-under=72
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload coverage.xml
+        if: ${{ matrix.coverage && always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  ahk-validate:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Download AutoHotkey (build/pins.json, SHA-256 verified)
+        run: |
+          scripts/ci/get-autohotkey.ps1 -Dest "$env:RUNNER_TEMP\ahk"
+          Copy-Item "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" ahk\AutoHotkey64.exe
+      - name: Validate main.ahk (/ErrorStdOut /validate)
+        run: scripts/ci/ahk-run.ps1 -Ahk ahk\AutoHotkey64.exe -Script main.ahk -Validate
+      - name: Negative test - a broken script must fail validation (H13)
+        run: scripts/ci/ahk-run.ps1 -Ahk ahk\AutoHotkey64.exe -Script scripts\ci\fixtures\broken.ahk -Validate -ExpectFailure
+
+  ahk-unit:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Skip until S8a adds tests/ahk/run.ahk
+        if: ${{ hashFiles('tests/ahk/run.ahk') == '' }}
+        run: Write-Host "::notice::tests/ahk/run.ahk does not exist yet (step S8a); AHK unit tests skipped."
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: ${{ hashFiles('tests/ahk/run.ahk') != '' }}
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Download AutoHotkey (build/pins.json, SHA-256 verified)
+        if: ${{ hashFiles('tests/ahk/run.ahk') != '' }}
+        run: |
+          scripts/ci/get-autohotkey.ps1 -Dest "$env:RUNNER_TEMP\ahk"
+          Copy-Item "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" ahk\AutoHotkey64.exe
+      - name: Validate tests/ahk/run.ahk
+        if: ${{ hashFiles('tests/ahk/run.ahk') != '' }}
+        run: scripts/ci/ahk-run.ps1 -Ahk ahk\AutoHotkey64.exe -Script tests\ahk\run.ahk -Validate
+      - name: Run AHK unit tests (exit code = failure count)
+        if: ${{ hashFiles('tests/ahk/run.ahk') != '' }}
+        run: scripts/ci/ahk-run.ps1 -Ahk ahk\AutoHotkey64.exe -Script tests\ahk\run.ahk
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      # sha256 of gitleaks_8.30.1_linux_x64.tar.gz (GitHub release asset digest and the release checksums.txt).
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+          persist-credentials: false
+      - name: Install gitleaks (pinned, SHA-256 verified)
+        run: |
+          set -euo pipefail
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$tarball" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          "$RUNNER_TEMP/gitleaks/gitleaks" version
+      - name: gitleaks (full history, redacted)
+        run: '"$RUNNER_TEMP/gitleaks/gitleaks" git --redact --no-banner --exit-code 1 --verbose .'
+      - name: No tracked config.ini, work/, *.exe or *.rar
+        run: python3 -I scripts/ci/check_hygiene.py tracked
+      - name: No personal C:\Users\<name>\ paths in tracked files
+        run: python3 -I scripts/ci/check_hygiene.py paths
+
+  licenses:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: License files present
+        run: python -I scripts/ci/check_license_presence.py
+      - name: Install the locked SearXNG wheels into a temp lib (hash-checked, no byte-compiling)
+        # The vendored searxng/lib is not in git, so rebuild an equivalent lib from the hashed lock.
+        # --no-compile matters: .pyc entries in RECORD would change the generated packages.json.
+        run: |
+          python -I -m pip install --isolated --no-cache-dir --no-compile --no-deps --only-binary=:all: `
+            --require-hashes --target "$env:RUNNER_TEMP\searxng-lib" -r build/requirements-searxng.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Python-package notices are up to date (gen_notices.py --check)
+        run: python -I tools/licenses/gen_notices.py --lib "$env:RUNNER_TEMP\searxng-lib" --check
+
+  vuln-scan:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    # Advisory for now (H27). Make this blocking (at least for HIGH findings) before the first release.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install pip-audit (requirements-dev.txt)
+        run: python -m pip install -r requirements-dev.txt
+      - name: pip-audit on the hashed SearXNG lock
+        run: python -m pip_audit -r build/requirements-searxng.txt --require-hashes --disable-pip --progress-spinner off
