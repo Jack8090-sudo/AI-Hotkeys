@@ -38,7 +38,7 @@ class ObsidianMainTest(unittest.TestCase):
         return self.ot.STATUS_FILE.read_text(encoding="utf-8").split("\n")[0]
 
     def backups(self):
-        return sorted(p.name for p in self.todo.parent.glob("*.backup_*.md"))
+        return sorted(p.name for p in (self.todo.parent / ".ai-hotkeys-backups").glob("*.backup_*.md"))
 
     def test_status_files_live_in_the_temporary_work_folder(self):
         self.assertEqual(self.ot.STATUS_FILE.parent, self.tree.work)
@@ -54,7 +54,7 @@ class ObsidianMainTest(unittest.TestCase):
         self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))     # still CRLF
         backups = self.backups()
         self.assertEqual(len(backups), 1)
-        self.assertEqual((self.todo.parent / backups[0]).read_bytes(), original)
+        self.assertEqual((self.todo.parent / ".ai-hotkeys-backups" / backups[0]).read_bytes(), original)
         self.assertFalse((self.todo.parent / ".To-Do List.md.tmp").exists())
 
     def test_safety_failure_leaves_file_untouched(self):
@@ -90,9 +90,36 @@ class ObsidianMainTest(unittest.TestCase):
             self.assertEqual(self.ot.main(), 2)
         self.assertIn("aggiunto mentre Qwen lavorava", self.todo.read_text(encoding="utf-8"))
 
-    # ---- known defect C13: flipped by step S5 ----
+    def test_bom_is_preserved_and_qwen_output_removed_on_success(self):
+        self.todo.write_bytes(b"\xef\xbb\xbf" + GOLDEN.encode("utf-8"))
+        self.assertEqual(self.run_main(answer=GOLDEN.replace("Sistema di clan", "Sistema dei clan")), 0)
+        self.assertTrue(self.todo.read_bytes().startswith(b"\xef\xbb\xbf"))
+        self.assertFalse(self.ot.OUTPUT_FILE.exists())
 
-    @unittest.expectedFailure
+    def test_qwen_output_is_kept_when_a_check_fails(self):
+        self.todo.write_text(GOLDEN, encoding="utf-8")
+        self.assertEqual(self.run_main(answer=GOLDEN.replace("- [ ] Sistema di clan\n", "")), 2)
+        self.assertTrue(self.ot.OUTPUT_FILE.exists())
+
+    def test_backups_are_rotated_and_old_style_backups_untouched(self):
+        old_style = self.todo.parent / "To-Do List.backup_20200101_000000.md"
+        old_style.write_text("vecchio", encoding="utf-8")
+        folder = self.todo.parent / ".ai-hotkeys-backups"
+        folder.mkdir()
+        for i in range(25):
+            (folder / f"To-Do List.backup_20250101_0000{i:02d}.md").write_text("x", encoding="utf-8")
+        self.todo.write_text(GOLDEN, encoding="utf-8")
+        self.assertEqual(self.run_main(answer=GOLDEN.replace("Sistema di clan", "Sistema dei clan")), 0)
+        self.assertEqual(len(self.backups()), self.ot.BACKUP_KEEP)
+        self.assertTrue(old_style.exists())
+
+    def test_non_utf8_file_is_reported(self):
+        self.todo.write_bytes("caff\xe8 \x80".encode("latin-1"))
+        self.assertEqual(self.run_main(answer=GOLDEN), 1)
+        self.assertIn("not UTF-8", self.ot.STATUS_FILE.read_text(encoding="utf-8"))
+
+    # ---- C13 (fixed in S5) ----
+
     def test_C13_replace_failure_reports_error_and_keeps_original(self):
         """C13: an os.replace failure escapes main(): no status is written, tmp is left behind."""
         self.todo.write_text(GOLDEN, encoding="utf-8")

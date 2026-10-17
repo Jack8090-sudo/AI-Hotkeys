@@ -11,14 +11,20 @@ Exit codes:
 
 The outcome is also written to work\\obsidian_status.txt
 (first line: OK or ERRORE), so AutoHotkey can show it.
+
+Backups go to the hidden folder ".ai-hotkeys-backups" next to the file
+(Obsidian does not index dot-folders); the newest BACKUP_KEEP are kept.
 """
 
+import glob
 import os
 import re
 import shutil
 import sys
+import time
 from collections import Counter
 from datetime import datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -35,6 +41,14 @@ STATUS_FILE = WORK_DIR / "obsidian_status.txt"
 
 LEVELS = ["🟢", "🟡", "🔴"]
 CATEGORIES = ["### 🐛 Bug", "### ⚙️ Game Design", "### 💡 Idea"]
+
+BACKUP_DIR_NAME = ".ai-hotkeys-backups"
+BACKUP_KEEP = 20
+
+# Minimum similarity between a task's old and new text. Low on purpose: the
+# prompt asks Qwen to fix spelling and translate English to Italian, which
+# keeps about 0.35; an unrelated replacement scores about 0.2.
+TASK_SIMILARITY = 0.3
 
 
 # =========================================================
@@ -167,11 +181,13 @@ def write_status(ok, lines):
 # =========================================================
 
 def ask_qwen(testo):
-    prompt = PROMPT.replace("{testo}", testo)
-    return qwen_client.chat(
-        [{"role": "user", "content": prompt}],
-        "obsidian_todo",
-    )
+    messages = [{"role": "user", "content": PROMPT.replace("{testo}", testo)}]
+    if hasattr(qwen_client, "chat_ex"):
+        text, done_reason = qwen_client.chat_ex(messages, "obsidian_todo")
+        if done_reason == "length":
+            raise RuntimeError("the answer was cut off: the To-Do file is too long for one pass")
+        return text
+    return qwen_client.chat(messages, "obsidian_todo")
 
 
 # =========================================================
@@ -332,15 +348,119 @@ def validate(original, new):
             "probably truncated"
         )
 
+    # --- content that is not a task: frontmatter, paragraphs, tables, headings ---
+    if preamble(original) != preamble(new):
+        errors.append(f"the content before '# {LEVELS[0]}' (e.g. frontmatter) was changed or removed")
+
+    o_kinds, n_kinds = line_kinds(original), line_kinds(new)
+    for kind in sorted(o_kinds):
+        if n_kinds[kind] < o_kinds[kind]:
+            errors.append(f"{kind} lines: {o_kinds[kind]} in the original, only {n_kinds[kind]} in the result")
+
+    changed = changed_tasks(o_clean, n_clean)
+    if changed:
+        errors.append("tasks changed beyond recognition: " + "; ".join(f"'{t[:60]}'" for t in changed[:3]))
+
     return errors
+
+
+def preamble(text):
+    """Everything before the first level heading (frontmatter, notes), lines right-trimmed."""
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if line.strip() == f"# {LEVELS[0]}":
+            return "\n".join(l.rstrip() for l in lines[:i]).strip()
+    return ""
+
+
+STRUCTURE_HEADINGS = {f"# {level}" for level in LEVELS} | set(CATEGORIES)
+
+
+def line_kinds(text):
+    """How many non-task lines of each kind: paragraph, table row, heading."""
+    kinds = Counter()
+    for line in strip_code(text).split("\n"):
+        s = line.strip()
+        if not s or LIST_RE.match(line) or s in STRUCTURE_HEADINGS or re.fullmatch(r"-{3,}", s):
+            continue
+        if s.startswith("|"):
+            kinds["table"] += 1
+        elif re.match(r"#{1,6} ", s):
+            kinds["heading"] += 1
+        else:
+            kinds["paragraph"] += 1
+    return kinds
+
+
+TASK_TEXT_RE = re.compile(r"(?m)^[ \t]*(?:[-*+]|\d+[.)])[ \t]+\[.\][ \t]+(.+?)[ \t]*$")
+
+
+def changed_tasks(original, new):
+    """Original tasks whose text has no similar task in the result (TASK_SIMILARITY)."""
+    def norm(t):
+        return " ".join(t.lower().split())
+
+    # Identical tasks pair up first; the rest is compared only with unpaired new tasks.
+    old = Counter(norm(t) for t in TASK_TEXT_RE.findall(original))
+    cur = Counter(norm(t) for t in TASK_TEXT_RE.findall(new))
+    common = old & cur
+    old, cur = list((old - common).elements()), list((cur - common).elements())
+    out = []
+    for task in old:
+        best = 0.0
+        for candidate in cur:
+            m = SequenceMatcher(None, task, candidate)
+            if m.real_quick_ratio() > best and m.quick_ratio() > best:
+                best = max(best, m.ratio())
+        if best < TASK_SIMILARITY:
+            out.append(task)
+    return out
 
 
 # =========================================================
 # MAIN
 # =========================================================
 
-def main():
-    todo_file = Path(sys.argv[1]) if len(sys.argv) > 1 else TODO_FILE
+def make_backup(todo_file):
+    """Copy the file into .ai-hotkeys-backups/ and keep only the newest BACKUP_KEEP copies."""
+    folder = todo_file.parent / BACKUP_DIR_NAME
+    folder.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file = folder / f"{todo_file.stem}.backup_{timestamp}{todo_file.suffix}"
+    shutil.copy2(todo_file, backup_file)
+    pattern = f"{glob.escape(todo_file.stem)}.backup_*{glob.escape(todo_file.suffix)}"
+    for old in sorted(folder.glob(pattern))[:-BACKUP_KEEP]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    return backup_file
+
+
+def replace_with_retry(src, dst, attempts=5):
+    """os.replace, retried when Obsidian / OneDrive / antivirus briefly locks the file."""
+    for i in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if i == attempts - 1:
+                raise
+            time.sleep(0.1 * (i + 1))
+
+
+def main(argv=None, ask=None):
+    """Exit code 0/1/2 (see the module docstring); never raises."""
+    try:
+        return _main(sys.argv if argv is None else argv, ask or ask_qwen)
+    except Exception as e:
+        write_status(False, [f"Unexpected error: {type(e).__name__}: {e}",
+                             "The original file was NOT modified."])
+        return 1
+
+
+def _main(argv, ask):
+    todo_file = Path(argv[1]) if len(argv) > 1 else TODO_FILE
     WORK_DIR.mkdir(parents=True, exist_ok=True)
 
     if not todo_file.exists():
@@ -349,10 +469,16 @@ def main():
 
     raw = todo_file.read_bytes()
     newline = "\r\n" if b"\r\n" in raw else "\n"
-    original = raw.decode("utf-8-sig").replace("\r\n", "\n")
+    encoding = "utf-8-sig" if raw.startswith(b"\xef\xbb\xbf") else "utf-8"
+    try:
+        original = raw.decode("utf-8-sig").replace("\r\n", "\n")
+    except UnicodeDecodeError:
+        write_status(False, ["The To-Do file is not UTF-8 text: open it in Obsidian and save it again.",
+                             "The original file was NOT modified."])
+        return 1
 
     try:
-        risposta = ask_qwen(original)
+        risposta = ask(original)
     except Exception as e:
         write_status(False, [f"Ollama error: {e}", "The original file was NOT modified."])
         return 1
@@ -382,22 +508,36 @@ def main():
         ])
         return 2
 
-    # Backup
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_file = todo_file.with_name(f"{todo_file.stem}.backup_{timestamp}{todo_file.suffix}")
-    shutil.copy2(todo_file, backup_file)
+    backup_file = make_backup(todo_file)
 
-    # Atomic write: first a temp file, then the replacement.
+    # Atomic write: first a temp file (flushed to disk), then the replacement.
     tmp_file = todo_file.with_name("." + todo_file.name + ".tmp")
-    with open(tmp_file, "w", encoding="utf-8", newline=newline) as f:
-        f.write(risposta)
-    os.replace(tmp_file, todo_file)
+    try:
+        with open(tmp_file, "w", encoding=encoding, newline=newline) as f:
+            f.write(risposta)
+            f.flush()
+            os.fsync(f.fileno())
+        replace_with_retry(tmp_file, todo_file)
+    except Exception as e:
+        try:
+            tmp_file.unlink()
+        except OSError:
+            pass
+        write_status(False, [f"Could not write the To-Do file: {e}",
+                             "The original file was NOT modified.",
+                             f"Backup: {BACKUP_DIR_NAME}\\{backup_file.name}"])
+        return 1
+
+    try:
+        OUTPUT_FILE.unlink()          # Qwen's copy is only kept when a check fails
+    except OSError:
+        pass
 
     tasks = sum(task_states(original).values())
     write_status(True, [
         "To-Do List updated.",
         f"Tasks checked: {tasks}",
-        f"Backup: {backup_file.name}",
+        f"Backup: {BACKUP_DIR_NAME}\\{backup_file.name}",
     ])
     return 0
 
