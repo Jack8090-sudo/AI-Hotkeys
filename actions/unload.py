@@ -12,5 +12,6 @@ if __name__ == "__main__":
         qwen_client.unload()
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
+        qwen_client.write_error(*qwen_client.describe_error(e))
         sys.exit(1)
     sys.exit(0)

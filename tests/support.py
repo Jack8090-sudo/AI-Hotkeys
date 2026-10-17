@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 # Application modules that live in the repository root
-APP_MODULES = ("qwen_client", "prompts", "websearch", "viewer", "settings", "pages", "config_edit")
+APP_MODULES = ("qwen_client", "prompts", "prompt_loader", "prompts_user", "websearch", "viewer", "settings", "pages", "config_edit")
 
 DEFAULT_CONFIG = """\
 [qwen]
@@ -253,8 +253,9 @@ class FakeOllama(_FakeServer):
     delay: seconds to sleep before answering /api/chat
     """
 
-    def __init__(self, text="Risposta di prova.", scenario="ok", delay=0.0):
+    def __init__(self, text="Risposta di prova.", scenario="ok", delay=0.0, version="0.12.0"):
         self.text = text
+        self.version = version
         self.scenario = scenario
         self.delay = delay
         super().__init__()
@@ -265,7 +266,7 @@ class FakeOllama(_FakeServer):
     def handle(self, h, body):
         path = h.path.split("?")[0]
         if path == "/api/version":
-            return self.send(h, 200, {"version": "0.12.0"})
+            return self.send(h, 200, {"version": self.version})
         if path == "/api/tags":
             return self.send(h, 200, {"models": [{"name": "test-model:1b"}]})
         if path == "/api/generate":

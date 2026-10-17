@@ -63,7 +63,8 @@ class SettingsHttpTest(unittest.TestCase):
         for host in ("evil.example", "127.0.0.1.evil.example", "localhost.evil.example", "", "[::1]"):
             with self.subTest(host=host):
                 self.assertEqual(self.request("GET", f"/?t={TOKEN}", host=host)[0], 403)
-                self.assertEqual(self.save({"aspetto.tema": "nero"}, host=host)[0], 403)
+                # no body: the server answers 403 before reading it (a body would race with the close)
+                self.assertEqual(self.request("POST", "/api/save", b"", {"X-Token": TOKEN}, host=host)[0], 403)
 
     def test_ping_needs_header_token(self):
         self.assertEqual(self.request("GET", "/api/ping")[0], 403)
