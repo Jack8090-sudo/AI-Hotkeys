@@ -1,0 +1,26 @@
+{
+  "_comment": "Hotkey validity vectors. Authority: settings.valid_hotkey (Python). Asserted by tests/test_hotkey_parity.py and tests/ahk/run.ahk (ValidHotkey in lib/Util.ahk). Strings use only the JSON escapes \\n \\t \\\" \\\\ and \\uXXXX.",
+  "valid": [
+    "PgUp", "PgDn", "End", "Home", "Ins", "Del", "Pause", "ScrollLock", "AppsKey",
+    "F1", "F8", "F12", "F13", "F24",
+    "^a", "!a", "+a", "#a", "^1", "^!r", "^!+#z", "+^r", "#!^+9",
+    "^Space", "!Tab", "+Enter", "^Backspace", "#Up", "^Down", "!Left", "+Right",
+    "^Numpad0", "^Numpad9", "!NumpadAdd", "^NumpadSub", "^NumpadMult", "^NumpadDiv", "^NumpadDot", "^NumpadEnter",
+    "^PgUp", "+F5", "#F24", "^!Del", "!AppsKey"
+  ],
+  "invalid": [
+    "", "a", "Z", "1", "0",
+    "Space", "Tab", "Enter", "Backspace", "Up", "Down", "Left", "Right",
+    "Numpad0", "NumpadAdd", "NumpadEnter",
+    "pgup", "PGUP", "pgdn", "end", "home", "f1", "^space", "^numpad1",
+    "F0", "F25", "F99",
+    "Foo", "^Foo", "12", "^12", "ab",
+    "Esc", "Escape", "Delete", "Insert", "PageUp", "CapsLock", "NumLock", "PrintScreen",
+    "LButton", "RButton", "MButton", "XButton1", "WheelUp", "LWin", "RCtrl", "LShift",
+    "sc029", "vk41", "^vk41",
+    "^^a", "!!PgUp", "++F5", "##a", "^!^r",
+    "^", "!", "^!+#",
+    "^ a", "Pg Up", " PgUp", "PgUp ", "^a;b", "^a b", "$PgUp", "~PgUp", "*PgUp", "<^a", "^Media_Next",
+    "PgUp\n", "\nPgUp", "PgUp\t", "^è", "Ènd", "F١"
+  ]
+}
