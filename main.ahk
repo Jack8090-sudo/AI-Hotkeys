@@ -1,6 +1,9 @@
 ﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
 
+; Pure helpers: ReadConfig, IsNo, ValidHotkey, KeyLabel, HexToColorRef, CIMap
+#Include %A_ScriptDir%\lib\Util.ahk
+
 ; =========================================================
 ;  AI-Hotkeys — AutoHotkey → Python → Ollama → Qwen 3.5 9B
 ; =========================================================
@@ -692,41 +695,10 @@ LoadTheme()
     return {bg: "F8F9FB", text: "141920", cap: "E3E7ED", line: "B8C1CD", accent: acc[2]}
 }
 
-HexToColorRef(hex)
-{
-    ; "RRGGBB" → 0x00BBGGRR
-    return Integer("0x" SubStr(hex, 5, 2) SubStr(hex, 3, 2) SubStr(hex, 1, 2))
-}
-
 
 ; =========================================================
-; KEYS: validation, readable names, native key
+; KEYS: native key (validation and labels are in lib\Util.ahk)
 ; =========================================================
-
-ValidHotkey(hk)
-{
-    if !RegExMatch(hk, "^([\^!+#]*)([A-Za-z0-9]+)$", &m)
-        return false
-    ; Single letters and digits alone are for typing
-    if (StrLen(m[2]) = 1 && m[1] = "")
-        return false
-    return true
-}
-
-; "^!r" → "Ctrl+Alt+R", "PgUp" → "PgUp"
-KeyLabel(hk)
-{
-    names := Map("^", "Ctrl", "!", "Alt", "+", "Shift", "#", "Win")
-    label := ""
-    i := 1
-    while (i <= StrLen(hk) && InStr("^!+#", SubStr(hk, i, 1)))
-    {
-        label .= names[SubStr(hk, i, 1)] "+"
-        i++
-    }
-    k := SubStr(hk, i)
-    return label (StrLen(k) = 1 ? StrUpper(k) : k)
-}
 
 ; Sends the key as if AI-Hotkeys was not there
 SendNative(hk)
@@ -781,23 +753,6 @@ FindPython()
     if FileExist(A_ScriptDir "\python\pythonw.exe")
         return '"' A_ScriptDir '\python\pythonw.exe"'
     return "pythonw"
-}
-
-; Reads "key = value" from config.ini (UTF-8)
-ReadConfig(key, default := "")
-{
-    path := A_ScriptDir "\config.ini"
-    if !FileExist(path)
-        return default
-    text := FileRead(path, "UTF-8")
-    if RegExMatch(text, "im)^[ \t]*" key "[ \t]*=[ \t]*(.*?)[ \t]*$", &m) && m[1] != ""
-        return m[1]
-    return default
-}
-
-IsNo(value)
-{
-    return RegExMatch(Trim(value), "i)^(no|false|0|off)$")
 }
 
 SetupTrayMenu()
@@ -897,14 +852,4 @@ OpenSearxng()
 {
     StartSearxng()
     Run SearxngUrl()
-}
-
-; Map with case-insensitive keys
-CIMap(pairs*)
-{
-    m := Map()
-    m.CaseSense := "Off"
-    if pairs.Length
-        m.Set(pairs*)
-    return m
 }
