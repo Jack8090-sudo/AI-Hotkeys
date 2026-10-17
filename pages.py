@@ -5,11 +5,56 @@ fonts, shared style and appearance settings from config.ini.
 
 import json
 import re
+import secrets
+import traceback
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 FONTS_DIR = STATIC_DIR / "fonts"
+SERVER_LOG = BASE_DIR / "work" / "server.log"
+SERVER_LOG_MAX = 1_000_000
+
+# The pages only need their own inline script/style, fonts and requests to this server.
+# No remote images, frames or forms: model output and web text cannot load anything.
+CSP = (
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+    "font-src 'self'; img-src 'self' data:; connect-src 'self'; "
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
+
+# Seconds a client may take to send its request (slow or stuck connections are dropped)
+REQUEST_TIMEOUT = 30
+
+
+def token_ok(given, token):
+    """Constant-time token check that never raises (non-ASCII input simply fails)."""
+    try:
+        return secrets.compare_digest(str(given or "").encode("utf-8", "surrogatepass"),
+                                      token.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def log_server_error(text):
+    """Append to work/server.log (restarted when it passes SERVER_LOG_MAX)."""
+    try:
+        SERVER_LOG.parent.mkdir(parents=True, exist_ok=True)
+        mode = "w" if SERVER_LOG.exists() and SERVER_LOG.stat().st_size > SERVER_LOG_MAX else "a"
+        with open(SERVER_LOG, mode, encoding="utf-8") as f:
+            f.write(text.rstrip() + "\n")
+    except OSError:
+        pass
+
+
+class LocalServer(ThreadingHTTPServer):
+    """127.0.0.1 server whose request errors go to work/server.log, not to a hidden console."""
+
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        log_server_error(traceback.format_exc())
 
 FONT_RE = re.compile(r"^/fonts/([a-z0-9-]+\.woff2)$")
 

@@ -94,7 +94,7 @@ class ViewerHttpTest(unittest.TestCase):
         self.assertIn("più formale", sent["messages"][-1]["content"])
 
     def test_ask_rejects_bad_requests(self):
-        self.assertEqual(self.ask("x", token="nope")[0], 403)
+        self.assertEqual(self.request("POST", "/api/ask", b"", {"X-Token": "nope"})[0], 403)
         self.assertEqual(self.ask("   ")[0], 400)
         self.assertEqual(self.ask("x" * (self.v.MAX_QUESTION + 1))[0], 400)
         self.assertEqual(self.request("POST", "/api/ask", "not json", {"X-Token": TOKEN})[0], 400)
@@ -105,6 +105,23 @@ class ViewerHttpTest(unittest.TestCase):
         self.ollama.scenario = "error_field"
         events = self.ndjson(self.ask("ancora")[2])
         self.assertIn("error", events[-1])
+
+    def test_K4_interrupted_stream_is_reported_as_partial(self):
+        self.ollama.scenario = "no_done"
+        events = self.ndjson(self.ask("ancora")[2])
+        self.assertTrue(any("t" in e for e in events))           # the text already streamed is kept
+        self.assertTrue(events[-1].get("partial"))
+        self.assertIn("interrupted", events[-1]["error"])
+
+    def test_page_turns_remote_images_into_links(self):
+        # marked renderer override (C10, D8); the CSP blocks remote images as well
+        self.assertIn("Image: ", self.page)
+        self.assertIn("img-src 'self' data:", self.v.pages.CSP)
+
+    def test_idle_clock_is_monotonic(self):
+        import time
+        self.session.touch()
+        self.assertLess(abs(time.monotonic() - self.session.last_seen), 5)
 
     def test_detect_mode(self):
         self.assertEqual(self.v.detect_mode("Riassunto"), "summarize")
@@ -122,7 +139,6 @@ class ViewerHttpTest(unittest.TestCase):
         self.assertNotIn("Cannot reach Ollama", events[-1].get("error", ""))
         self.assertIn("pull", events[-1].get("error", "").lower())
 
-    @unittest.expectedFailure
     def test_C10_page_sends_content_security_policy(self):
         """C10 (fixed in S7): no CSP header on the results page."""
         _, headers, _ = self.request("GET", f"/?t={TOKEN}")

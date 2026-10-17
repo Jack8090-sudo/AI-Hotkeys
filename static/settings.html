@@ -501,6 +501,8 @@ h1 {
 "use strict";
 
 const DATA = /*__DATA__*/null;
+// The token stays in DATA: remove it from the address bar and the history.
+try { history.replaceState(null, "", location.pathname); } catch (e) {}
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
 

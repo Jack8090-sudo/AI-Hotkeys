@@ -98,16 +98,28 @@ class ConfigEditTest(unittest.TestCase):
                              capture_output=True, text=True)
         self.assertEqual(bad.returncode, 1)
 
-    # ---- known defects (C17): flipped by step S7 ----
+    def test_save_leaves_no_temporary_file_and_keeps_trailing_newline(self):
+        self.path.write_bytes(b"[aspetto]\ntema = scuro\n")
+        self.ce.set_values(self.path, {"aspetto": {"tema": "nero"}})
+        self.ce.set_values(self.path, {"aspetto": {"tema": "chiaro"}})
+        self.assertEqual(self.path.read_bytes(), b"[aspetto]\ntema = chiaro\n")
+        self.assertEqual([p.name for p in self.path.parent.iterdir()], ["config.ini"])
 
-    @unittest.expectedFailure
+    def test_invalid_names_are_rejected(self):
+        for section, key in (("a]", "k"), ("a", "k=v"), ("a", ""), ("a", "k:v")):
+            with self.subTest(section=section, key=key):
+                with self.assertRaises(ValueError):
+                    self.ce.set_values(self.path, {section: {key: "x"}})
+        self.assertFalse(self.path.exists())          # nothing written
+
+    # ---- C17 (fixed in S7) ----
+
     def test_C17_newline_in_value_is_rejected(self):
         """C17: a value with a newline must not inject new lines/sections."""
         self.path.write_bytes(b"[qwen]\nmodel = x\n")
         with self.assertRaises(ValueError):
             self.ce.set_values(self.path, {"qwen": {"model": "x\n[evil]\nz = 1"}})
 
-    @unittest.expectedFailure
     def test_C17_unicode_line_separator_in_comment_survives(self):
         """C17: splitlines() splits on U+2028 and corrupts the file for configparser."""
         self.path.write_bytes("; note tail\n[qwen]\nmodel = x\n".encode("utf-8"))
@@ -116,7 +128,6 @@ class ConfigEditTest(unittest.TestCase):
         parser.read(self.path, encoding="utf-8-sig")     # must not raise
         self.assertEqual(parser.get("qwen", "model"), "y")
 
-    @unittest.expectedFailure
     def test_C17_colon_style_key_is_updated_not_duplicated(self):
         """C17: 'k: v' lines are not recognised, so a duplicate 'k = v' is appended."""
         self.path.write_bytes(b"[qwen]\nmodel: x\n")

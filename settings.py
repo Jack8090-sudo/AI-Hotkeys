@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 import webbrowser
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -73,7 +73,7 @@ NAMED_KEYS = SPECIAL_KEYS | {"Space", "Tab", "Enter", "Backspace", "Up", "Down",
 
 
 def valid_hotkey(value):
-    m = KEY_RE.match(value or "")
+    m = KEY_RE.fullmatch(value or "")
     if not m:
         return False
     mods, key = m.groups()
@@ -104,7 +104,7 @@ def current_values():
         out[f"{sec}.{key}"] = max(lo, min(hi, v))
     for (sec, key), (default, rx) in TEXTS.items():
         v = raw.get(sec, {}).get(key, default)
-        out[f"{sec}.{key}"] = v if rx.match(v) else default
+        out[f"{sec}.{key}"] = v if rx.fullmatch(v) else default
     for (sec, key), default in KEYS.items():
         v = raw.get(sec, {}).get(key, default)
         out[f"{sec}.{key}"] = v if valid_hotkey(v) else default
@@ -131,11 +131,12 @@ def validate(data):
                 continue
         elif (sec, key) in NUMBERS:
             _, lo, hi = NUMBERS[(sec, key)]
-            if not value.lstrip("-").isdigit() or not lo <= int(value) <= hi:
+            digits = value.lstrip("-")
+            if not (digits.isascii() and digits.isdigit()) or not lo <= int(value) <= hi:
                 errors[name] = f"Choose a number from {lo} to {hi}."
                 continue
         elif (sec, key) in TEXTS:
-            if not TEXTS[(sec, key)][1].match(value):
+            if not TEXTS[(sec, key)][1].fullmatch(value):
                 errors[name] = "Invalid format."
                 continue
         elif (sec, key) in KEYS:
@@ -154,16 +155,29 @@ def validate(data):
     return updates, errors
 
 
+def url_warning(updates):
+    """A warning when Ollama is set to another computer: the selected text would leave this PC."""
+    url = updates.get("qwen", {}).get("ollama_url")
+    if not url:
+        return None
+    host = (urlparse(url).hostname or "").lower()
+    if host in ("localhost", "127.0.0.1", "::1"):
+        return None
+    return (f"Ollama is set to another computer ({host}): the text you select will be sent there. "
+            "Use http://localhost:11434 to keep everything on this PC.")
+
+
 # =========================================================
 # SERVER
 # =========================================================
 
 class State:
+    # monotonic: the idle timer must not jump after sleep/hibernate or a clock change
     def __init__(self):
-        self.last_seen = time.time()
+        self.last_seen = time.monotonic()
 
     def touch(self):
-        self.last_seen = time.time()
+        self.last_seen = time.monotonic()
 
 
 def build_page(token):
@@ -185,12 +199,13 @@ def make_handler(state, token):
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"
+        timeout = pages.REQUEST_TIMEOUT
 
         def log_message(self, *args):
             pass
 
         def _authorized(self):
-            return secrets.compare_digest(self.headers.get("X-Token", ""), token)
+            return pages.token_ok(self.headers.get("X-Token", ""), token)
 
         def _send(self, status, body, ctype):
             self.send_response(status)
@@ -200,6 +215,8 @@ def make_handler(state, token):
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
+            if ctype.startswith("text/html"):
+                self.send_header("Content-Security-Policy", pages.CSP)
             self.end_headers()
             self.wfile.write(body)
 
@@ -216,7 +233,7 @@ def make_handler(state, token):
                 self.send_error(403)
                 return
             if url.path == "/":
-                if not secrets.compare_digest(parse_qs(url.query).get("t", [""])[0], token):
+                if not pages.token_ok(parse_qs(url.query).get("t", [""])[0], token):
                     self.send_error(403)
                     return
                 state.touch()
@@ -265,7 +282,11 @@ def make_handler(state, token):
             except Exception:
                 self._json(500, {"error": "Cannot save, try again."})
                 return
-            self._json(200, {"ok": True, "values": current_values()})
+            reply = {"ok": True, "values": current_values()}
+            warning = url_warning(updates)
+            if warning:
+                reply["warning"] = warning
+            self._json(200, reply)
 
     return Handler
 
@@ -273,14 +294,13 @@ def make_handler(state, token):
 def main():
     state = State()
     token = secrets.token_urlsafe(18)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(state, token))
-    server.daemon_threads = True
+    server = pages.LocalServer(("127.0.0.1", 0), make_handler(state, token))
     url = f"http://127.0.0.1:{server.server_address[1]}/?t={token}"
 
     def watchdog():
         while True:
             time.sleep(5)
-            if time.time() - state.last_seen > IDLE_TIMEOUT:
+            if time.monotonic() - state.last_seen > IDLE_TIMEOUT:
                 server.shutdown()
                 return
 

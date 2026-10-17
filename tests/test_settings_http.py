@@ -73,7 +73,7 @@ class SettingsHttpTest(unittest.TestCase):
 
     def test_save_without_token_is_rejected_and_writes_nothing(self):
         before = self.tree.config_file.read_bytes()
-        self.assertEqual(self.save({"aspetto.tema": "nero"}, token="nope")[0], 403)
+        self.assertEqual(self.request("POST", "/api/save", b"", {"X-Token": "nope"})[0], 403)   # no body: 403 comes before reading it
         self.assertEqual(self.tree.config_file.read_bytes(), before)
 
     def test_save_valid_updates_config(self):
@@ -94,7 +94,7 @@ class SettingsHttpTest(unittest.TestCase):
 
     def test_unknown_paths_and_methods(self):
         self.assertEqual(self.request("GET", "/nope")[0], 404)
-        self.assertEqual(self.request("POST", "/api/other", "{}", {"X-Token": TOKEN})[0], 404)
+        self.assertEqual(self.request("POST", "/api/other", b"", {"X-Token": TOKEN})[0], 404)
         status, headers, _ = self.request("OPTIONS", "/api/save", headers={"Origin": "http://evil.example"})
         self.assertEqual(status, 501)
         self.assertFalse(any(k.lower().startswith("access-control") for k in headers))
@@ -107,14 +107,12 @@ class SettingsHttpTest(unittest.TestCase):
             with self.subTest(path=bad):
                 self.assertEqual(self.request("GET", bad)[0], 404)
 
-    # ---- known defects: flipped by step S7 ----
+    # ---- defects fixed in step S7 (were expected failures in S1) ----
 
-    @unittest.expectedFailure
     def test_C35_non_ascii_token_gets_403_instead_of_a_dropped_connection(self):
         """C35: compare_digest raises TypeError on non-ASCII str, killing the handler."""
         self.assertEqual(self.request("GET", "/api/ping", headers={"X-Token": "é"})[0], 403)
 
-    @unittest.expectedFailure
     def test_C10_page_sends_content_security_policy(self):
         """C10: no CSP header on HTML responses."""
         _, headers, _ = self.request("GET", f"/?t={TOKEN}")

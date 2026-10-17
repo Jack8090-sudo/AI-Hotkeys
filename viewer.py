@@ -21,16 +21,16 @@ import time
 import urllib.error
 import webbrowser
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pages
-import prompts
 import qwen_client
 import websearch
+from prompt_loader import prompts
 
 
 # =========================================================
@@ -97,11 +97,12 @@ class Session:
         self.sources = websearch.load_sources() if mode == "explain" else []
 
         self.lock = threading.Lock()
-        self.last_seen = time.time()
+        # monotonic: the idle timer must not jump after sleep/hibernate or a clock change
+        self.last_seen = time.monotonic()
         self.active_requests = 0
 
     def touch(self):
-        self.last_seen = time.time()
+        self.last_seen = time.monotonic()
 
     # -----------------------------------------------------
 
@@ -141,6 +142,7 @@ def make_handler(session, token, page_html):
     class Handler(BaseHTTPRequestHandler):
 
         protocol_version = "HTTP/1.0"
+        timeout = pages.REQUEST_TIMEOUT
 
         def log_message(self, *args):
             pass
@@ -148,9 +150,7 @@ def make_handler(session, token, page_html):
         # ---------------------------------------------
 
         def _authorized(self):
-            return secrets.compare_digest(
-                self.headers.get("X-Token", ""), token
-            )
+            return pages.token_ok(self.headers.get("X-Token", ""), token)
 
         def _send_json(self, status, data):
             body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -177,7 +177,7 @@ def make_handler(session, token, page_html):
             if url.path == "/":
                 query = parse_qs(url.query)
 
-                if not secrets.compare_digest(query.get("t", [""])[0], token):
+                if not pages.token_ok(query.get("t", [""])[0], token):
                     self.send_error(403)
                     return
 
@@ -191,6 +191,7 @@ def make_handler(session, token, page_html):
                 self.send_header("Referrer-Policy", "no-referrer")
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("X-Frame-Options", "DENY")
+                self.send_header("Content-Security-Policy", pages.CSP)
                 self.end_headers()
                 self.wfile.write(body)
                 return
@@ -294,6 +295,12 @@ def make_handler(session, token, page_html):
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                 # The page interrupted generation (stop button).
                 return
+            except qwen_client.TruncatedAnswer:
+                self._safe_emit({"error": "The answer was cut off (too long for the model).", "partial": True})
+                return
+            except qwen_client.StreamIncomplete:
+                self._safe_emit({"error": "The answer was interrupted: try again.", "partial": True})
+                return
             except Exception:
                 self._safe_emit({"error": "Generation error, try again."})
                 return
@@ -381,11 +388,10 @@ def main():
     token = secrets.token_urlsafe(18)
     page_html = build_page(session, token, key_label)
 
-    server = ThreadingHTTPServer(
+    server = pages.LocalServer(
         ("127.0.0.1", 0),
         make_handler(session, token, page_html),
     )
-    server.daemon_threads = True
 
     port = server.server_address[1]
     url = f"http://127.0.0.1:{port}/?t={token}"
@@ -393,7 +399,7 @@ def main():
     def watchdog():
         while True:
             time.sleep(5)
-            idle = time.time() - session.last_seen
+            idle = time.monotonic() - session.last_seen
             if session.active_requests == 0 and idle > IDLE_TIMEOUT:
                 server.shutdown()
                 return

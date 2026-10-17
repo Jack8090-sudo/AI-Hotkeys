@@ -472,6 +472,8 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
 "use strict";
 
 const DATA = /*__DATA__*/null;
+// The token stays in DATA: remove it from the address bar and the history.
+try { history.replaceState(null, "", location.pathname); } catch (e) {}
 
 /* ================= APPEARANCE (from config.ini) ================= */
 
@@ -553,7 +555,18 @@ marked.use({
     breaks: true,
     renderer: {
         // No raw HTML: it is shown as text.
-        html(html) { return escapeHtml(typeof html === "object" ? html.text : html); }
+        html(html) { return escapeHtml(typeof html === "object" ? html.text : html); },
+        // Remote images are never loaded (a web page read by the search could use
+        // one to send text away): they become a link. The page's CSP blocks them too.
+        image(href, title, text) {
+            if (href && typeof href === "object") ({ href, title, text } = href);
+            href = String(href || "");
+            if (/^data:image\//i.test(href)) return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text || "")}">`;
+            if (!/^https?:\/\//i.test(href)) return escapeHtml(text || "");
+            let host = href;
+            try { host = new URL(href).hostname.replace(/^www\./, ""); } catch (e) {}
+            return `<a href="${escapeHtml(href)}">Image: ${escapeHtml(text || host)}</a>`;
+        }
     }
 });
 
@@ -569,11 +582,9 @@ function renderMarkdown(el, text) {
             try { a.title = new URL(href).hostname.replace(/^www\./, ""); } catch (e) { a.title = href; }
         }
     });
+    // Only inline data: images may stay (remote ones were turned into links above)
     el.querySelectorAll("img[src]").forEach((img) => {
-        const src = img.getAttribute("src") || "";
-        if (!/^https?:\/\//i.test(src)) { img.removeAttribute("src"); return; }
-        img.loading = "lazy";
-        img.referrerPolicy = "no-referrer";
+        if (!/^data:image\//i.test(img.getAttribute("src") || "")) img.removeAttribute("src");
     });
     shapeSections(el);
 }

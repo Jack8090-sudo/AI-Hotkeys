@@ -67,14 +67,25 @@ class SettingsValidateTest(unittest.TestCase):
         self.assertEqual(v["tasti.spiega"], "End")                 # invalid key -> default (I2)
         self.assertEqual(v["tasti.correggi"], "PgUp")              # missing key -> default (I11)
 
-    # ---- known defects: flipped by step S7 ----
+    def test_url_warning_only_for_other_computers(self):
+        self.assertIsNone(self.s.url_warning({"qwen": {"ollama_url": "http://localhost:11434"}}))
+        self.assertIsNone(self.s.url_warning({"qwen": {"ollama_url": "http://127.0.0.1:11434"}}))
+        self.assertIsNone(self.s.url_warning({"aspetto": {"tema": "nero"}}))
+        self.assertIn("192.168.1.5", self.s.url_warning({"qwen": {"ollama_url": "http://192.168.1.5:11434"}}))
 
-    @unittest.expectedFailure
+    def test_token_ok_never_raises(self):
+        pages = self.tree.load("pages")
+        self.assertTrue(pages.token_ok("abc", "abc"))
+        for bad in ("abd", "", None, "é", "\udcff", 123):
+            with self.subTest(given=bad):
+                self.assertFalse(pages.token_ok(bad, "abc"))
+
+    # ---- defects fixed in step S7 (were expected failures in S1) ----
+
     def test_C36_hotkey_with_trailing_newline_is_rejected(self):
         """C36: KEY_RE ends with $, which also matches before a final newline."""
         self.assertFalse(self.s.valid_hotkey("PgUp\n"))
 
-    @unittest.expectedFailure
     def test_C35_non_ascii_digit_is_a_validation_error_not_a_crash(self):
         """C35: '²'.isdigit() is True, then int('²') raises ValueError."""
         _, errors = self.s.validate({"aspetto.testo": "²"})
