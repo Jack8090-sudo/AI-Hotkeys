@@ -1,0 +1,167 @@
+{
+  "_comment": [
+    "Notice registry for tools/licenses/check_notices.py and gen_notices.py.",
+    "Paths are install-relative with forward slashes (a leading 'payload/' and 'app/' are stripped).",
+    "Patterns: '*' matches within one path segment, '**' matches any number of segments.",
+    "The first component whose pattern matches a path wins, so keep specific patterns first.",
+    "'exclude' patterns take a path out of a component (it must then be covered elsewhere or the check fails).",
+    "A binary (.exe/.dll/.pyd/.so) is accepted only if it also matches the component's 'binaries' patterns.",
+    "'notices' are repo-relative files that must exist and must be shipped in the payload.",
+    "'requires_dist' pins the package versions whose bundled native libraries were verified;",
+    "a different version in the manifest fails the check until the notices are re-verified."
+  ],
+  "components": [
+    {
+      "id": "notice-files",
+      "name": "License, notice and documentation files",
+      "paths": [
+        "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/**",
+        "searxng/LICENSE-searxng.txt", "ahk/license.txt", "python/LICENSE.txt",
+        "static/fonts/OFL-*.txt", "python/Lib/site-packages/README.txt"
+      ],
+      "notices": []
+    },
+    {
+      "id": "ai-hotkeys",
+      "name": "AI-Hotkeys (this project)",
+      "license": "MIT",
+      "paths": [
+        "*.py", "main.ahk", "lib/**", "actions/**",
+        "static/*.html", "static/*.css", "icon.ico",
+        "config.ini", "config.example.ini", "VERSION",
+        "searxng/avvia_searxng.py", "searxng/settings.yml",
+        "python/*._pth"
+      ],
+      "notices": ["LICENSE"]
+    },
+    {
+      "id": "autohotkey",
+      "name": "AutoHotkey 2.0.19",
+      "license": "GPL-2.0-only (bundled PCRE: BSD-3-Clause)",
+      "paths": ["ahk/**"],
+      "binaries": ["ahk/AutoHotkey64.exe", "ahk/AutoHotkey32.exe"],
+      "notices": ["licenses/autohotkey/license.txt", "licenses/autohotkey/pcre-LICENCE.txt"]
+    },
+    {
+      "id": "cpython",
+      "name": "CPython 3.13 for Windows (embeddable)",
+      "license": "PSF-2.0 (bundled libraries: see THIRD_PARTY_NOTICES.md)",
+      "paths": ["python/**"],
+      "exclude": ["python/Lib/site-packages/**"],
+      "binaries": ["python/*.exe", "python/*.dll", "python/*.pyd", "python/DLLs/*.dll", "python/DLLs/*.pyd",
+                   "python/Lib/venv/scripts/nt/*.exe"],
+      "notices": [
+        "licenses/cpython/LICENSE-windows-build.txt",
+        "licenses/cpython/license.rst",
+        "licenses/cpython/openssl-LICENSE.txt",
+        "licenses/cpython/libffi-LICENSE.txt",
+        "licenses/cpython/xz-COPYING.txt",
+        "licenses/cpython/expat-COPYING.txt"
+      ]
+    },
+    {
+      "id": "searxng",
+      "name": "SearXNG 2026.10.7+6671d89",
+      "license": "AGPL-3.0-or-later (bundled web client libraries: see THIRD_PARTY_NOTICES.md)",
+      "paths": ["searxng/app/**"],
+      "notices": [
+        "licenses/searxng/LICENSE.txt",
+        "licenses/searxng/frontend/openlayers-10.10.0-LICENSE.md",
+        "licenses/searxng/frontend/mathjs-15.2.0-LICENSE.txt",
+        "licenses/searxng/frontend/mathjs-15.2.0-NOTICE.txt",
+        "licenses/searxng/frontend/babel-runtime-7.29.7-LICENSE.txt",
+        "licenses/searxng/frontend/typed-function-4.2.2-LICENSE.txt",
+        "licenses/searxng/frontend/escape-latex-1.2.0-LICENSE.md",
+        "licenses/searxng/frontend/tiny-emitter-2.1.0-LICENSE.txt",
+        "licenses/searxng/frontend/quickselect-3.0.0-LICENSE.txt",
+        "licenses/searxng/frontend/rbush-4.0.1-LICENSE.txt",
+        "licenses/searxng/frontend/swiped-events-1.2.0-LICENSE.txt",
+        "licenses/searxng/frontend/ionicons-8.1.0-LICENSE.txt",
+        "licenses/searxng/frontend/normalize.css-8.0.1-LICENSE.md"
+      ]
+    },
+    {
+      "id": "curl-impersonate",
+      "name": "libcurl-impersonate 2.2.2 (inside curl_cffi)",
+      "license": "MIT AND curl AND Apache-2.0 AND BSD-3-Clause AND Zlib",
+      "paths": ["searxng/lib/curl_cffi.libs/**"],
+      "binaries": ["searxng/lib/curl_cffi.libs/libcurl-impersonate-*.dll"],
+      "requires_dist": {"curl_cffi": "0.16.3"},
+      "notices": [
+        "licenses/curl-impersonate/curl-impersonate-LICENSE.txt",
+        "licenses/curl-impersonate/curl-COPYING.txt",
+        "licenses/curl-impersonate/boringssl-LICENSE.txt",
+        "licenses/curl-impersonate/nghttp2-COPYING.txt",
+        "licenses/curl-impersonate/ngtcp2-COPYING.txt",
+        "licenses/curl-impersonate/nghttp3-COPYING.txt",
+        "licenses/curl-impersonate/brotli-LICENSE.txt",
+        "licenses/curl-impersonate/zstd-LICENSE.txt",
+        "licenses/curl-impersonate/zlib-LICENSE.txt"
+      ]
+    },
+    {
+      "id": "marked",
+      "name": "marked 12.0.2",
+      "license": "MIT",
+      "paths": ["static/marked.min.js"],
+      "notices": ["licenses/marked/LICENSE.md"]
+    },
+    {
+      "id": "fonts",
+      "name": "Barlow Semi Condensed and IBM Plex fonts",
+      "license": "OFL-1.1",
+      "paths": ["static/fonts/barlow-*.woff2", "static/fonts/ibm-plex-*.woff2"],
+      "notices": ["licenses/fonts/OFL-Barlow.txt", "licenses/fonts/OFL-IBM-Plex.txt"]
+    }
+  ],
+  "python_packages": {
+    "lib_root": "searxng/lib",
+    "index": "licenses/python-packages/packages.json",
+    "license_overrides": {
+      "_comment": "SPDX ids for packages whose metadata has no License-Expression; each was read from the shipped license text.",
+      "async-timeout": "Apache-2.0",
+      "babel": "BSD-3-Clause",
+      "blinker": "MIT",
+      "certifi": "MPL-2.0",
+      "colorama": "BSD-3-Clause",
+      "flask-babel": "BSD-3-Clause",
+      "isodate": "BSD-3-Clause",
+      "itsdangerous": "BSD-3-Clause",
+      "jinja2": "BSD-3-Clause",
+      "lxml": "BSD-3-Clause",
+      "markdown-it-py": "MIT",
+      "mdurl": "MIT",
+      "python-dateutil": "Apache-2.0 AND BSD-3-Clause",
+      "pytz": "MIT",
+      "pyyaml": "MIT",
+      "rich": "MIT",
+      "shellingham": "ISC",
+      "six": "MIT",
+      "tzdata": "Apache-2.0",
+      "valkey": "MIT"
+    },
+    "extra_notices": {
+      "_comment": "Native libraries statically linked into a wheel's extension modules, verified for the pinned version.",
+      "lxml": {
+        "version": "6.1.3",
+        "bundles": "libxml2 2.14.6 (MIT), libxslt/libexslt 1.1.43 (MIT), zlib 1.3.2 (Zlib), libiconv 1.18 (LGPL-2.1-or-later)",
+        "notices": [
+          "licenses/bundled-in-wheels/libxml2-2.14.6-Copyright.txt",
+          "licenses/bundled-in-wheels/libxslt-1.1.43-Copyright.txt",
+          "licenses/bundled-in-wheels/zlib-1.3.2-LICENSE.txt",
+          "licenses/bundled-in-wheels/LGPL-2.1.txt"
+        ]
+      },
+      "pyyaml": {
+        "version": "6.0.3",
+        "bundles": "libyaml 0.2.5 (MIT)",
+        "notices": ["licenses/bundled-in-wheels/libyaml-0.2.5-License.txt"]
+      },
+      "cffi": {
+        "version": "2.1.1",
+        "bundles": "libffi (MIT), from cffi's src/c/libffi_x86_x64",
+        "notices": ["licenses/bundled-in-wheels/cffi-libffi_x86_x64-LICENSE.txt"]
+      }
+    }
+  }
+}
