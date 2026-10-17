@@ -16,10 +16,12 @@
 #>
 param(
     [Parameter(Mandatory = $true)][string]$From,
-    [string]$To = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+    [string]$To = ''
 )
 
 $ErrorActionPreference = 'Stop'
+# $PSScriptRoot is empty inside param() on Windows PowerShell 5.1: resolve the default here
+if (-not $To) { $To = Join-Path $PSScriptRoot '..\..' }
 $From = (Resolve-Path $From).Path.TrimEnd('\')
 $To = (Resolve-Path $To).Path.TrimEnd('\')
 
