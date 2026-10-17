@@ -75,15 +75,26 @@ class ObsidianValidateTest(unittest.TestCase):
         self.assertEqual(self.ot.normalize(raw), "# 🟢\n\n### 🐛 Bug\n\n### ⚙️ Game Design\n\n### 💡 Idea\n")
         self.assertEqual(self.ot.normalize(GOLDEN.replace("\n", "\r\n")), GOLDEN.strip() + "\n")
 
-    # ---- known defect C14: flipped by step S5 ----
+    def test_translation_and_spelling_fixes_are_accepted(self):
+        original = GOLDEN.replace("Sistema di clan", "Add a pet that follows the player")
+        new = GOLDEN.replace("Sistema di clan", "Aggiungere un pet che segue il giocatore")
+        self.assertEqual(self.errors(new, original), [])
 
-    @unittest.expectedFailure
+    def test_preserved_frontmatter_passes(self):
+        original = "---\ntags: [todo]\n---\n\n" + GOLDEN
+        self.assertEqual(self.errors(original, original), [])
+
+    def test_dropped_paragraph_fails(self):
+        original = GOLDEN.replace("### 🐛 Bug\n\n- [ ] Lag", "### 🐛 Bug\n\nNota: priorità alta questa settimana.\n\n- [ ] Lag", 1)
+        self.assertTrue(any("paragraph" in e for e in self.errors(GOLDEN, original)))
+
+    # ---- C14 (fixed in S5) ----
+
     def test_C14_dropped_frontmatter_fails(self):
         """C14: content before the first level (frontmatter) can disappear unnoticed."""
         original = "---\ntags: [todo]\nupdated: 2026-10-01\n---\n\n" + GOLDEN
         self.assertTrue(self.errors(GOLDEN, original))
 
-    @unittest.expectedFailure
     def test_C14_replaced_task_text_fails(self):
         """C14: a task can be rewritten into something unrelated with the same checkbox."""
         self.assertTrue(self.errors(GOLDEN.replace("Sistema di clan", "Comprare il latte")))
