@@ -4,7 +4,8 @@
 #   python tools/licenses/check_notices.py <manifest> --skip-shipped   (partial manifest: do not require
 #                                                                        the notice files to be in it)
 #
-# The manifest (written by build/build.ps1, step S11) has one "path<TAB>sha256" line per payload file.
+# The manifest (written by build/build.ps1, step S11) has one "<sha256>  <path>" line per payload file
+# ("path<TAB>sha256" is accepted too).
 # Paths may use "\" or "/" and may start with "payload/" and "app/"; both prefixes are stripped, so
 # paths are compared install-relative (app files land in the install folder itself).
 #
@@ -68,12 +69,18 @@ def read_manifest(path):
     for no, line in enumerate(text.splitlines(), 1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
+        # build.ps1 writes "<sha256>  <path>" (sha256sum style); "path<TAB>sha256" is accepted too.
         fields = line.split("\t")
-        if len(fields) != 2 or not SHA256_RE.fullmatch(fields[1].strip()):
-            errors.append(f"manifest line {no}: expected 'path<TAB>sha256', got {line[:120]!r}")
-            continue
+        if len(fields) == 2 and SHA256_RE.fullmatch(fields[1].strip()):
+            rel = fields[0]
+        else:
+            m = re.fullmatch(r"([0-9a-fA-F]{64}) [ *]?(.+)", line.strip())
+            if not m:
+                errors.append(f"manifest line {no}: expected '<sha256>  <path>', got {line[:120]!r}")
+                continue
+            rel = m.group(2)
         try:
-            paths.append(normalize_path(fields[0]))
+            paths.append(normalize_path(rel))
         except ValueError as e:
             errors.append(f"manifest line {no}: {e}")
     if not paths and not errors:

@@ -170,12 +170,12 @@ Do not edit it by hand.
 | Package | Version | License (SPDX) | Notices in `licenses/python-packages/` |
 |---|---|---|---|
 | [annotated-doc](https://github.com/fastapi/annotated-doc) | 0.0.5 | MIT | `annotated-doc-0.0.5/` |
-| [async-timeout](https://github.com/aio-libs/async-timeout) | 5.0.1 | Apache-2.0 | `async-timeout-5.0.1/` |
 | [babel](https://github.com/python-babel/babel) | 2.18.0 | BSD-3-Clause | `babel-2.18.0/` |
 | [blinker](https://github.com/pallets-eco/blinker/) | 1.9.0 | MIT | `blinker-1.9.0/` |
 | [certifi](https://github.com/certifi/python-certifi) | 2026.7.22 | MPL-2.0 | `certifi-2026.7.22/` |
 | [cffi](https://github.com/python-cffi/cffi) | 2.1.1 | MIT-0 | `cffi-2.1.1/`; statically bundles libffi (MIT), from cffi's src/c/libffi_x86_x64 |
 | [click](https://github.com/pallets/click/) | 8.5.0 | BSD-3-Clause | `click-8.5.0/` |
+| [colorama](https://github.com/tartley/colorama) | 0.4.6 | BSD-3-Clause | `colorama-0.4.6/` |
 | [curl-cffi](https://github.com/lexiforest/curl_cffi) | 0.16.3 | MIT | `curl-cffi-0.16.3/` |
 | [flask](https://github.com/pallets/flask/) | 3.1.3 | BSD-3-Clause | `flask-3.1.3/` |
 | [flask-babel](https://github.com/python-babel/flask-babel) | 4.0.0 | BSD-3-Clause | `flask-babel-4.0.0/` |

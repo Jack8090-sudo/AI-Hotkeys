@@ -17,21 +17,6 @@
       ]
     },
     {
-      "name": "async-timeout",
-      "version": "5.0.1",
-      "license": "Apache-2.0",
-      "url": "https://github.com/aio-libs/async-timeout",
-      "dist_info": "async_timeout-5.0.1.dist-info",
-      "top_level": [
-        "async_timeout",
-        "async_timeout-5.0.1.dist-info"
-      ],
-      "binaries": [],
-      "notices": [
-        "licenses/python-packages/async-timeout-5.0.1/LICENSE"
-      ]
-    },
-    {
       "name": "babel",
       "version": "2.18.0",
       "license": "BSD-3-Clause",
@@ -113,6 +98,21 @@
       "binaries": [],
       "notices": [
         "licenses/python-packages/click-8.5.0/LICENSE.txt"
+      ]
+    },
+    {
+      "name": "colorama",
+      "version": "0.4.6",
+      "license": "BSD-3-Clause",
+      "url": "https://github.com/tartley/colorama",
+      "dist_info": "colorama-0.4.6.dist-info",
+      "top_level": [
+        "colorama",
+        "colorama-0.4.6.dist-info"
+      ],
+      "binaries": [],
+      "notices": [
+        "licenses/python-packages/colorama-0.4.6/LICENSE.txt"
       ]
     },
     {
