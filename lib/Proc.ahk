@@ -35,3 +35,28 @@ ProcessPathOf(pid)
     try return ProcessGetPath(pid)
     return ""
 }
+
+; Handle that keeps a process's exit code readable after it ends.
+; Open it right after Run(); 0 if the process is already gone.
+ProcOpen(pid)
+{
+    if !(pid > 0)
+        return 0
+    return DllCall("OpenProcess", "UInt", PROCESS_QUERY_LIMITED_INFORMATION(), "Int", 0, "UInt", pid, "Ptr")
+}
+
+; Exit code of the process behind handle h: 259 (STILL_ACTIVE) while it
+; runs, -1 if it cannot be read.
+ProcExitCode(h)
+{
+    code := 0
+    if !h || !DllCall("GetExitCodeProcess", "Ptr", h, "UInt*", &code)
+        return -1
+    return code
+}
+
+ProcClose(h)
+{
+    if h
+        DllCall("CloseHandle", "Ptr", h)
+}

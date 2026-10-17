@@ -20,7 +20,9 @@ DirCreate(TMP)
 ; Each group runs on its own: an exception fails that group, the others still run
 for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToColorRef, TestCIMap,
              TestIsAppPageTitle, TestIsConsoleClass, TestParseClipWaitMs, TestSelectionMatches,
-             TestParsePidRecord, TestIsConfiguredPython, TestSearxngPidIsOurs, TestProcHelpers]
+             TestParsePidRecord, TestIsConfiguredPython, TestSearxngPidIsOurs, TestProcHelpers,
+             TestErrorFileLine1, TestWarningSummary, TestHotkeyId, TestResolveKeys,
+             TestPromptsUserTemplate, TestProcExitCode]
 {
     try
         test()
@@ -417,4 +419,117 @@ TestProcHelpers()
     rec := ParsePidRecord(me " " ProcessCreationTime(me))
     Assert("K5 record of self verifies against A_AhkPath",
         !!(rec.ctime = ProcessCreationTime(me) && ProcessPathOf(rec.pid) = A_AhkPath), true)
+}
+
+
+; ---------------------------------------------------------
+; S8b3: error file (K1), config warnings (K6), keys (C26), prompts (D4)
+; ---------------------------------------------------------
+
+TestErrorFileLine1()
+{
+    Assert("ErrorFileLine1 LF", ErrorFileLine1("Ollama is not running: start Ollama.`ndetail`n"), "Ollama is not running: start Ollama.")
+    Assert("ErrorFileLine1 CRLF", ErrorFileLine1("msg`r`ndetail"), "msg")
+    Assert("ErrorFileLine1 BOM + spaces", ErrorFileLine1(Chr(0xFEFF) "  msg  `n"), "msg")
+    Assert("ErrorFileLine1 keeps inner double space", ErrorFileLine1("run  ollama pull x`n"), "run  ollama pull x")
+    Assert("ErrorFileLine1 no newline", ErrorFileLine1("only"), "only")
+    Assert("ErrorFileLine1 empty", ErrorFileLine1(""), "")
+    Assert("ErrorFileLine1 empty first line", ErrorFileLine1("`nsecond"), "")
+    long := ""
+    Loop 300
+        long .= "x"
+    Assert("ErrorFileLine1 capped at 200", StrLen(ErrorFileLine1(long "`nd")), 200)
+}
+
+TestWarningSummary()
+{
+    Assert("WarningSummary empty", WarningSummary(""), "")
+    Assert("WarningSummary blank lines only", WarningSummary("`r`n  `n"), "")
+    Assert("WarningSummary one", WarningSummary("line 3: 'model' appears twice in [qwen]`n"), "line 3: 'model' appears twice in [qwen]")
+    Assert("WarningSummary CRLF, BOM, blanks", WarningSummary(Chr(0xFEFF) "a`r`n`r`nb`r`n"), "a`nb")
+    Assert("WarningSummary 3 lines kept", WarningSummary("a`nb`nc"), "a`nb`nc")
+    Assert("WarningSummary more than 3", WarningSummary("a`nb`nc`nd`ne"), "a`nb`nc`n(+2 more)")
+    Assert("WarningSummary custom max", WarningSummary("a`nb`nc", 1), "a`n(+2 more)")
+}
+
+TestHotkeyId()
+{
+    Assert("HotkeyId modifier order", HotkeyId("!^r"), HotkeyId("^!r"))
+    Assert("HotkeyId letter case", HotkeyId("^!R"), HotkeyId("^!r"))
+    Assert("HotkeyId named key", HotkeyId("PgUp"), "pgup")
+    Assert("HotkeyId all modifiers", HotkeyId("#+!^F5"), "^!+#f5")
+    Assert("HotkeyId differs by modifier", HotkeyId("^PgUp") = HotkeyId("PgUp"), false)
+}
+
+TestResolveKeys()
+{
+    defs := Map("correggi", "PgUp", "riassumi", "PgDn", "spiega", "End")
+    names := Map("correggi", "Fix", "riassumi", "Summarize", "spiega", "Explain")
+    keysOf(r) => r.keys["correggi"] "|" r.keys["riassumi"] "|" r.keys["spiega"]
+
+    r := ResolveKeys(Map(), defs, names)
+    Assert("ResolveKeys nothing set -> defaults", keysOf(r), "PgUp|PgDn|End")
+    Assert("ResolveKeys nothing set -> no warning", r.warnings.Length, 0)
+
+    r := ResolveKeys(Map("correggi", "^!r", "riassumi", "", "spiega", "F8"), defs, names)
+    Assert("ResolveKeys custom keys", keysOf(r), "^!r|PgDn|F8")
+    Assert("ResolveKeys custom keys -> no warning", r.warnings.Length, 0)
+
+    r := ResolveKeys(Map("correggi", "pgup"), defs, names)
+    Assert("ResolveKeys invalid -> default", keysOf(r), "PgUp|PgDn|End")
+    Assert("ResolveKeys invalid -> one warning", r.warnings.Length, 1)
+    Assert("ResolveKeys invalid warning text", r.warnings[1], 'Fix: "pgup" is not a valid key, using PgUp')
+
+    r := ResolveKeys(Map("correggi", "^!r", "riassumi", "!^R"), defs, names)
+    Assert("ResolveKeys duplicate -> second falls back", keysOf(r), "^!r|PgDn|End")
+    Assert("ResolveKeys duplicate warning", r.warnings[1], "Summarize: Alt+Ctrl+R is already used by Fix, using PgDn")
+
+    ; A key set by the user wins over another slot's default
+    r := ResolveKeys(Map("correggi", "PgDn"), defs, names)
+    Assert("ResolveKeys user key takes a default -> that slot has no key", keysOf(r), "PgDn||End")
+    Assert("ResolveKeys no-key warning", r.warnings[1], "Summarize: PgDn is used by Fix: no key")
+
+    ; Swapped defaults: both explicit, no conflict
+    r := ResolveKeys(Map("correggi", "PgDn", "riassumi", "PgUp"), defs, names)
+    Assert("ResolveKeys swapped keys", keysOf(r), "PgDn|PgUp|End")
+    Assert("ResolveKeys swapped keys -> no warning", r.warnings.Length, 0)
+
+    ; Duplicate whose default is also taken
+    r := ResolveKeys(Map("correggi", "End", "spiega", "End"), defs, names)
+    Assert("ResolveKeys duplicate and default taken", keysOf(r), "End|PgDn|")
+    Assert("ResolveKeys duplicate and default taken warning", r.warnings[1],
+        "Explain: End is already used by Fix, and End is used by Fix: no key")
+    Assert("ResolveKeys value is trimmed", ResolveKeys(Map("spiega", "  F8 "), defs, names).keys["spiega"], "F8")
+}
+
+TestPromptsUserTemplate()
+{
+    src := Chr(0xFEFF) 'x = """a`r`n`r`nb"""`r`nY = 1`r`n'
+    out := PromptsUserTemplate(src)
+    Assert("PromptsUserTemplate header", InStr(out, "# AI-Hotkeys — your own prompts (prompts_user.py).") = 1, true)
+    Assert("PromptsUserTemplate commented copy", InStr(out, '# x = """a`n#`n# b"""`n# Y = 1`n') > 0, true)
+    bad := 0
+    Loop Parse, out, "`n"
+        if (A_LoopField != "" && SubStr(A_LoopField, 1, 1) != "#")
+            bad++
+    Assert("PromptsUserTemplate every non-empty line is a comment", bad, 0)
+    Assert("PromptsUserTemplate no BOM inside", InStr(out, Chr(0xFEFF)), 0)
+    Assert("PromptsUserTemplate no CR", InStr(out, "`r"), 0)
+}
+
+TestProcExitCode()
+{
+    Run(A_ComSpec " /c exit 3", , "Hide", &pid)
+    h := ProcOpen(pid)
+    Assert("ProcOpen(child) handle", h != 0, true)
+    Loop 100
+    {
+        if (ProcExitCode(h) != 259)
+            break
+        Sleep 50
+    }
+    Assert("ProcExitCode(child) = 3", ProcExitCode(h), 3)
+    ProcClose(h)
+    Assert("ProcExitCode(0) = -1", ProcExitCode(0), -1)
+    Assert("ProcOpen(0) = 0", ProcOpen(0), 0)
 }

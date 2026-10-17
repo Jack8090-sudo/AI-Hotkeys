@@ -235,3 +235,142 @@ SearxngPidIsOurs(record, exePath, ctime, pythonExe)
         return (ctime != 0 && ctime = record.ctime)
     return InStr(pythonExe, "\") > 0
 }
+
+
+; =========================================================
+;  Error surfacing and UX (S8b3)
+; =========================================================
+
+; Line 1 of work\error.txt (contract K1): the user-facing message.
+; BOM, surrounding spaces and the detail lines are dropped; at most 200
+; characters. "" when there is nothing to show.
+ErrorFileLine1(text)
+{
+    text := LTrim(text, Chr(0xFEFF))
+    text := StrReplace(text, "`r", "`n")
+    nl := InStr(text, "`n")
+    line := Trim(nl ? SubStr(text, 1, nl - 1) : text, " `t")
+    return SubStr(line, 1, 200)
+}
+
+; work\config_warning.txt (contract K6, one warning per line) → toast text:
+; the first maxLines non-empty lines, plus "(+N more)". "" if none.
+WarningSummary(text, maxLines := 3)
+{
+    text := StrReplace(StrReplace(LTrim(text, Chr(0xFEFF)), "`r`n", "`n"), "`r", "`n")
+    lines := []
+    Loop Parse, text, "`n"
+    {
+        line := Trim(A_LoopField, " `t")
+        if (line != "")
+            lines.Push(SubStr(line, 1, 200))
+    }
+    out := ""
+    for i, line in lines
+    {
+        if (i > maxLines)
+        {
+            out .= "`n(+" (lines.Length - maxLines) " more)"
+            break
+        }
+        out .= (out = "" ? "" : "`n") line
+    }
+    return out
+}
+
+; Identity of a hotkey for duplicate detection: "!^r" and "^!R" are the
+; same key. Modifiers in a fixed order, key name lower-cased.
+HotkeyId(hk)
+{
+    i := 1
+    while (i <= StrLen(hk) && InStr("^!+#", SubStr(hk, i, 1)))
+        i++
+    mods := SubStr(hk, 1, i - 1), out := ""
+    for c in ["^", "!", "+", "#"]
+        if InStr(mods, c)
+            out .= c
+    return out StrLower(SubStr(hk, i))
+}
+
+; C26: decides which key each slot gets, before anything is registered.
+;   wanted   Map slot → the [tasti] value ("" = not set)
+;   defaults Map slot → default key (I1)
+;   names    Map slot → name for the messages ("Fix", ...)
+; Valid keys the user set win over defaults; a key set for two slots goes
+; to the first slot (in the order of defaults) and the other one falls back
+; to its default. A slot whose default is taken too gets no key ("").
+; Returns {keys: Map slot → key or "", warnings: [text, ...]}.
+ResolveKeys(wanted, defaults, names)
+{
+    keys := Map(), owner := Map(), problem := Map(), warnings := []
+    ; 1) keys set by the user
+    for slot, def in defaults
+    {
+        raw := wanted.Has(slot) ? Trim(wanted[slot], " `t") : ""
+        if (raw = "")
+            continue
+        if !ValidHotkey(raw)
+        {
+            problem[slot] := '"' raw '" is not a valid key'
+            continue
+        }
+        id := HotkeyId(raw)
+        if owner.Has(id)
+        {
+            problem[slot] := KeyLabel(raw) " is already used by " names[owner[id]]
+            continue
+        }
+        keys[slot] := raw, owner[id] := slot
+    }
+    ; 2) defaults for the rest
+    for slot, def in defaults
+    {
+        if keys.Has(slot)
+            continue
+        id := HotkeyId(def)
+        if !owner.Has(id)
+        {
+            keys[slot] := def, owner[id] := slot
+            if problem.Has(slot)
+                warnings.Push(names[slot] ": " problem[slot] ", using " KeyLabel(def))
+            continue
+        }
+        keys[slot] := ""
+        warnings.Push(names[slot] ": " (problem.Has(slot) ? problem[slot] ", and " : "")
+            . KeyLabel(def) " is used by " names[owner[id]] ": no key")
+    }
+    return {keys: keys, warnings: warnings}
+}
+
+; Text for a new prompts_user.py (decision D4): a header, then prompts.py
+; with every line commented out. Uncommented names override prompts.py;
+; anything left commented keeps coming from prompts.py (prompt_loader).
+PromptsUserTemplate(promptsText)
+{
+    header := "
+    (
+# AI-Hotkeys — your own prompts (prompts_user.py).
+#
+# This file is never shipped or overwritten by an update. prompt_loader.py
+# uses every name defined here instead of the one in prompts.py; anything
+# you do not define keeps coming from prompts.py, so new prompts added by
+# an update keep working.
+#
+# Below is a commented-out copy of prompts.py. To change a prompt, remove
+# the '# ' in front of ALL the lines of that assignment (the name, every
+# line of the text and the closing quotes), then edit it.
+# Note: REWRITE_SYSTEM and the others are built from BASE_RULES inside
+# prompts.py. If you change BASE_RULES here, also uncomment the names that
+# use it, so they are rebuilt from your version.
+#
+# If this file has an error, prompts.py is used and a warning is shown
+# after the next reload. Delete this file to go back to the standard prompts.
+# =========================================================================
+
+    )"
+    text := StrReplace(StrReplace(LTrim(promptsText, Chr(0xFEFF)), "`r`n", "`n"), "`r", "`n")
+    out := header
+    Loop Parse, text, "`n"
+        out .= (A_LoopField = "" ? "#" : "# " A_LoopField) "`n"
+    return out
+}
