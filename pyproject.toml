@@ -1,0 +1,21 @@
+# Tool configuration only: AI-Hotkeys is not a pip-installable package.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+    "python", "searxng/app", "searxng/lib", "work", "installer",
+    "graphify-out", "build/out", "build/cache", ".claude",
+]
+
+[tool.ruff.lint]
+select = ["E9", "F", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Pre-existing style findings, left for step S6b (no behaviour impact)
+"websearch.py" = ["B007", "B905"]
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*", "python/*", "searxng/*", "build/*", ".claude/*"]

@@ -1,0 +1,5 @@
+# Development-only tools (the app itself is stdlib-only, see README).
+# Install: python -m pip install -r requirements-dev.txt
+ruff==0.6.9
+coverage==7.6.1
+pip-audit==2.7.3
