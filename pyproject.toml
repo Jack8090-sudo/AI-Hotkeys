@@ -11,10 +11,6 @@ extend-exclude = [
 [tool.ruff.lint]
 select = ["E9", "F", "B"]
 
-[tool.ruff.lint.per-file-ignores]
-# Pre-existing style findings, left for step S6b (no behaviour impact)
-"websearch.py" = ["B007", "B905"]
-
 [tool.coverage.run]
 branch = true
 source = ["."]
