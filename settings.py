@@ -43,6 +43,7 @@ CHOICES = {
     ("comportamento", "sostituisci_testo"): ("si", ["si", "no"]),
     ("comportamento", "lunghezza"): ("normale", ["breve", "normale", "dettagliata"]),
     ("searxng", "web_search"): ("auto", ["auto", "always", "false"]),
+    ("searxng", "query_mode"): ("allow_fallback", ["allow_fallback", "model"]),
     ("qwen", "keep_alive"): ("30m", ["5m", "10m", "30m", "1h", "-1", "0"]),
 }
 

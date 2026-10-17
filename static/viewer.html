@@ -5,6 +5,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>__TITLE__ - AI-Hotkeys</title>
 
 <style>/*__THEME__*/</style>
@@ -13,6 +14,9 @@
 /* =========================================================
    Results page
    ========================================================= */
+
+/* keep the focused element above the sticky question bar */
+html { scroll-padding-bottom: 190px; }
 
 .wrap {
     width: min(100% - 48px, calc(300px + 56px + var(--measure)));
@@ -65,7 +69,7 @@ h1 {
 .btn {
     height: 34px;
     padding: 0 13px;
-    border: 1px solid var(--line-2);
+    border: 1px solid var(--edge);
     border-radius: 7px;
     background: transparent;
     color: var(--text);
@@ -76,15 +80,15 @@ h1 {
 }
 .btn:hover { background: var(--surface-2); }
 .btn.done { border-color: var(--accent); color: var(--accent); }
-.btn.toggle[aria-pressed="false"] { color: var(--muted); border-color: var(--line); }
-.btn.toggle[aria-pressed="true"] { background: var(--surface-2); }
+.btn.toggle[aria-pressed="false"] { color: var(--muted); border-style: dashed; }
+.btn.toggle[aria-pressed="true"] { background: var(--surface-2); box-shadow: inset 0 -3px 0 var(--accent); }
 .btn[hidden] { display: none; }
 
 /* two-or-more-position group (Result / Changes, versions) */
 .seg {
     display: inline-flex;
     padding: 2px;
-    border: 1px solid var(--line-2);
+    border: 1px solid var(--edge);
     border-radius: 8px;
 }
 .seg[hidden] { display: none; }
@@ -111,8 +115,11 @@ h1 {
     padding: 34px 0 40px;
 }
 
+.page > .rail { grid-column: 1; grid-row: 1; }
+.page > .reading { grid-column: 2; grid-row: 1; }
 .page.no-rail { grid-template-columns: minmax(0, var(--measure)); }
 .page.no-rail .rail { display: none; }
+.page.no-rail > .reading { grid-column: 1; }
 
 /* without the side column everything shrinks onto the reading column */
 body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
@@ -221,6 +228,17 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
 }
 .md a.cite:hover { text-decoration: underline; }
 
+/* answer cut off (K4 "partial"): marked as incomplete, not only by colour */
+.partial-note {
+    margin: 1em 0 0;
+    padding: 6px 12px;
+    border: 1px dashed var(--danger);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: calc(var(--fs) * .88);
+}
+.partial-note strong { color: var(--danger); }
+
 /* "Technical terms": glossary */
 .md ul.terms { list-style: none; padding-left: 0; }
 .md ul.terms li { margin: 0 0 .7em; }
@@ -250,7 +268,8 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
 .md ul.sources.other .src-n { color: var(--muted); }
 
 /* cursor while Qwen is writing */
-.md.streaming > :last-child::after {
+.md .tail { display: contents; }
+.md.streaming > .tail > :last-child::after {
     content: "";
     display: inline-block;
     width: .5em;
@@ -324,6 +343,7 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
     background: var(--surface);
     box-shadow: var(--shadow);
     overflow: hidden;
+    min-width: 0;
 }
 
 .progress {
@@ -348,23 +368,24 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
     flex: none;
     height: 28px;
     padding: 0 10px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: 6px;
     background: transparent;
     color: var(--text-2);
     font: 500 calc(var(--fs) * .84)/1 var(--f-ui);
     cursor: pointer;
 }
-.suggest button:hover { border-color: var(--line-2); color: var(--text); background: var(--surface-2); }
+.suggest button:hover { color: var(--text); background: var(--surface-2); }
 
 .row { display: flex; align-items: flex-end; gap: 8px; }
 
 .row textarea {
     flex: 1;
+    min-width: 0;
     min-height: 42px;
     max-height: 180px;
     padding: 10px 12px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: 8px;
     background: var(--bg);
     color: var(--text);
@@ -373,8 +394,8 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
     resize: none;
 }
 .row textarea::placeholder { color: var(--muted); }
-.row textarea:focus { outline: none; border-color: var(--accent); }
-.row textarea:disabled { opacity: .6; }
+.row textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.row textarea[readonly] { color: var(--muted); }
 
 .send {
     height: 42px;
@@ -398,7 +419,9 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
     font-size: calc(var(--fs) * .82);
 }
 .status:not(:empty) { margin-top: 8px; }
-.status.error { color: var(--danger); }
+.status.error, .alert { color: var(--danger); }
+.alert { margin: 0; font-size: calc(var(--fs) * .82); }
+.alert:not(:empty) { margin-top: 8px; }
 
 /* ---------- narrow screens ---------- */
 
@@ -408,14 +431,32 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
     .top .wrap { grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 16px; }
     .tools { grid-column: 1 / -1; justify-content: flex-start; }
     .page { grid-template-columns: minmax(0, 1fr); gap: 26px; padding-top: 24px; }
-    .rail { position: static; max-height: 40vh; }
+    .page > .rail, .page > .reading, .page.no-rail > .reading { grid-column: 1; grid-row: auto; }
+    .rail { position: static; max-height: 40vh; order: -1; }
     h1 { font-size: calc(var(--fs) * 1.9); }
     .key { min-width: 64px; height: 58px; font-size: 18px; }
+}
+
+/* small windows and high zoom: the question bar scrolls with the page instead of covering it */
+@media (max-width: 640px), (max-height: 560px) {
+    html { scroll-padding-bottom: 0; }
+    .dock { position: static; background: none; }
+    .row { flex-wrap: wrap; }
+    .row textarea { flex-basis: 12em; }
+}
+
+@media (forced-colors: active) {
+    .progress, .md.streaming > .tail > :last-child::after { background: CanvasText; }
+    .send { border: 1px solid ButtonText; }
+    .partial-note { border-color: CanvasText; }
+    .diff ins { border-bottom-color: CanvasText; }
 }
 </style>
 </head>
 
 <body>
+
+<p class="offline" id="offline" role="alert" hidden></p>
 
 <header class="top">
     <div class="wrap">
@@ -431,37 +472,39 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
             </div>
             <div class="seg" id="versions" role="group" aria-label="Versions" hidden></div>
             <button type="button" class="btn toggle" id="toggleRail" aria-controls="rail" aria-pressed="true" title="Show or hide the selected text">Selected text</button>
-            <button type="button" class="btn" id="copyResult">Copy</button>
+            <button type="button" class="btn" id="copyResult" aria-label="Copy result">Copy</button>
         </div>
     </div>
 </header>
 
 <main class="wrap page" id="page">
 
-    <aside class="rail" id="rail">
-        <h2>Selected text</h2>
-        <div class="md" id="original"></div>
-    </aside>
-
     <div class="reading">
+        <h2 class="sr-only" id="resultTitle">Result</h2>
         <p class="note" id="versionNote" hidden></p>
-        <article class="md result" id="result"></article>
+        <article class="md result" id="result" aria-labelledby="resultTitle"></article>
 
         <section class="thread" id="thread" aria-label="Follow-up questions" hidden></section>
 
         <div class="dock">
         <form class="composer" id="askForm" autocomplete="off">
             <div class="progress" aria-hidden="true"></div>
-            <div class="suggest" id="suggest"></div>
+            <div class="suggest" id="suggest" role="group" aria-label="Suggested questions"></div>
             <div class="row">
                 <label class="sr-only" for="askInput">Ask Qwen</label>
-                <textarea id="askInput" rows="1" spellcheck="true"></textarea>
+                <textarea id="askInput" rows="1" spellcheck="true" aria-describedby="askStatus askError"></textarea>
                 <button type="submit" class="send" id="askSend">Send</button>
             </div>
             <p class="status" id="askStatus" role="status" aria-live="polite"></p>
+            <p class="alert" id="askError" role="alert"></p>
         </form>
         </div>
     </div>
+
+    <aside class="rail" id="rail" aria-labelledby="railTitle">
+        <h2 id="railTitle">Selected text</h2>
+        <div class="md" id="original"></div>
+    </aside>
 
 </main>
 
@@ -534,6 +577,7 @@ const form = $("askForm");
 const askInput = $("askInput");
 const askSend = $("askSend");
 const askStatus = $("askStatus");
+const askError = $("askError");
 const resultEl = $("result");
 
 const state = {
@@ -577,9 +621,11 @@ function renderMarkdown(el, text) {
         if (!/^https?:\/\//i.test(href)) { a.removeAttribute("href"); return; }
         a.target = "_blank";
         a.rel = "noopener noreferrer";
-        if (/^\[\d+\]$/.test(a.textContent.trim())) {
+        const cite = /^\[(\d+)\]$/.exec(a.textContent.trim());
+        if (cite) {
             a.classList.add("cite");
             try { a.title = new URL(href).hostname.replace(/^www\./, ""); } catch (e) { a.title = href; }
+            a.setAttribute("aria-label", "Source " + cite[1] + ": " + a.title);
         }
     });
     // Only inline data: images may stay (remote ones were turned into links above)
@@ -838,6 +884,7 @@ async function copyText(text, btn) {
         const label = btn.textContent;
         btn.textContent = "Copied";
         btn.classList.add("done");
+        if (!state.busy) setStatus("Copied to the clipboard.");
         setTimeout(() => { btn.textContent = label; btn.classList.remove("done"); }, 1400);
     }
 }
@@ -887,26 +934,30 @@ form.addEventListener("submit", (e) => {
 
 document.addEventListener("keydown", (e) => {
     const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
+    // Esc stops the answer; the focus stays where it is
     if (e.key === "Escape") {
-        if (state.busy) { stopGeneration(); return; }
-        if (typing) askInput.blur();
+        if (state.busy) stopGeneration();
         return;
     }
+    if (isReload(e)) { e.preventDefault(); showOffline("reload"); return; }
     if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
         askInput.focus();
     }
 });
 
+/* Messages go to a polite status line, errors to a separate alert line */
 function setStatus(text, isError = false) {
-    askStatus.textContent = text || "";
-    askStatus.classList.toggle("error", !!isError);
+    askStatus.textContent = isError ? "" : (text || "");
+    askError.textContent = isError ? (text || "") : "";
 }
 
 function setBusy(busy) {
     state.busy = busy;
     form.classList.toggle("busy", busy);
-    askInput.disabled = busy;
+    // readonly, not disabled: the field keeps the focus and stays in the tab order
+    askInput.readOnly = busy;
+    askInput.setAttribute("aria-disabled", String(busy));
     askSend.textContent = busy ? "Stop" : "Send";
     askSend.title = busy ? "Stop (Esc)" : "Send (Enter)";
     if (busy) setStatus(ui.busy + " Press Esc to stop it.");
@@ -917,12 +968,51 @@ function stopGeneration() { if (state.controller) state.controller.abort(); }
 
 /* ================= CONVERSATION ================= */
 
+/* While streaming, the Markdown is rendered at most once every RENDER_EVERY ms
+   (C40: re-parsing on every frame is O(n^2) and breaks text selection).
+   cancel() drops a pending render: the caller then does the single final one. */
+const RENDER_EVERY = 150;
+
+/* Text up to the last blank line (outside a code fence) is rendered once and kept ("frozen");
+   only the paragraph being written is parsed again. The selection on earlier text survives. */
+const FENCE = /^ {0,3}(```|~~~)/gm;
+
+function markdownNodes(text) {
+    const box = document.createElement("div");
+    renderMarkdown(box, text);
+    return [...box.childNodes];
+}
+
 function scheduleRender(el, getText) {
-    let pending = false;
-    return () => {
-        if (pending) return;
-        pending = true;
-        requestAnimationFrame(() => { pending = false; renderMarkdown(el, getText()); });
+    let timer = 0;
+    let last = 0;
+    let frozen = 0;
+    let tail = null;
+    const run = () => {
+        timer = 0;
+        last = performance.now();
+        const text = getText();
+        if (!tail) {
+            tail = document.createElement("div");
+            tail.className = "tail";
+            el.replaceChildren(tail);
+        }
+        const cut = text.lastIndexOf("\n\n");
+        if (cut > frozen) {
+            const part = text.slice(frozen, cut);
+            if ((part.match(FENCE) || []).length % 2 === 0) {
+                tail.before(...markdownNodes(part));
+                frozen = cut;
+            }
+        }
+        tail.replaceChildren(...markdownNodes(text.slice(frozen)));
+    };
+    return {
+        request() {
+            if (timer) return;
+            timer = setTimeout(run, Math.max(0, RENDER_EVERY - (performance.now() - last)));
+        },
+        cancel() { clearTimeout(timer); timer = 0; }
     };
 }
 
@@ -930,12 +1020,15 @@ function addTurn(question) {
     const thread = $("thread");
     thread.hidden = false;
 
+    const n = thread.querySelectorAll(".turn").length + 1;
     const turn = document.createElement("section");
     turn.className = "turn";
+    turn.setAttribute("aria-label", "Question " + n);
     turn.innerHTML = `
         <div class="ask-line"><p></p><button type="button" class="btn" data-copy>Copy</button></div>
         <div class="md"><p class="waiting">Qwen is reading the question.</p></div>`;
     turn.querySelector(".ask-line p").textContent = question;
+    turn.querySelector("[data-copy]").setAttribute("aria-label", "Copy answer " + n);
     const content = turn.querySelector(".md");
     turn.querySelector("[data-copy]").addEventListener("click", (e) => copyText(content.innerText, e.currentTarget));
 
@@ -963,6 +1056,7 @@ async function submit() {
     }
 
     const rerender = scheduleRender(target, () => text);
+    target.setAttribute("aria-busy", "true");
 
     askInput.value = "";
     autoGrow();
@@ -972,6 +1066,7 @@ async function submit() {
     state.controller = controller;
     let finished = false;
     let errorMsg = null;
+    let partial = false;
 
     try {
         const res = await fetch("/api/ask", {
@@ -980,6 +1075,7 @@ async function submit() {
             body: JSON.stringify({ question, base }),
             signal: controller.signal
         });
+        if (res.status === 403) { showOffline("gone"); throw new Error(OFFLINE_TEXT.gone); }
         if (!res.ok || !res.body) {
             let msg = "The server responded with error " + res.status + ".";
             try { msg = (await res.json()).error || msg; } catch (e) {}
@@ -999,22 +1095,24 @@ async function submit() {
                 buffer = buffer.slice(nl + 1);
                 if (!line) continue;
                 const msg = JSON.parse(line);
-                if (msg.error) { errorMsg = msg.error; continue; }
+                if (msg.error) { errorMsg = msg.error; partial = !!msg.partial; continue; }
                 if (msg.t) {
                     if (first) { first = false; target.classList.add("streaming"); }
                     text += msg.t;
-                    rerender();
+                    rerender.request();
                 }
                 if (msg.done) { finished = true; text = msg.text; }
             }
         }
     } catch (e) {
         if (e.name === "AbortError") errorMsg = "__abort__";
-        else if (e instanceof TypeError) errorMsg = "This page is no longer connected to Qwen. Select the text again and press the key.";
+        else if (e instanceof TypeError) { errorMsg = OFFLINE_TEXT.gone; showOffline("gone"); }
         else errorMsg = e.message || String(e);
     } finally {
         state.controller = null;
+        rerender.cancel();
         target.classList.remove("streaming");
+        target.removeAttribute("aria-busy");
         setBusy(false);
     }
 
@@ -1025,7 +1123,7 @@ async function submit() {
             state.current = state.versions.length - 1;
             renderVersions();
         }
-        setStatus("");
+        setStatus(isRewrite ? "New version ready: v" + state.versions.length + "." : "Answer ready.");
         askInput.focus({ preventScroll: true });
         return;
     }
@@ -1040,21 +1138,58 @@ async function submit() {
         target.firstChild.textContent = errorMsg === "__abort__" ? "Stopped before the answer." : (errorMsg || "No answer.");
     } else {
         renderMarkdown(target, text + (errorMsg === "__abort__" ? "\n\n*Stopped here.*" : ""));
+        if (errorMsg !== "__abort__") markIncomplete(target, partial);
     }
 
     if (errorMsg === "__abort__") {
         setStatus(isRewrite ? "Stopped. The current version has not changed." : "Stopped.");
         setTimeout(() => { if (!state.busy) setStatus(""); }, 2500);
     } else {
-        setStatus(errorMsg || "Qwen did not answer. Check that Ollama is running.", true);
+        let msg = errorMsg || "Qwen did not answer. Check that Ollama is running.";
+        if (isRewrite && text) msg += " The incomplete draft was not kept: the current version has not changed.";
+        else if (text) msg += " The answer above is incomplete.";
+        setStatus(msg, true);
     }
+}
+
+/* An answer cut off by Ollama (K4 "partial") or by an error stays visible, marked as incomplete */
+function markIncomplete(target, partial) {
+    const note = document.createElement("p");
+    note.className = "partial-note";
+    const b = document.createElement("strong");
+    b.textContent = "Incomplete answer.";
+    note.append(b, partial ? " Ollama stopped before the end: ask again to get the full answer."
+                           : " An error interrupted it: ask again to get the full answer.");
+    target.appendChild(note);
 }
 
 
 /* ================= CONNECTION TO THE SERVER ================= */
 
+const OFFLINE_TEXT = {
+    gone: "This page is no longer connected to AI-Hotkeys. Select the text again and press the hotkey to open a new one.",
+    reload: "This page cannot be reloaded: reloading would disconnect it. To start again, select the text and press the hotkey."
+};
+
+/* Banner at the top: the server is gone (ping failed, idle shutdown) or the user tried to reload
+   (the token was removed from the address, so a reload could not open the page again). */
+function showOffline(kind) {
+    const box = $("offline");
+    box.replaceChildren();
+    const b = document.createElement("strong");
+    b.textContent = kind === "reload" ? "Reload not available. " : "Disconnected. ";
+    box.append(b, OFFLINE_TEXT[kind]);
+    box.hidden = false;
+}
+
+function isReload(e) {
+    return e.key === "F5" || ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "r");
+}
+
 function ping() {
-    fetch("/api/ping", { headers: { "X-Token": DATA.token }, cache: "no-store" }).catch(() => {});
+    fetch("/api/ping", { headers: { "X-Token": DATA.token }, cache: "no-store" })
+        .then((res) => { if (!res.ok) showOffline("gone"); })
+        .catch(() => showOffline("gone"));
 }
 setInterval(ping, 15000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) ping(); });
