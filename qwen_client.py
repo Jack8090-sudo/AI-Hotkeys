@@ -3,6 +3,7 @@ AI-Hotkeys — shared Ollama connection used by all actions.
 """
 
 import configparser
+import http.client
 import json
 import os
 import re
@@ -41,11 +42,28 @@ DEFAULTS = {
 
 CONFIG_WARNINGS = []
 
+# Keys holding a file path: surrounding quotes ("C:\...") are removed
+PATH_KEYS = {"todo_file"}
+
 
 def _unquote(value):
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
         return value[1:-1].strip()
     return value
+
+
+def _config_error_text(e):
+    """Short description of a configparser error, with the line number and without the path."""
+    if isinstance(e, configparser.MissingSectionHeaderError):
+        return f"line {e.lineno}: a setting appears before any [section] header"
+    if isinstance(e, configparser.DuplicateOptionError):
+        return f"line {e.lineno}: '{e.option}' appears twice in [{e.section}]"
+    if isinstance(e, configparser.DuplicateSectionError):
+        return f"line {e.lineno}: section [{e.section}] appears twice"
+    if isinstance(e, configparser.ParsingError) and e.errors:
+        lineno, line = e.errors[0]
+        return f"line {lineno}: {line.strip()[:80]!s} (expected  key = value)"
+    return str(e).strip().splitlines()[0][:160]
 
 
 def load_config():
@@ -64,34 +82,45 @@ def load_config():
                                "Open it in Notepad and save it with UTF-8 encoding.")
         return cfg
     except configparser.Error as e:
-        first = str(e).strip().splitlines()[0][:160]
-        CONFIG_WARNINGS.append(f"config.ini has an error, using the default settings: {first}")
+        CONFIG_WARNINGS.append(f"config.ini has an error, using the default settings: {_config_error_text(e)}")
         return cfg
 
     for section in parser.sections():
         for key, value in parser.items(section):
-            value = _unquote(value.strip())
+            value = value.strip()
+            if key in PATH_KEYS:
+                value = _unquote(value)
             if value:
                 cfg[key] = value
     return cfg
 
 
 def _write_atomic(path, text):
+    """Write via a unique temp file + replace; if the replace is refused (file held open), write directly."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
-
-
-def _write_config_warnings():
-    lines = CONFIG_WARNINGS + ([PROMPTS_WARNING] if PROMPTS_WARNING else [])
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
-        if lines:
-            _write_atomic(CONFIG_WARNING_FILE, "\n".join(lines) + "\n")
-        elif CONFIG_WARNING_FILE.exists():
-            CONFIG_WARNING_FILE.unlink()
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
     except OSError:
-        pass
+        path.write_text(text, encoding="utf-8")
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def report_config_warnings():
+    """Write work/config_warning.txt when config.ini or prompts_user.py has a problem (contract K6).
+
+    Called by the entry points (actions), never at import: main.ahk deletes the
+    file after showing it, so an import elsewhere cannot hide a warning.
+    """
+    lines = CONFIG_WARNINGS + ([PROMPTS_WARNING] if PROMPTS_WARNING else [])
+    if lines:
+        try:
+            _write_atomic(CONFIG_WARNING_FILE, "\n".join(lines) + "\n")
+        except OSError:
+            pass
 
 
 CONFIG = load_config()
@@ -106,8 +135,6 @@ CHAT_URL = OLLAMA_URL + "/api/chat"
 KEEP_ALIVE = CONFIG["keep_alive"]
 if re.fullmatch(r"-?\d+", KEEP_ALIVE):
     KEEP_ALIVE = int(KEEP_ALIVE)
-
-_write_config_warnings()
 
 
 def todo_file():
@@ -140,12 +167,16 @@ def describe_error(exc):
         except Exception:
             pass
         detail = f"HTTP {exc.code}: {err or exc.reason}"
-        if exc.code == 404:
+        if exc.code == 404 and ("model" in err.lower() or "not found" in err.lower()):
             return f"Model '{MODEL}' not found: run  ollama pull {MODEL}", detail
+        if exc.code == 404:
+            return f"Ollama answered 404: check  ollama_url  in the settings ({OLLAMA_URL}).", detail
         return f"Ollama returned an error (HTTP {exc.code}): {err[:120]}".rstrip(": "), detail
     reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
     if isinstance(reason, TimeoutError):
         return "Ollama did not answer in time. Try again, or select less text.", detail
+    if isinstance(reason, (ConnectionResetError, ConnectionAbortedError)):
+        return "Ollama stopped while answering: try again.", detail
     if isinstance(exc, (urllib.error.URLError, ConnectionError)):
         return "Ollama is not running: start Ollama, then try again.", detail
     if isinstance(exc, (TruncatedAnswer, StreamIncomplete)):
@@ -157,7 +188,8 @@ def describe_error(exc):
 
 def write_error(message, detail=""):
     """Write work/error.txt: line 1 is shown to the user by main.ahk."""
-    text = message.replace("\n", " ").strip()[:200] + "\n" + (detail.strip() + "\n" if detail else "")
+    line1 = re.sub(r"[\r\n\t]+", " ", message).strip()[:200]     # keeps the "run  ollama pull" spacing
+    text = line1 + "\n" + (detail.strip() + "\n" if detail else "")
     try:
         _write_atomic(ERROR_FILE, text)
     except OSError:
@@ -237,14 +269,25 @@ def unload(timeout=30):
         r.read()
 
 
+def _lines(response):
+    """Lines of a streamed response; a connection cut mid-answer becomes StreamIncomplete."""
+    try:
+        yield from response
+    except http.client.IncompleteRead as e:
+        raise StreamIncomplete("The answer was interrupted before the end.") from e
+
+
 def stream_pieces(response):
     """Text pieces of a streamed answer; StreamIncomplete if it stops before "done"."""
     done = False
-    for raw in response:
+    for raw in _lines(response):
         raw = raw.strip()
         if not raw:
             continue
-        chunk = json.loads(raw.decode("utf-8"))
+        try:
+            chunk = json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise StreamIncomplete("The answer was interrupted before the end.") from e
         if chunk.get("error"):
             raise RuntimeError(chunk["error"])
         piece = chunk.get("message", {}).get("content", "")
@@ -260,7 +303,8 @@ def stream_pieces(response):
 
 
 def _version_tuple(text):
-    return tuple(int(n) for n in re.findall(r"\d+", str(text))[:3])
+    nums = [int(n) for n in re.findall(r"\d+", str(text))[:3]]
+    return tuple(nums + [0] * (3 - len(nums)))
 
 
 def health(timeout=3):
@@ -272,7 +316,8 @@ def health(timeout=3):
             names = [m.get("name", "") for m in json.load(r).get("models", [])]
     except Exception as e:
         return False, describe_error(e)[0]
-    if version and _version_tuple(version) < MIN_OLLAMA_VERSION:
+    # "0.0.0" is reported by builds from source: no check possible
+    if version and _version_tuple(version) != (0, 0, 0) and _version_tuple(version) < MIN_OLLAMA_VERSION:
         need = ".".join(map(str, MIN_OLLAMA_VERSION))
         return False, f"Ollama {version} is too old: update it to {need} or newer."
     wanted = MODEL if ":" in MODEL else MODEL + ":latest"
@@ -298,18 +343,30 @@ _EMPTY_BODY_RE = re.compile(
 
 
 def _drop_empty_sections(text):
-    """Remove headings whose whole body is "Nessuno." / "n/a" / "-" (line by line, linear time)."""
+    """Remove headings whose whole body is "Nessuno." / "n/a" / "-".
+
+    Linear time: one backward pass finds, for every line, where the next
+    section starts; only bodies of at most two non-empty lines are examined.
+    """
     lines = text.split("\n")
+    n = len(lines)
+    next_section = [n] * (n + 1)          # first index > i that starts a "#... " section
+    for i in range(n - 1, -1, -1):
+        next_section[i] = i + 1 if i + 1 < n and re.match(r"#{1,4} ", lines[i + 1]) else next_section[i + 1]
+    nonempty = [0] * (n + 1)              # non-empty lines before index i
+    for i, line in enumerate(lines):
+        nonempty[i + 1] = nonempty[i] + (1 if line.strip() else 0)
+
     out, i = [], 0
-    while i < len(lines):
+    while i < n:
         if re.match(r"#{1,4}", lines[i]):
-            j = i + 1
-            while j < len(lines) and not re.match(r"#{1,4} ", lines[j]):
-                j += 1
-            body = "\n".join(lines[i + 1:j]).strip()
-            if body and _EMPTY_BODY_RE.fullmatch(body):
-                i = j
-                continue
+            j = min(next_section[i], n)
+            # Any heading inside the range is itself non-empty, so few ranges get scanned
+            if 1 <= nonempty[j] - nonempty[i + 1] <= 2:
+                body = "\n".join(l for l in lines[i + 1:j] if l.strip())
+                if _EMPTY_BODY_RE.fullmatch(body.strip()):
+                    i = j
+                    continue
         out.append(lines[i])
         i += 1
     return "\n".join(out)
@@ -327,10 +384,14 @@ def clean_answer(text, mode=None, original=None):
     # Possible reasoning
     text = re.sub(r"(?s)^<think>.*?</think>\s*", "", text)
 
-    # Everything wrapped in one ```...``` block (not two blocks, not a fenced original)
+    # Everything wrapped in one ```...``` block. Not unwrapped when the original was
+    # fenced, or when it is really two blocks ("```a\n...\n```\ntext\n```b\n...\n```").
+    # Inner blocks are fine when balanced and the first inner fence opens one (```lua).
     fence = re.match(r"(?s)^```[a-zA-Z]*\n(.*)\n```$", text)
-    if fence and "```" not in fence.group(1) and not original.startswith("```"):
-        text = fence.group(1).strip()
+    if fence and not original.startswith("```"):
+        inner_fences = re.findall(r"(?m)^```(\S*)", fence.group(1))
+        if not inner_fences or (len(inner_fences) % 2 == 0 and inner_fences[0]):
+            text = fence.group(1).strip()
 
     # Prompt tags repeated by the model
     text = re.sub(r"^</?(testo|versione_attuale|testo_originale)>\s*", "", text)
@@ -363,14 +424,23 @@ def clean_answer(text, mode=None, original=None):
 # PgUp / PgDn / End ACTIONS
 # =========================================================
 
-def max_input_chars(mode):
-    """Longest selection that still leaves room in the context for the prompt and the answer.
+# Characters the web sources can add to the End prompt (websearch.SOURCES_BUDGET)
+SOURCES_RESERVE_CHARS = 10000
 
-    Rough estimate: about 3 characters per token, about 2000 tokens for the
-    instructions (the web sources budget is kept apart by websearch.py).
+
+def max_input_chars(mode):
+    """Longest selection that still fits: room in the context for the instructions and the
+    answer, and for rewrite an answer (as long as the text) that fits in num_predict.
+
+    Rough estimate: about 3 characters per token, about 2000 tokens of instructions.
     """
     num_predict = prompts.OPTIONS.get(mode, prompts.OPTIONS["explain"]).get("num_predict", 4096)
-    return max(2000, (prompts.NUM_CTX - num_predict - 2000) * 3)
+    limit = (prompts.NUM_CTX - num_predict - 2000) * 3
+    if mode == "rewrite":
+        limit = min(limit, int(num_predict * 3 * 0.8))
+    if mode == "explain" and str(CONFIG.get("web_search", "auto")).strip().lower() not in ("0", "false", "no", "off"):
+        limit -= SOURCES_RESERVE_CHARS
+    return max(2000, limit)
 
 
 def run_action(mode, argv):
@@ -393,6 +463,7 @@ def _run_action(mode, argv):
 
     t0 = time.time()
     clear_error()
+    report_config_warnings()
     input_file = Path(argv[1])
     output_file = Path(argv[2])
 

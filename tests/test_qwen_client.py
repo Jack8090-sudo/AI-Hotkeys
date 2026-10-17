@@ -167,8 +167,11 @@ class QwenClientTest(unittest.TestCase):
     def test_C16_malformed_config_is_reported(self):
         """C16: a duplicate key makes load_config silently fall back to all defaults."""
         with AppTree(config_text="[qwen]\nmodel = mine\nmodel = again\n") as tree:
-            tree.load("qwen_client")
-            self.assertTrue((tree.work / "config_warning.txt").exists())
+            qc = tree.load("qwen_client")
+            self.assertFalse((tree.work / "config_warning.txt").exists())   # never written at import
+            qc.report_config_warnings()                                     # entry points do it
+            warning = (tree.work / "config_warning.txt").read_text(encoding="utf-8")
+            self.assertIn("line 3: 'model' appears twice in [qwen]", warning)
 
     def test_C24_system_proxy_is_not_used_for_ollama(self):
         """C24 / H20: HTTP_PROXY routes the localhost Ollama call through a proxy."""
@@ -255,8 +258,15 @@ class QwenClientTest(unittest.TestCase):
             (tree.root / "prompts_user.py").write_text("def broken(:\n", encoding="utf-8")
             qc = tree.load("qwen_client")
             self.assertEqual(qc.prompts.NUM_CTX, 16384)
+            qc.report_config_warnings()
             warning = (tree.work / "config_warning.txt").read_text(encoding="utf-8")
             self.assertIn("prompts_user.py has an error", warning)
+        with AppTree() as tree:                       # an old copy without newer names
+            (tree.root / "prompts_user.py").write_text("NUM_CTX = 8192\n", encoding="utf-8")
+            qc = tree.load("qwen_client")
+            self.assertEqual(qc.prompts.NUM_CTX, 8192)
+            self.assertIn("rewrite", qc.prompts.OPTIONS)               # falls back to prompts.py
+            self.assertTrue(callable(qc.prompts.first_messages))
 
     def test_H24_health(self):
         ok, message = self.qc.health()
@@ -282,7 +292,61 @@ class QwenClientTest(unittest.TestCase):
         import time
         t = time.perf_counter()
         self.qc.clean_answer("## A\n" + "\n" * 5000 + "x", "explain")
-        self.assertLess(time.perf_counter() - t, 0.1)
+        self.qc.clean_answer("#tag riga\n" * 5000, "explain")          # hashtag lines, not headings
+        self.assertLess(time.perf_counter() - t, 0.3)
+
+    def test_empty_sections_equivalent_cases(self):
+        ca = lambda t: self.qc.clean_answer(t, "explain")
+        self.assertEqual(ca("## A\nTesto.\n\n## B\n- Nessuno.\n\n## C\nAltro."), "## A\nTesto.\n\n## C\nAltro.")
+        self.assertEqual(ca("## A\n\nn/a\n"), "")
+        self.assertEqual(ca("## A\nNessuno dei due va bene."), "## A\nNessuno dei due va bene.")
+
+    def test_original_text_keeps_intro_and_fence(self):
+        ca = self.qc.clean_answer
+        self.assertEqual(ca("Ecco la lista:\n\n- uno", "rewrite", original="Ecco la lista:\n- uno"),
+                         "Ecco la lista:\n\n- uno")
+        fenced = "```py\nprint(1)\n```"
+        self.assertEqual(ca(fenced, "rewrite", original=fenced), fenced)
+
+    def test_nested_fences_are_unwrapped_but_two_blocks_are_not(self):
+        nested = "```markdown\n## A\n```lua\nprint(1)\n```\n```"
+        self.assertEqual(self.qc.clean_answer(nested, "explain"), "## A\n```lua\nprint(1)\n```")
+
+    def test_describe_error_variants(self):
+        import urllib.error
+        de = self.qc.describe_error
+
+        def http(code, body):
+            return urllib.error.HTTPError("http://x", code, "reason", {}, io.BytesIO(body))
+
+        self.assertIn("ollama pull", de(http(404, b'{"error": "model \'x\' not found"}'))[0])
+        self.assertIn("check  ollama_url", de(http(404, b"404 page not here"))[0])
+        self.assertIn("HTTP 500", de(http(500, b'{"error": "out of memory"}'))[0])
+        self.assertIn("out of memory", de(http(500, b'{"error": "out of memory"}'))[0])
+        self.assertIn("did not answer in time", de(TimeoutError())[0])
+        self.assertIn("did not answer in time", de(urllib.error.URLError(TimeoutError()))[0])
+        self.assertIn("stopped while answering", de(urllib.error.URLError(ConnectionResetError()))[0])
+        self.assertIn("not running", de(urllib.error.URLError(ConnectionRefusedError()))[0])
+
+    def test_stream_with_length_raises_truncated(self):
+        self.ollama.scenario = "length"
+        self.ollama.text = "parole"
+        with self.qc.open_stream([{"role": "user", "content": "x"}], "explain") as r:
+            with self.assertRaises(self.qc.TruncatedAnswer):
+                list(self.qc.stream_pieces(r))
+
+    def test_version_tuple_and_rewrite_limit(self):
+        self.assertEqual(self.qc._version_tuple("0.9"), (0, 9, 0))
+        self.assertEqual(self.qc._version_tuple("0.12.3-rc1"), (0, 12, 3))
+        num_predict = self.qc.prompts.OPTIONS["rewrite"]["num_predict"]
+        self.assertLessEqual(self.qc.max_input_chars("rewrite"), num_predict * 3)
+
+    def test_write_error_line1_is_one_line(self):
+        self.qc.write_error("riga uno\r\nriga\tdue", "dettagli")
+        lines = (self.tree.work / "error.txt").read_text(encoding="utf-8").split("\n")
+        self.assertEqual(lines[0], "riga uno riga due")
+        self.assertEqual(lines[1], "dettagli")
+        (self.tree.work / "error.txt").unlink()
 
 
 if __name__ == "__main__":

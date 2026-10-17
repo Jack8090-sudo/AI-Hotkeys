@@ -8,8 +8,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import qwen_client
 
 if __name__ == "__main__":
+    qwen_client.report_config_warnings()
     ok, message = qwen_client.health()
     print(message)
-    if not ok:
+    if ok:
+        qwen_client.clear_error()
+    else:
         qwen_client.write_error(message, "health check")
     sys.exit(0 if ok else 1)
