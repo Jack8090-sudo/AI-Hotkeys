@@ -11,6 +11,7 @@ Flow:
 If SearXNG does not respond, End works as before (no web).
 """
 
+import codecs
 import http.client
 import ipaddress
 import json
@@ -28,8 +29,8 @@ from concurrent.futures import TimeoutError as FuturesTimeout
 from html.parser import HTMLParser
 from pathlib import Path
 
-import prompts
 import qwen_client
+from prompt_loader import prompts
 
 BASE_DIR = Path(__file__).resolve().parent
 WORK_DIR = BASE_DIR / "work"
@@ -51,6 +52,18 @@ def _int(value, default):
 _MODE = (CFG.get("web_search") or "auto").strip().lower()
 ENABLED = _MODE not in ("0", "false", "no", "off", "")
 ALWAYS = _MODE in ("always", "sempre")
+
+# query_mode (D5): what may be sent to the search engine.
+#   allow_fallback  model queries; when the model gives none but a search is
+#                   forced, the technical terms or the first 10 words of the
+#                   selected text are searched (default, the original behaviour)
+#   model           only queries written by the model; none = no search, so
+#                   the selected text is never sent verbatim
+QUERY_MODES = ("allow_fallback", "model")
+QUERY_MODE = (CFG.get("query_mode") or "allow_fallback").strip().lower()
+if QUERY_MODE not in QUERY_MODES:
+    QUERY_MODE = "allow_fallback"
+
 
 def _clamp(value, low, high):
     return max(low, min(high, value))
@@ -187,6 +200,17 @@ class _TextExtractor(HTMLParser):
              "dd", "dt", "figcaption", "summary", "caption"}
     # Tags that separate words: without a space "<li>A</li><li>B</li>" becomes "AB"
     SPACE = {"br", "div", "li", "p", "td", "th", "dd", "dt", "tr", "img", "hr"}
+    # Elements that never have an end tag
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+            "param", "source", "track", "wbr"}
+    # Inline elements: they do not end a run of loose text (text outside BLOCK tags)
+    INLINE = {"a", "abbr", "b", "bdi", "bdo", "cite", "code", "data", "dfn", "em", "font", "i",
+              "kbd", "label", "mark", "q", "s", "samp", "small", "span", "strong", "sub", "sup",
+              "time", "u", "var"}
+    # Opening one of these right inside another of the same kind closes the first
+    SELF_CLOSING = {"p", "li", "dt", "dd", "option"}
+    # Below this much block text, the loose text (div/span only pages) is used too (C39)
+    LOOSE_FALLBACK = 200
 
     def __init__(self, include_noscript=False):
         super().__init__(convert_charrefs=True)
@@ -196,13 +220,27 @@ class _TextExtractor(HTMLParser):
         self.main = 0
         self.article = 0
         self.buf = []
+        self.loose = []    # text outside any BLOCK tag (div/span only pages)
         self.row = None    # cells of the current table row
         self.cell = None   # text of the current cell
-        self.parts = []    # (text, inside_main, inside_article)
+        self.parts = []    # (text, inside_main, inside_article, loose)
+        # Open elements as [tag, counted_as_block]. An end tag closes every element
+        # opened after its match, so an unclosed <form> or <nav> ends with its parent
+        # instead of swallowing the rest of the page (C39).
+        self.stack = []
+        self.open = {}     # tag -> how many are on the stack (stray end tags cost nothing)
 
     # -----------------------------------------------------
 
     def handle_starttag(self, tag, attrs):
+        if tag in self.VOID:
+            self.handle_startendtag(tag, attrs)
+            return
+        if tag in self.SELF_CLOSING and self.stack and self.stack[-1][0] == tag:
+            self.handle_endtag(tag)       # "<p>a<p>b", "<li>a<li>b": the new one ends the old one
+        entry = [tag, False]
+        self.stack.append(entry)
+        self.open[tag] = self.open.get(tag, 0) + 1
         if tag in self.skip_tags:
             self.skip += 1
             return
@@ -212,6 +250,8 @@ class _TextExtractor(HTMLParser):
             self.article += 1
         if self.skip:
             return
+        if tag not in self.INLINE:
+            self._flush_loose()
 
         if tag == "tr":
             self._end_row()
@@ -229,6 +269,7 @@ class _TextExtractor(HTMLParser):
         elif tag in self.BLOCK:
             self._flush()
             self.block += 1
+            entry[1] = True
         elif tag in self.SPACE:
             self.buf.append(" ")
 
@@ -236,9 +277,24 @@ class _TextExtractor(HTMLParser):
         if self.skip:
             return
         if tag in self.SPACE:
-            (self.cell if self.cell is not None else self.buf).append(" ")
+            if self.cell is not None:
+                self.cell.append(" ")
+            elif self.block > 0:
+                self.buf.append(" ")
+            else:
+                self.loose.append(" ")
 
     def handle_endtag(self, tag):
+        if not self.open.get(tag):
+            return      # stray end tag: nothing to close
+        while self.stack:
+            name, counted = self.stack.pop()
+            self.open[name] -= 1
+            self._close(name, counted)
+            if name == tag:
+                break
+
+    def _close(self, tag, counted):
         if tag in self.skip_tags:
             self.skip = max(0, self.skip - 1)
             return
@@ -246,8 +302,12 @@ class _TextExtractor(HTMLParser):
             self.main = max(0, self.main - 1)
         elif tag == "article":
             self.article = max(0, self.article - 1)
+        if counted:
+            self.block = max(0, self.block - 1)
         if self.skip:
             return
+        if tag not in self.INLINE:
+            self._flush_loose()
 
         if tag in ("td", "th"):
             self._end_cell()
@@ -258,7 +318,6 @@ class _TextExtractor(HTMLParser):
                 self.cell.append(" ")
         elif tag in self.BLOCK:
             self._flush()
-            self.block = max(0, self.block - 1)
 
     def handle_data(self, data):
         if self.skip:
@@ -267,18 +326,30 @@ class _TextExtractor(HTMLParser):
             self.cell.append(data)
         elif self.block > 0:
             self.buf.append(data)
+        else:
+            self.loose.append(data)
 
     # -----------------------------------------------------
 
-    def _add(self, text):
-        self.parts.append((text, self.main > 0, self.article > 0))
+    def _add(self, text, loose=False):
+        self.parts.append((text, self.main > 0, self.article > 0, loose))
+
+    @staticmethod
+    def _keep(text):
+        # Drop menu and button fragments
+        return len(text) >= 40 or (text and text[-1:] in ".:?!")
 
     def _flush(self):
         text = " ".join("".join(self.buf).split())
         self.buf = []
-        # Drop menu and button fragments
-        if len(text) >= 40 or (text and text[-1:] in ".:?!"):
+        if self._keep(text):
             self._add(text)
+
+    def _flush_loose(self):
+        text = " ".join("".join(self.loose).split())
+        self.loose = []
+        if self._keep(text):
+            self._add(text, loose=True)
 
     def _end_cell(self):
         if self.cell is not None and self.row is not None:
@@ -296,8 +367,13 @@ class _TextExtractor(HTMLParser):
 
     def text(self):
         self._flush()
+        self._flush_loose()
         self._end_row()
-        parts = self.parts
+        parts = [p for p in self.parts if not _is_boilerplate(p[0])]
+        # Loose text (only inside div/span) is used when the blocks hold almost nothing
+        blocks = [p for p in parts if not p[3]]
+        if sum(len(p[0]) for p in blocks) >= self.LOOSE_FALLBACK:
+            parts = blocks
         for flag in (1, 2):   # <main> first, then <article>
             chosen = [p for p in parts if p[flag]]
             if sum(len(p[0]) for p in chosen) >= 500:
@@ -369,9 +445,52 @@ def _cffi():
     return _cffi_requests or None
 
 
+_CHARSET_RE = re.compile(r"charset\s*=\s*([^;,\s]+)", re.IGNORECASE)
+_META_CHARSET_RE = re.compile(rb"<meta[^>]*?charset\s*=\s*[\"']?\s*([A-Za-z0-9._:-]+)", re.IGNORECASE)
+
+
+def _valid_charset(name):
+    """The codec name when Python knows it as a text encoding, otherwise None."""
+    name = (name or "").strip().strip("\"'").strip()
+    if not name:
+        return None
+    try:
+        info = codecs.lookup(name)
+    except LookupError:
+        return None
+    if not getattr(info, "_is_text_encoding", True):
+        return None          # base64, rot13, zlib…: not a page encoding
+    return name
+
+
 def _charset(ctype, default="utf-8"):
-    m = re.search(r"charset=([\w-]+)", ctype or "", re.IGNORECASE)
-    return m.group(1) if m else default
+    """Charset from a Content-Type value: quotes stripped, unknown names -> default (C38)."""
+    m = _CHARSET_RE.search(ctype or "")
+    return (_valid_charset(m.group(1)) if m else None) or default
+
+
+def _decode(raw, ctype):
+    """Page bytes -> text. Header charset first, then <meta charset>, then UTF-8."""
+    m = _CHARSET_RE.search(ctype or "")
+    name = _valid_charset(m.group(1)) if m else None
+    if name is None:
+        meta = _META_CHARSET_RE.search(raw[:4096])
+        if meta:
+            name = _valid_charset(meta.group(1).decode("ascii", "replace"))
+    try:
+        return raw.decode(name or "utf-8", errors="replace")
+    except LookupError:
+        return raw.decode("utf-8", errors="replace")
+
+
+def _is_text_type(ctype):
+    """Content types worth reading (compared case-insensitively, C38)."""
+    ctype = (ctype or "").lower()
+    return "html" in ctype or "text/plain" in ctype
+
+
+def _is_plain_text(ctype):
+    return "text/plain" in (ctype or "").lower()
 
 
 # =========================================================
@@ -569,7 +688,7 @@ def _download_cffi(cr, url, deadline):
                         return None, ""
                     continue
                 ctype = r.headers.get("content-type", "")
-                if r.status_code != 200 or ("html" not in ctype and "text/plain" not in ctype):
+                if r.status_code != 200 or not _is_text_type(ctype):
                     return None, ctype
                 chunks, size = [], 0
                 for chunk in r.iter_content():
@@ -579,7 +698,7 @@ def _download_cffi(cr, url, deadline):
                     if size > MAX_PAGE_BYTES:
                         break
                 _remaining(deadline)
-                return b"".join(chunks).decode(_charset(ctype), errors="replace"), ctype
+                return _decode(b"".join(chunks), ctype), ctype
             finally:
                 r.close()
         finally:
@@ -666,7 +785,7 @@ def _download_stdlib(url, deadline):
                     return None, ""
                 continue
             ctype = r.getheader("Content-Type", "") or ""
-            if r.status != 200 or ("html" not in ctype and "text/plain" not in ctype):
+            if r.status != 200 or not _is_text_type(ctype):
                 return None, ctype
             chunks, size = [], 0
             while size <= MAX_PAGE_BYTES:
@@ -678,7 +797,7 @@ def _download_stdlib(url, deadline):
                 size += len(chunk)
             _remaining(deadline)
             raw = b"".join(chunks)[:MAX_PAGE_BYTES]
-            return raw.decode(r.headers.get_content_charset() or "utf-8", errors="replace"), ctype
+            return _decode(raw, ctype), ctype
         finally:
             watchdog.cancel()
             r.close()
@@ -711,7 +830,7 @@ def fetch_page_text(url, timeout=None):
     html, ctype = _download(url, timeout)
     if not html:
         return ""
-    text = html if "text/plain" in ctype else html_to_text(html)
+    text = html if _is_plain_text(ctype) else html_to_text(html)
     return text.strip()[:MAX_PAGE_TEXT]
 
 
@@ -768,7 +887,7 @@ def select_relevant(text, query_terms, text_terms, max_chars):
             scored.append((score, i))
     scored.sort(key=lambda x: (-x[0], x[1]))
 
-    for score, i in scored:
+    for _score, i in scored:
         if budget < 80:
             break
         p = paras[i]
@@ -799,9 +918,11 @@ def select_relevant(text, query_terms, text_terms, max_chars):
 # QUERY
 # =========================================================
 
-# "NO", "**NO**", "No." and also "NO, il testo si spiega da sé": a real
-# query never starts with the word "no" ("node js" is untouched).
-NO_RE = re.compile(r"^\W*no\b", re.IGNORECASE)
+# The model saying NO: the whole answer is "NO" ("**NO**", "No.", "no!"), or "no"
+# followed by punctuation and an explanation ("NO, il testo si spiega da sé",
+# "No - è una nota personale"). A query that merely starts with the word "no"
+# ("No Man's Sky mod list", "no-code tools", "node js") is a query (C38).
+NO_RE = re.compile(r"^\W*no(?:\W*$|\s*[.,;:!?](?:\s|$)|\s+[-–—]\s)", re.IGNORECASE)
 
 
 # ---------------------------------------------------------
@@ -878,9 +999,10 @@ def decide_queries(testo):
         answer = ""
     said_no, queries = parse_queries(answer)
 
-    if force and not queries:
+    if force and not queries and QUERY_MODE == "allow_fallback":
         # The model said NO anyway: search with the found terms,
-        # or with the start of the text
+        # or with the start of the text. With query_mode = model nothing
+        # taken verbatim from the selected text is sent: no query, no search (D5).
         if terms:
             queries = [" ".join(terms[:5])]
         else:
@@ -1107,28 +1229,106 @@ def sources_block(sources):
 CITE_RE = re.compile(r"\[(\d{1,2}(?:\s*[,;]\s*\d{1,2})*)\](?!\()")
 CITE_WS_RE = re.compile(r"([ \t]*)\[(\d{1,2}(?:\s*[,;]\s*\d{1,2})*)\](?!\()")
 
+# Markdown code: fenced blocks (``` or ~~~, up to the closing fence or the end)
+# and inline code spans (a run of backticks up to the same run). Citations
+# inside code are never touched: `parts[1]` is an index, not a source (C25).
+_FENCE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})[^\n]*\n(?:.*?\n)??[ \t]{0,3}\1[`~]*[ \t]*(?:\n|\Z)"
+                       r"|^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]*(?:\n.*)?\Z",
+                       re.MULTILINE | re.DOTALL)
+_SPAN_RE = re.compile(r"(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)", re.DOTALL)
+
+
+def _segments(text):
+    """Split markdown into (is_code, piece) pairs; joining the pieces gives `text`."""
+    out = []
+    pos = 0
+    for fence in _FENCE_RE.finditer(text):
+        out += _span_segments(text[pos:fence.start()])
+        out.append((True, fence.group(0)))
+        pos = fence.end()
+    out += _span_segments(text[pos:])
+    return out
+
+
+def _span_segments(text):
+    out, pos = [], 0
+    for span in _SPAN_RE.finditer(text):
+        if span.start() > pos:
+            out.append((False, text[pos:span.start()]))
+        out.append((True, span.group(0)))
+        pos = span.end()
+    if pos < len(text):
+        out.append((False, text[pos:]))
+    return out
+
+
+def _cite_nums(group):
+    return [int(x) for x in re.split(r"\s*[,;]\s*", group)]
+
+
+def _is_citation(text, m, by_n):
+    """A [n] glued to a word (arr[0], lista[2]) is an index unless every number is a known source."""
+    glued = not m.group(1) and m.start() > 0 and (text[m.start() - 1].isalnum() or text[m.start() - 1] == "_")
+    if not glued:
+        return True
+    return by_n is not None and all(n in by_n for n in _cite_nums(m.group(2)))
+
+
+def md_url(url):
+    """URL safe inside markdown link parentheses: spaces and ( ) percent-encoded (C25)."""
+    return url.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
+
 
 def linkify(text, sources):
-    """[1] → link to source 1. Non-existent numbers are removed."""
+    """[1] → link to source 1. Non-existent numbers are removed.
+
+    Code spans and fenced code blocks are left alone, and so is an unknown
+    [n] glued to a word (arr[0]): those are indexes, not citations.
+    """
     by_n = {s["n"]: s for s in sources}
 
-    def repl(m):
-        nums = [int(x) for x in re.split(r"\s*[,;]\s*", m.group(2))]
-        links = [f"[\\[{n}\\]]({by_n[n]['url']})" for n in nums if n in by_n]
-        # Invented citation: the space before it goes too
-        return m.group(1) + "".join(links) if links else ""
+    def repl(piece):
+        def sub(m):
+            if not _is_citation(piece, m, by_n):
+                return m.group(0)
+            links = [f"[\\[{n}\\]]({md_url(by_n[n]['url'])})" for n in _cite_nums(m.group(2)) if n in by_n]
+            # Invented citation: the space before it goes too
+            return m.group(1) + "".join(links) if links else ""
+        return CITE_WS_RE.sub(sub, piece)
 
-    return CITE_WS_RE.sub(repl, text)
+    return "".join(piece if code else repl(piece) for code, piece in _segments(text))
 
 
-def cited_numbers(text):
+def cited_numbers(text, sources=None):
+    """Numbers cited outside code, in order of first appearance. With `sources`,
+    a [n] glued to a word counts only when linkify would link it."""
+    by_n = {s["n"]: s for s in sources} if sources is not None else None
     nums = []
-    for m in CITE_RE.finditer(text):
-        for x in re.split(r"\s*[,;]\s*", m.group(1)):
-            n = int(x)
-            if n not in nums:
-                nums.append(n)
+    for code, piece in _segments(text):
+        if code:
+            continue
+        for m in CITE_WS_RE.finditer(piece):
+            if not _is_citation(piece, m, by_n):
+                continue
+            for n in _cite_nums(m.group(2)):
+                if n not in nums:
+                    nums.append(n)
     return nums
+
+
+# The model's own sources section at the end ("## Fonti" + only list lines),
+# removed because add_sources writes the real one. "## Fonti di lag" followed
+# by prose is a normal heading and stays (C38).
+_OWN_SOURCES_RE = re.compile(
+    r"^[ \t]*(?:#{1,4}[ \t]*(?:fonti|sources|riferimenti)[ \t]*:?[ \t]*#*"
+    r"|\*\*(?:fonti|sources|riferimenti)[ \t]*:?\*\*[ \t]*:?)[ \t]*\n"
+    r"(?:[ \t]*(?:[-*+•]|\d{1,2}[.)]|\[\d{1,2}\])[^\n]*(?:\n|\Z)|[ \t]*(?:\n|\Z))*\Z",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _strip_own_sources(text):
+    return _OWN_SOURCES_RE.sub("", text.rstrip() + "\n").rstrip()
 
 
 def _domain(url):
@@ -1143,18 +1343,17 @@ def add_sources(text, sources):
         return text
 
     by_n = {s["n"]: s for s in sources}
-    cited = [n for n in cited_numbers(text) if n in by_n]
+    # The model sometimes still writes its own "Fonti" list at the end: remove it.
+    text = _strip_own_sources(text)
+    cited = [n for n in cited_numbers(text, sources) if n in by_n]
     read = [s["n"] for s in sources if s.get("text") and s["n"] not in cited]
-
-    # The model sometimes still writes its own "Fonti" section: remove it.
-    text = re.sub(r"(?ims)^#{1,4}\s*fonti\b.*\Z", "", text).rstrip()
     text = linkify(text, sources)
 
     def line(n):
         src = by_n[n]
         title = src["title"].replace("[", "(").replace("]", ")")
         kind = src.get("kind") or source_kind(src["url"])
-        return f"- **[{n}]** [{title}]({src['url']}) ({_domain(src['url'])}, {kind})"
+        return f"- **[{n}]** [{title}]({md_url(src['url'])}) ({_domain(src['url'])}, {kind})"
 
     lines = []
     if cited:
