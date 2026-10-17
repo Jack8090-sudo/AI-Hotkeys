@@ -121,3 +121,55 @@ CIMap(pairs*)
         m.Set(pairs*)
     return m
 }
+
+
+; =========================================================
+;  Capture and routing (S8b1)
+; =========================================================
+
+; True for the window titles of AI-Hotkeys' own pages, where the hotkeys
+; must keep their native function (scrolling, hotkey recording):
+;   results page  "<Fix|Summary|Explanation> - AI-Hotkeys - <Browser>"
+;                 (static\viewer.html: <title>__TITLE__ - AI-Hotkeys</title>
+;                  and document.title = ui.title + " - AI-Hotkeys")
+;   settings page "AI-Hotkeys Settings"  (static\settings.html <title>)
+; The browser appends its own name, so " - AI-Hotkeys" must be followed by
+; " - " or the end of the title. S10 must keep both titles.
+IsAppPageTitle(title)
+{
+    static RESULTS_TITLE_RE := "D)\s-\sAI-Hotkeys(?:\s-\s|$)"
+    static SETTINGS_TITLE   := "AI-Hotkeys Settings"
+    return RegExMatch(title, RESULTS_TITLE_RE) > 0 || InStr(title, SETTINGS_TITLE) > 0
+}
+
+; True for console/terminal window classes: "^c" would interrupt the
+; running program there (SIGINT), so the hotkeys stay native.
+;   ConsoleWindowClass             conhost (cmd, PowerShell)
+;   CASCADIA_HOSTING_WINDOW_CLASS  Windows Terminal
+;   mintty                         Git Bash, Cygwin, MSYS2
+IsConsoleClass(cls)
+{
+    static CLASSES := CIMap("ConsoleWindowClass", true, "CASCADIA_HOSTING_WINDOW_CLASS", true, "mintty", true)
+    return CLASSES.Has(cls)
+}
+
+; [comportamento] clip_wait_ms → milliseconds to wait for "^c" (decision D12).
+; Whole numbers from 100 to 10000 are accepted; anything else gives the default.
+ParseClipWaitMs(value, default := 2000)
+{
+    value := Trim(value, " `t`r`n")
+    if !RegExMatch(value, "D)^\d{1,5}$")
+        return default
+    n := Integer(value)
+    return (n >= 100 && n <= 10000) ? n : default
+}
+
+; True if a re-copy of the selection still matches the text sent to Qwen
+; (direct replace, C05). Line endings are ignored; everything else must match.
+SelectionMatches(original, recopied)
+{
+    if (original = "")
+        return false
+    norm(s) => StrReplace(StrReplace(s, "`r`n", "`n"), "`r", "`n")
+    return norm(original) == norm(recopied)
+}

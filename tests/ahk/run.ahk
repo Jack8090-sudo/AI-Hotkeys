@@ -17,7 +17,8 @@ global REPO := RegExReplace(A_ScriptDir, "\\tests\\ahk$")
 
 DirCreate(TMP)
 ; Each group runs on its own: an exception fails that group, the others still run
-for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToColorRef, TestCIMap]
+for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToColorRef, TestCIMap,
+             TestIsAppPageTitle, TestIsConsoleClass, TestParseClipWaitMs, TestSelectionMatches]
 {
     try
         test()
@@ -287,4 +288,54 @@ TestCIMap()
     Assert("CIMap get, different case", m["*|CORREGGI"], "rewrite")
     Assert("CIMap missing key", m.Has("Code.exe"), false)
     Assert("CIMap() empty", CIMap().Count, 0)
+}
+
+
+; ---------------------------------------------------------
+; S8b1: own-page titles (C04), consoles (C03), ClipWait (D12), re-copy (C05)
+; ---------------------------------------------------------
+
+TestIsAppPageTitle()
+{
+    yes := ["Fix - AI-Hotkeys - Google Chrome", "Summary - AI-Hotkeys - Personal - Microsoft Edge",
+            "Explanation - AI-Hotkeys - Mozilla Firefox", "Fix - AI-Hotkeys", "Fix - AI-Hotkeys - ",
+            "AI-Hotkeys Settings", "AI-Hotkeys Settings - Google Chrome", "ai-hotkeys settings - Brave",
+            "Riassunto - AI-Hotkeys - Opera"]
+    no := ["", "AI-Hotkeys", "AI-Hotkeys - Google Chrome", "Fix - AI-Hotkeys2 - Chrome",
+           "Fix - AI-HotkeysX", "Fix -AI-Hotkeys - Chrome", "My AI-Hotkeys notes - Notepad",
+           "Fix - ai-hotkeys - Chrome", "C:\AI-Hotkeys", "Fix - AI-Hotkeys-dev - Chrome"]
+    for t in yes
+        Assert("IsAppPageTitle(" Show(t) ") true", !!IsAppPageTitle(t), true)
+    for t in no
+        Assert("IsAppPageTitle(" Show(t) ") false", !!IsAppPageTitle(t), false)
+}
+
+TestIsConsoleClass()
+{
+    for c in ["ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS", "mintty", "consolewindowclass"]
+        Assert("IsConsoleClass(" Show(c) ") true", !!IsConsoleClass(c), true)
+    for c in ["", "Notepad", "Chrome_WidgetWin_1", "MozillaWindowClass", "OpusApp", "Console", "minttyx"]
+        Assert("IsConsoleClass(" Show(c) ") false", !!IsConsoleClass(c), false)
+}
+
+TestParseClipWaitMs()
+{
+    cases := [["", 2000], ["500", 500], [" 300 ", 300], ["300`r", 300], ["100", 100], ["10000", 10000],
+              ["99", 2000], ["0", 2000], ["10001", 2000], ["-5", 2000], ["0.5", 2000], ["abc", 2000],
+              ["500ms", 2000], ["123456", 2000], ["0300", 300]]
+    for c in cases
+        Assert("ParseClipWaitMs(" Show(c[1]) ")", ParseClipWaitMs(c[1]), c[2])
+    Assert("ParseClipWaitMs custom default", ParseClipWaitMs("x", 750), 750)
+}
+
+TestSelectionMatches()
+{
+    Assert("SelectionMatches identical", !!SelectionMatches("ciao mondo", "ciao mondo"), true)
+    Assert("SelectionMatches CRLF vs LF", !!SelectionMatches("a`r`nb", "a`nb"), true)
+    Assert("SelectionMatches CR vs LF", !!SelectionMatches("a`rb", "a`nb"), true)
+    Assert("SelectionMatches different text", !!SelectionMatches("ciao", "ciao!"), false)
+    Assert("SelectionMatches case differs", !!SelectionMatches("Ciao", "ciao"), false)
+    Assert("SelectionMatches recopy empty", !!SelectionMatches("ciao", ""), false)
+    Assert("SelectionMatches original empty", !!SelectionMatches("", ""), false)
+    Assert("SelectionMatches whole line copied instead", !!SelectionMatches("word", "a word here`r`n"), false)
 }

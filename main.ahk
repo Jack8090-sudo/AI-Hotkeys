@@ -1,5 +1,8 @@
 ﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
+; A second press of the same key may run while the first one is still
+; copying the selection: it is sent natively instead of being dropped (C03).
+#MaxThreadsPerHotkey 2
 
 ; Pure helpers: ReadConfig, IsNo, ValidHotkey, KeyLabel, HexToColorRef, CIMap
 #Include %A_ScriptDir%\lib\Util.ahk
@@ -22,6 +25,10 @@ global inputFile  := BASE "\work\input.txt"
 global outputFile := BASE "\work\output.txt"
 global viewer     := BASE "\viewer.py"
 global statusFile := BASE "\work\status.txt"
+; capturing = a key was pressed and "^c" / ClipWait is running: nothing has
+;             been captured yet, so further presses keep their native function.
+; busy      = text was captured (or the To-Do route started) and a job runs.
+global capturing  := false
 global busy       := false
 ; Cancelling by holding Esc: the running job can be
 ; interrupted by holding Esc for 2 seconds (see EscDown/CheckEscHold).
@@ -71,9 +78,15 @@ global KEYS := Map()
 ;   "Chrome.exe"      = process name (case insensitive)
 ;   "*"               = any program
 ;
+;   "Console"         = terminal windows (IsConsoleClass): "^c" is never sent there
+;
 ; "native" action = the key keeps its normal function.
 
 global ROUTES := CIMap(
+    "Console|correggi", "native",
+    "Console|riassumi", "native",
+    "Console|spiega",   "native",
+
     "Obsidian:To-Do|correggi", "obsidian_todo",
 
     "*|correggi", "rewrite",
@@ -102,6 +115,9 @@ global EDITABLE_APPS := CIMap(
 
 global REPLACE_ENABLED := !IsNo(ReadConfig("sostituisci_testo", "si"))
 global SHOW_PROGRESS   := !IsNo(ReadConfig("avanzamento", "si"))
+; How long "^c" may take before "nothing selected" (decision D12).
+; Optional [comportamento] clip_wait_ms; 2000 until S3 measures a safe floor.
+global CLIP_WAIT_S     := ParseClipWaitMs(ReadConfig("clip_wait_ms", "", "comportamento")) / 1000
 
 
 ; =========================================================
@@ -169,20 +185,31 @@ RegisterKeys()
 
 Dispatch(slot, *)
 {
-    global busy, ROUTES, ACTIONS, KEYS
+    global busy, capturing, ROUTES, ACTIONS, KEYS
 
-    ; In the Settings page the keys are captured for registration
-    try
+    ; Until capturing/busy is set, a second press (#MaxThreadsPerHotkey 2)
+    ; must not interrupt this thread and start a second capture
+    Critical "On"
+
+    ; AI-Hotkeys' own pages: the results page scrolls with these keys and the
+    ; Settings page records them, so they stay native there (C04)
+    if IsOwnPageActive()
     {
-        if InStr(WinGetTitle("A"), "AI-Hotkeys Settings")
-        {
-            SendNative(KEYS[slot])
-            return
-        }
+        SendNative(KEYS[slot])
+        return
+    }
+
+    ; Another press while the first one is still copying the selection
+    ; (e.g. holding PgDn with nothing selected): keep the native key (C03)
+    if capturing
+    {
+        SendNative(KEYS[slot])
+        return
     }
 
     if busy
     {
+        Critical "Off"
         Flash("Qwen is still working", KeyLabel(KEYS[slot]))
         return
     }
@@ -205,24 +232,51 @@ Dispatch(slot, *)
 
     if !ACTIONS.Has(actionId)
     {
+        Critical "Off"
         MsgBox "Unknown action in dispatcher: " actionId, "AI-Hotkeys", "Icon!"
         return
     }
 
     action := ACTIONS[actionId]
-    busy := true
 
     try
     {
         if action.HasOwnProp("special") && action.special = "obsidian_todo"
+        {
+            busy := true
+            Critical "Off"
             RunObsidianTodo(KeyLabel(KEYS[slot]))
+        }
         else
+        {
+            ; busy becomes true only once the text is captured
+            capturing := true
+            Critical "Off"
             RunSelectionAction(action, KEYS[slot])
+        }
     }
     finally
     {
+        capturing := false
         busy := false
     }
+}
+
+; True if the active window is the results page or the Settings page.
+; Editors are never the browser that shows those pages: a VS Code window
+; titled "main.ahk - AI-Hotkeys - Visual Studio Code" (a folder named
+; AI-Hotkeys) must keep working.
+IsOwnPageActive()
+{
+    global EDITABLE_APPS
+    try
+    {
+        title := WinGetTitle("A")
+        proc  := WinGetProcessName("A")
+    }
+    catch
+        return false
+    return IsAppPageTitle(title) && !EDITABLE_APPS.Has(proc)
 }
 
 
@@ -236,12 +290,17 @@ GetContexts()
     {
         proc  := WinGetProcessName("A")
         title := WinGetTitle("A")
+        cls   := WinGetClass("A")
     }
     catch
     {
         proc  := ""
         title := ""
+        cls   := ""
     }
+
+    if IsConsoleClass(cls)
+        contexts.Push("Console")
 
     if (proc = "Obsidian.exe" && InStr(title, TODO_TITLE_PREFIX) = 1)
         contexts.Push("Obsidian:To-Do")
@@ -261,7 +320,7 @@ GetContexts()
 RunSelectionAction(action, hk)
 {
     global inputFile, outputFile, viewer, PYTHON, BASE, EDITABLE_APPS, REPLACE_ENABLED, SHOW_PROGRESS
-    global cancelRequested, currentPid, statusFile
+    global cancelRequested, currentPid, statusFile, busy, capturing, CLIP_WAIT_S
 
     cancelRequested := false
     currentPid := 0
@@ -286,17 +345,22 @@ RunSelectionAction(action, hk)
     A_Clipboard := ""
     Send "^c"
 
-    if !ClipWait(2)
+    if !ClipWait(CLIP_WAIT_S)
     {
         ; Nothing selected: the key keeps its normal function
         ; (PgUp scrolls, Home goes to start of line...)
         A_Clipboard := savedClipboard
+        capturing := false
         SendNative(hk)
         return
     }
 
     testo := A_Clipboard
     A_Clipboard := savedClipboard
+
+    ; Text captured: from now on further presses say "still working"
+    busy := true
+    capturing := false
 
     ; Save the selected text as UTF-8
     file := FileOpen(inputFile, "w", "UTF-8-RAW")
@@ -382,22 +446,60 @@ RunSelectionAction(action, hk)
     if (REPLACE_ENABLED && action.HasOwnProp("replace") && action.replace
         && EDITABLE_APPS.Has(proc) && hwnd && WinExist("ahk_id " hwnd))
     {
-        WinActivate "ahk_id " hwnd
-        WinWaitActive "ahk_id " hwnd, , 2
-
-        A_Clipboard := risposta
-        ClipWait 1
-        Send "^v"
-        Sleep 300
-
-        ; The result stays in the clipboard
-        return
+        why := ReplaceSelection(hwnd, testo, risposta)
+        if (why = "")
+            return          ; pasted: the result stays in the clipboard (I15, D10)
+        ; Not pasted: nothing was overwritten, the result opens in the results page
+        ToastShow(why " — opened in the results page", keyLbl, 4000)
     }
 
     ; -----------------------------------------------------
     ; EVERYTHING ELSE → results page
     ; -----------------------------------------------------
 
+    OpenResultsPage(action, keyLbl)
+}
+
+; Direct replace (C05). Pastes risposta over the selection only if the
+; starting window is active again and its selection is still the text that
+; was sent to Qwen. Returns "" when pasted, otherwise the reason it did not.
+ReplaceSelection(hwnd, original, risposta)
+{
+    global CLIP_WAIT_S
+
+    win := "ahk_id " hwnd
+    try WinActivate(win)
+    if !WinWaitActive(win, , 2)
+        return "The window did not come back to the front"
+
+    ; Re-copy the selection: the user may have changed it while Qwen worked
+    savedClipboard := ClipboardAll()
+    A_Clipboard := ""
+    Send "^c"
+    recopied := ClipWait(CLIP_WAIT_S) ? A_Clipboard : ""
+    if !SelectionMatches(original, recopied)
+    {
+        A_Clipboard := savedClipboard
+        return "The selection changed"
+    }
+    if !WinActive(win)
+    {
+        A_Clipboard := savedClipboard
+        return "The window lost focus"
+    }
+
+    A_Clipboard := risposta
+    ClipWait 1
+    Send "^v"
+    ; C41: fixed sleep kept until S3 measures a safe floor
+    Sleep 300
+    return ""
+}
+
+; Opens the result in the results page (viewer.py, contract K3)
+OpenResultsPage(action, keyLbl)
+{
+    global PYTHON, viewer, inputFile, outputFile, BASE
     Run PYTHON ' "' viewer '" "' inputFile '" "' outputFile '" "' action.name '" ' action.mode ' "--key=' keyLbl '"', BASE, "Hide"
 }
 
@@ -416,6 +518,7 @@ RunObsidianTodo(keyLbl)
     statusFile := BASE "\work\obsidian_status.txt"
 
     ; Save the note before reading it from disk
+    ; (C41: fixed sleep kept until S3 measures the save time)
     Send "^s"
     Sleep 500
 
@@ -495,13 +598,14 @@ EscUp(*)
 
 CheckEscHold()
 {
-    global escTracking, busy, cancelRequested, currentPid
+    global escTracking, busy, capturing, cancelRequested, currentPid
     escTracking := false
     ; Esc already released before 2 seconds: nothing to do
     if !GetKeyState("Esc", "P")
         return
-    ; Nothing running: Esc just keeps its normal function
-    if !busy
+    ; Nothing running: Esc just keeps its normal function.
+    ; While capturing, the request is kept and WaitPid acts on it at once.
+    if !(busy || capturing)
         return
     if cancelRequested
         return
@@ -731,11 +835,11 @@ ConfigStamp()
 
 WatchConfig()
 {
-    global CONFIG_STAMP, busy
+    global CONFIG_STAMP, busy, capturing
     stamp := ConfigStamp()
     if (stamp = "" || stamp = CONFIG_STAMP)
         return
-    if busy
+    if (busy || capturing)
         return          ; reloads when the job is done
     CONFIG_STAMP := stamp
     try FileAppend("", BASE "\work\reloaded.flag")
