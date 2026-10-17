@@ -10,6 +10,7 @@
 ;  No hotkeys are registered.
 
 #Include %A_ScriptDir%\..\..\lib\Util.ahk
+#Include %A_ScriptDir%\..\..\lib\Proc.ahk
 
 global failures := 0, passes := 0
 global TMP := A_Temp "\aihk-ahk-tests-" ProcessExist() "-" A_TickCount
@@ -18,7 +19,8 @@ global REPO := RegExReplace(A_ScriptDir, "\\tests\\ahk$")
 DirCreate(TMP)
 ; Each group runs on its own: an exception fails that group, the others still run
 for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToColorRef, TestCIMap,
-             TestIsAppPageTitle, TestIsConsoleClass, TestParseClipWaitMs, TestSelectionMatches]
+             TestIsAppPageTitle, TestIsConsoleClass, TestParseClipWaitMs, TestSelectionMatches,
+             TestParsePidRecord, TestIsConfiguredPython, TestSearxngPidIsOurs, TestProcHelpers]
 {
     try
         test()
@@ -338,4 +340,81 @@ TestSelectionMatches()
     Assert("SelectionMatches recopy empty", !!SelectionMatches("ciao", ""), false)
     Assert("SelectionMatches original empty", !!SelectionMatches("", ""), false)
     Assert("SelectionMatches whole line copied instead", !!SelectionMatches("word", "a word here`r`n"), false)
+}
+
+
+; ---------------------------------------------------------
+; S8b2: SearXNG pid file (K5, C20) and process helpers
+; ---------------------------------------------------------
+
+TestParsePidRecord()
+{
+    r := ParsePidRecord("1234 133700000000000000")
+    Assert("ParsePidRecord K5 pid", r.pid, 1234)
+    Assert("ParsePidRecord K5 ctime", r.ctime, 133700000000000000)
+    r := ParsePidRecord("  42`t133700000000000001`r`n")
+    Assert("ParsePidRecord tab and CRLF pid", r.pid, 42)
+    Assert("ParsePidRecord tab and CRLF ctime", r.ctime, 133700000000000001)
+    r := ParsePidRecord("5678`n")
+    Assert("ParsePidRecord legacy pid", r.pid, 5678)
+    Assert("ParsePidRecord legacy ctime = 0", r.ctime, 0)
+    r := ParsePidRecord("7 9223372036854775807")
+    Assert("ParsePidRecord max Int64 ctime", r.ctime, 9223372036854775807)
+    for bad in ["", "   ", "0", "0 123", "-5", "12 -3", "abc", "12 abc", "12 34 56", "12,34", "1.5",
+                "12345678901", "7 9223372036854775808", "7 99999999999999999999", "４２"]
+        Assert("ParsePidRecord(" Show(bad) ") rejected", ParsePidRecord(bad), "")
+}
+
+TestIsConfiguredPython()
+{
+    exe := "C:\Program Files\AI-Hotkeys\python\pythonw.exe"
+    Assert("IsConfiguredPython same path", !!IsConfiguredPython(exe, exe), true)
+    Assert("IsConfiguredPython case-insensitive", !!IsConfiguredPython("c:\program files\ai-hotkeys\PYTHON\PythonW.EXE", exe), true)
+    Assert("IsConfiguredPython python.exe sibling", !!IsConfiguredPython("C:\Program Files\AI-Hotkeys\python\python.exe", exe), true)
+    Assert("IsConfiguredPython other folder", !!IsConfiguredPython("C:\Python313\pythonw.exe", exe), false)
+    Assert("IsConfiguredPython subfolder", !!IsConfiguredPython("C:\Program Files\AI-Hotkeys\python\x\pythonw.exe", exe), false)
+    Assert("IsConfiguredPython other exe same folder", !!IsConfiguredPython("C:\Program Files\AI-Hotkeys\python\notepad.exe", exe), false)
+    Assert("IsConfiguredPython lookalike name", !!IsConfiguredPython("C:\Program Files\AI-Hotkeys\python\pythonw.exe.exe", exe), false)
+    Assert("IsConfiguredPython empty path", !!IsConfiguredPython("", exe), false)
+    Assert("IsConfiguredPython system pythonw: name only", !!IsConfiguredPython("C:\Python313\pythonw.exe", "pythonw"), true)
+    Assert("IsConfiguredPython system pythonw: other exe", !!IsConfiguredPython("C:\Windows\notepad.exe", "pythonw"), false)
+}
+
+TestSearxngPidIsOurs()
+{
+    exe := "C:\AI-Hotkeys\python\pythonw.exe"
+    k5 := {pid: 100, ctime: 133700000000000000}
+    legacy := {pid: 100, ctime: 0}
+    Assert("SearxngPidIsOurs K5 match", !!SearxngPidIsOurs(k5, exe, 133700000000000000, exe), true)
+    Assert("SearxngPidIsOurs K5 ctime differs (pid reused)", !!SearxngPidIsOurs(k5, exe, 133700000000000001, exe), false)
+    Assert("SearxngPidIsOurs K5 ctime unknown", !!SearxngPidIsOurs(k5, exe, 0, exe), false)
+    Assert("SearxngPidIsOurs K5 other python", !!SearxngPidIsOurs(k5, "C:\Python313\python.exe", 133700000000000000, exe), false)
+    Assert("SearxngPidIsOurs K5 unrelated exe", !!SearxngPidIsOurs(k5, "C:\Windows\explorer.exe", 133700000000000000, exe), false)
+    Assert("SearxngPidIsOurs process gone", !!SearxngPidIsOurs(k5, "", 0, exe), false)
+    Assert("SearxngPidIsOurs legacy, path matches", !!SearxngPidIsOurs(legacy, exe, 133700000000000000, exe), true)
+    Assert("SearxngPidIsOurs legacy, unrelated python", !!SearxngPidIsOurs(legacy, "C:\Python313\python.exe", 1, exe), false)
+    Assert("SearxngPidIsOurs legacy, system pythonw (no path to match)", !!SearxngPidIsOurs(legacy, "C:\Python313\pythonw.exe", 1, "pythonw"), false)
+    Assert("SearxngPidIsOurs K5, system pythonw, ctime matches", !!SearxngPidIsOurs(k5, "C:\Python313\pythonw.exe", 133700000000000000, "pythonw"), true)
+    Assert("SearxngPidIsOurs unreadable record", !!SearxngPidIsOurs("", exe, 1, exe), false)
+}
+
+TestProcHelpers()
+{
+    me := ProcessExist()
+    Assert("ProcessCreationTime(self) > 0", ProcessCreationTime(me) > 0, true)
+    Assert("ProcessCreationTime(self) stable", ProcessCreationTime(me) = ProcessCreationTime(me), true)
+    ; FILETIME of a process started this century: after 2000-01-01 (125911584000000000)
+    Assert("ProcessCreationTime(self) plausible FILETIME", ProcessCreationTime(me) > 125911584000000000, true)
+    Assert("ProcessCreationTime(0) = 0", ProcessCreationTime(0), 0)
+    Assert("ProcessPathOf(self) = A_AhkPath", ProcessPathOf(me) = A_AhkPath, true)
+    Assert("ProcessPathOf(0) empty", ProcessPathOf(0), "")
+    ; A short-lived child: once it has ended, both helpers report "gone"
+    Run(A_ComSpec " /c exit 0", , "Hide", &pid)
+    ProcessWaitClose(pid, 10)
+    Assert("ProcessCreationTime(ended child) = 0", ProcessCreationTime(pid), 0)
+    Assert("ProcessPathOf(ended child) empty", ProcessPathOf(pid), "")
+    ; The pid-file check end to end on this very process
+    rec := ParsePidRecord(me " " ProcessCreationTime(me))
+    Assert("K5 record of self verifies against A_AhkPath",
+        !!(rec.ctime = ProcessCreationTime(me) && ProcessPathOf(rec.pid) = A_AhkPath), true)
 }

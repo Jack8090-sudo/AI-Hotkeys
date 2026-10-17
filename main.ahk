@@ -4,8 +4,10 @@
 ; copying the selection: it is sent natively instead of being dropped (C03).
 #MaxThreadsPerHotkey 2
 
-; Pure helpers: ReadConfig, IsNo, ValidHotkey, KeyLabel, HexToColorRef, CIMap
+; Pure helpers: ReadConfig, IsNo, ValidHotkey, KeyLabel, HexToColorRef, CIMap, ...
 #Include %A_ScriptDir%\lib\Util.ahk
+; Process helpers: ProcessCreationTime, ProcessPathOf
+#Include %A_ScriptDir%\lib\Proc.ahk
 
 ; =========================================================
 ;  AI-Hotkeys — AutoHotkey → Python → Ollama → Qwen 3.5 9B
@@ -19,7 +21,13 @@
 ; =========================================================
 
 global BASE       := A_ScriptDir
-global PYTHON     := FindPython()
+; PYTHON_EXE = the interpreter (unquoted), PYTHON = the command prefix used
+; for every launch. -E ignores PYTHON* variables (PYTHONPATH, PYTHONHOME...),
+; -s ignores the user site-packages: the bundled interpreter only loads the
+; app's own modules (C28). Under the shipped python313._pth both are already
+; implied (S11), so they are redundant there but harmless.
+global PYTHON_EXE := FindPython()
+global PYTHON     := '"' PYTHON_EXE '" -E -s'
 global CONFIG     := BASE "\config.ini"
 global inputFile  := BASE "\work\input.txt"
 global outputFile := BASE "\work\output.txt"
@@ -146,7 +154,7 @@ Hotkey("~Esc Up", EscUp)
 
 ; SearXNG (web search for End) starts together with AI-Hotkeys
 StartSearxng()
-OnExit(StopSearxng)
+OnExit(OnExitCleanup)
 
 ; Automatic reload when config.ini changes (e.g. from Settings)
 global CONFIG_STAMP := ConfigStamp()
@@ -363,12 +371,30 @@ RunSelectionAction(action, hk)
     capturing := false
 
     ; Save the selected text as UTF-8
-    file := FileOpen(inputFile, "w", "UTF-8-RAW")
-    file.Write(testo)
-    file.Close()
+    try
+    {
+        file := FileOpen(inputFile, "w", "UTF-8-RAW")
+        file.Write(testo)
+        file.Close()
+    }
+    catch as e
+    {
+        ShowError("Could not write " inputFile ":`n" e.Message)
+        return
+    }
 
-    if FileExist(outputFile)
-        FileDelete(outputFile)
+    ; A leftover output.txt would be shown as this job's result
+    try
+    {
+        if FileExist(outputFile)
+            FileDelete(outputFile)
+    }
+    catch as e
+    {
+        ShowError("Could not delete the previous result " outputFile
+            . " (is another program using it?):`n" e.Message)
+        return
+    }
 
     if SHOW_PROGRESS
         ToastShow(action.doing . "  ·  Esc 2 s = cancel", keyLbl)
@@ -397,7 +423,7 @@ RunSelectionAction(action, hk)
         SetTimer statusTimer, 0
         ToastHide()
         currentPid := 0
-        MsgBox "Could not start Python:`n" e.Message, "AI-Hotkeys", "Iconx"
+        ShowError("Could not start Python:`n" e.Message)
         return
     }
 
@@ -431,7 +457,13 @@ RunSelectionAction(action, hk)
         return
     }
 
-    risposta := FileRead(outputFile, "UTF-8")
+    try
+        risposta := FileRead(outputFile, "UTF-8")
+    catch as e
+    {
+        ShowError("Could not read the result " outputFile ":`n" e.Message)
+        return
+    }
 
     if Trim(risposta) = ""
     {
@@ -500,7 +532,9 @@ ReplaceSelection(hwnd, original, risposta)
 OpenResultsPage(action, keyLbl)
 {
     global PYTHON, viewer, inputFile, outputFile, BASE
-    Run PYTHON ' "' viewer '" "' inputFile '" "' outputFile '" "' action.name '" ' action.mode ' "--key=' keyLbl '"', BASE, "Hide"
+    try Run(PYTHON ' "' viewer '" "' inputFile '" "' outputFile '" "' action.name '" ' action.mode ' "--key=' keyLbl '"', BASE, "Hide")
+    catch as e
+        ShowError("Could not open the results page:`n" e.Message)
 }
 
 
@@ -522,8 +556,17 @@ RunObsidianTodo(keyLbl)
     Send "^s"
     Sleep 500
 
-    if FileExist(statusFile)
-        FileDelete(statusFile)
+    ; A leftover status file would be read as this run's result
+    try
+    {
+        if FileExist(statusFile)
+            FileDelete(statusFile)
+    }
+    catch as e
+    {
+        ShowError("Could not delete " statusFile " (is another program using it?):`n" e.Message)
+        return
+    }
 
     ToastShow("Qwen is reorganizing the To-Do List, it may take a few minutes  ·  Esc 2 s = cancel", keyLbl)
 
@@ -537,7 +580,7 @@ RunObsidianTodo(keyLbl)
     {
         ToastHide()
         currentPid := 0
-        MsgBox "Could not start Python:`n" e.Message, "AI-Hotkeys", "Iconx"
+        ShowError("Could not start Python:`n" e.Message)
         return
     }
 
@@ -556,10 +599,12 @@ RunObsidianTodo(keyLbl)
         return
     }
 
-    if FileExist(statusFile)
-        rawEsito := FileRead(statusFile, "UTF-8")
-    else
-        rawEsito := ""
+    rawEsito := ""
+    try
+    {
+        if FileExist(statusFile)
+            rawEsito := FileRead(statusFile, "UTF-8")
+    }
 
     esito := RegExReplace(rawEsito, "^(OK|ERRORE)\R", "")
 
@@ -851,12 +896,45 @@ WatchConfig()
 ; UTILITIES
 ; =========================================================
 
-; Bundled Python if present, otherwise the system one
+; Bundled Python if present, otherwise the system one (unquoted)
 FindPython()
 {
     if FileExist(A_ScriptDir "\python\pythonw.exe")
-        return '"' A_ScriptDir '\python\pythonw.exe"'
+        return A_ScriptDir "\python\pythonw.exe"
     return "pythonw"
+}
+
+; Error from a job. Modal for now; S8b3 turns it into a non-modal toast.
+ShowError(msg)
+{
+    MsgBox msg, "AI-Hotkeys", "Iconx"
+}
+
+; Tray Reload / Exit while a job runs: ask first, the job will be cancelled
+ConfirmIfBusy(what)
+{
+    global busy
+    if !busy
+        return true
+    return MsgBox("Qwen is still working. " what " anyway? The running job will be cancelled.",
+        "AI-Hotkeys", "YesNo Icon? Default2") = "Yes"
+}
+
+; OnExit: cancel the running job, then stop SearXNG (C18).
+; Not on "Single" (#SingleInstance Force replaced this instance): the new
+; instance owns the cleanup, as the plan decided for S8b2.
+OnExitCleanup(reason, *)
+{
+    global currentPid
+    if (reason != "Single" && currentPid)
+    {
+        pid := currentPid
+        currentPid := 0
+        try ProcessClose(pid)
+        ; No half-written files for the next run
+        CleanupWorkFiles()
+    }
+    StopSearxng(reason)
 }
 
 SetupTrayMenu()
@@ -877,8 +955,8 @@ SetupTrayMenu()
     tray.Add("Open config.ini", (*) => Run('notepad.exe "' A_ScriptDir '\config.ini"'))
     tray.Add("Open folder", (*) => Run('explorer.exe "' A_ScriptDir '"'))
     tray.Add()
-    tray.Add("Reload", (*) => Reload())
-    tray.Add("Exit", (*) => ExitApp())
+    tray.Add("Reload", (*) => ConfirmIfBusy("Reload") && Reload())
+    tray.Add("Exit", (*) => ConfirmIfBusy("Exit") && ExitApp())
 }
 
 ; Unloads the model from Ollama: frees the VRAM without closing AI-Hotkeys.
@@ -933,8 +1011,12 @@ StartSearxng()
 }
 
 ; Closes SearXNG when exiting AI-Hotkeys (not on "Reload")
+; The pid file (contract K5) is trusted only if the process is still our
+; interpreter and, for the K5 form, was created at the recorded time: a pid
+; reused by another program is never killed (C20).
 StopSearxng(reason, *)
 {
+    global PYTHON_EXE
     if (reason = "Reload" || reason = "Single")
         return
 
@@ -943,13 +1025,29 @@ StopSearxng(reason, *)
         return
 
     try
+        record := ParsePidRecord(FileRead(pidFile))
+    catch
+        return
+    if !IsObject(record)
     {
-        pid := Integer(Trim(FileRead(pidFile)))
-        ; Only if that number is still a Python process (the PID may have been reused)
-        if InStr(ProcessGetName(pid), "python")
-            ProcessClose pid
+        try FileDelete(pidFile)         ; unreadable: stale
+        return
     }
-    try FileDelete(pidFile)
+
+    exePath := ProcessPathOf(record.pid)
+    if (exePath = "")
+    {
+        if !ProcessExist(record.pid)
+            try FileDelete(pidFile)     ; process gone: stale
+        return
+    }
+    if SearxngPidIsOurs(record, exePath, ProcessCreationTime(record.pid), PYTHON_EXE)
+    {
+        try ProcessClose(record.pid)
+        try FileDelete(pidFile)
+    }
+    ; Otherwise the pid now belongs to someone else (or cannot be verified):
+    ; leave both alone. The launcher removes its own pid file on a clean exit.
 }
 
 OpenSearxng()

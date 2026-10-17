@@ -173,3 +173,65 @@ SelectionMatches(original, recopied)
     norm(s) => StrReplace(StrReplace(s, "`r`n", "`n"), "`r", "`n")
     return norm(original) == norm(recopied)
 }
+
+
+; =========================================================
+;  Process lifecycle (S8b2)
+; =========================================================
+
+; Parses work\searxng.pid (contract K5): "<pid> <creation FILETIME>", or the
+; legacy "<pid>". Returns {pid, ctime} (ctime = 0 for the legacy form), or ""
+; for anything else. Same rules as avvia_searxng.parse_pid_record.
+ParsePidRecord(text)
+{
+    text := Trim(text, " `t`r`n")
+    if !RegExMatch(text, "D)^(\d{1,10})(?:[ \t]+(\d{1,19}))?$", &m)
+        return ""
+    pid := Integer(m[1])
+    if (pid <= 0 || pid > 0xFFFFFFFF)
+        return ""
+    ctime := 0
+    if (m[2] != "")
+    {
+        ; FILETIME fits in a signed 64-bit integer until the year 30828
+        if (StrLen(m[2]) = 19 && StrCompare(m[2], "9223372036854775807") > 0)
+            return ""
+        ctime := Integer(m[2])
+    }
+    return {pid: pid, ctime: ctime}
+}
+
+; True if exePath is the configured interpreter (pythonExe, unquoted) or its
+; python.exe / pythonw.exe sibling (websearch.py starts SearXNG with the
+; pythonw.exe next to sys.executable). When pythonExe has no folder (system
+; "pythonw"), only the file name can be compared.
+IsConfiguredPython(exePath, pythonExe)
+{
+    if (exePath = "" || pythonExe = "")
+        return false
+    SplitPath(exePath, &name, &dir)
+    if !(name = "python.exe" || name = "pythonw.exe")
+        return false
+    if !InStr(pythonExe, "\")
+        return true
+    SplitPath(pythonExe, , &wantDir)
+    return (dir = wantDir)
+}
+
+; C20: may StopSearxng kill the process named by the pid file?
+;   record     ParsePidRecord result ("" = unreadable → never)
+;   exePath    ProcessGetPath of record.pid ("" = gone or not accessible → never)
+;   ctime      creation FILETIME of record.pid (0 = unknown)
+;   pythonExe  the configured interpreter, unquoted
+; K5 record: the interpreter must match and the creation time must be equal.
+; Legacy record (no creation time): the full interpreter path must match.
+SearxngPidIsOurs(record, exePath, ctime, pythonExe)
+{
+    if !IsObject(record) || exePath = ""
+        return false
+    if !IsConfiguredPython(exePath, pythonExe)
+        return false
+    if record.ctime
+        return (ctime != 0 && ctime = record.ctime)
+    return InStr(pythonExe, "\") > 0
+}
