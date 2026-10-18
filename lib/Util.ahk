@@ -474,3 +474,36 @@ IsLocalSearxUrl(url)
 {
     return RegExMatch(url, "iD)^https?://(127\.0\.0\.1|localhost)(:\d{1,5})?(/[^\s\\]*)?$") ? true : false
 }
+
+
+; ---------------------------------------------------------
+; STREAM1: the first answer streamed into the results page
+; ---------------------------------------------------------
+
+; Does this job end in the results page? Only a direct replace (the fix action,
+; replace enabled, an editable app, a known window) needs the whole text first;
+; every other job opens the page at once and streams the first answer into it.
+ResultGoesToPage(actionReplaces, replaceEnabled, editableApp, hwnd)
+{
+    return (actionReplaces && replaceEnabled && editableApp && hwnd) ? false : true
+}
+
+; Command line of the results page (K3, run-folder form). stream: the page
+; produces the first answer itself (only input.txt is in the folder).
+ViewerCommand(python, viewerPy, runDir, name, mode, keyLbl, stream := false)
+{
+    return python ' "' viewerPy '" "--run-dir=' runDir '" "' CmdArgSafe(name) '" ' mode
+        . ' "--key=' CmdArgSafe(keyLbl) '"' (stream ? " --stream" : "")
+}
+
+; The folders (of streaming results pages) for which exists(dir) is still true:
+; a page deletes its folder once the first answer ended, so the rest are still
+; generating and can be cancelled with Esc 2 s.
+LiveStreamDirs(dirs, exists)
+{
+    live := []
+    for dir in dirs
+        if (dir != "" && exists(dir))
+            live.Push(dir)
+    return live
+}

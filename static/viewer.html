@@ -410,6 +410,8 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
     cursor: pointer;
 }
 .send:hover { filter: brightness(1.06); }
+.send:disabled { opacity: .5; cursor: default; filter: none; }
+.suggest[hidden] { display: none; }
 .composer.busy .send { background: var(--surface-2); color: var(--text); }
 
 .status {
@@ -742,6 +744,7 @@ function renderMeta() {
     if (m.seconds) parts.push("Ready in " + Math.round(m.seconds) + " s");
     parts.push("At " + DATA.time);
     const box = $("meta");
+    box.replaceChildren();
     parts.forEach((p) => {
         if (typeof p === "string") { const s = document.createElement("span"); s.textContent = p; box.append(s); }
         else box.append(p);
@@ -753,7 +756,13 @@ $("title").textContent = ui.title;
 renderKeys();
 renderMeta();
 renderMarkdown($("original"), DATA.original);
-renderMarkdown(resultEl, DATA.result);
+if (DATA.stream) {
+    // Stream mode: the first answer arrives from /api/first (started at the end of this script)
+    resultEl.innerHTML = '<p class="waiting" id="firstWaiting"></p>';
+    $("firstWaiting").textContent = "The AI is reading the text.";
+} else {
+    renderMarkdown(resultEl, DATA.result);
+}
 askInput.placeholder = ui.placeholder;
 
 
@@ -1037,9 +1046,27 @@ function addTurn(question) {
     return content;
 }
 
+/* Calls onMessage for each line of an NDJSON response body */
+async function readNdjson(res, onMessage) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (line) onMessage(JSON.parse(line));
+        }
+    }
+}
+
 async function submit() {
     const question = askInput.value.trim();
-    if (!question || state.busy) return;
+    if (!question || state.busy || state.locked) return;
 
     const base = state.current;
     let text = "";
@@ -1081,29 +1108,16 @@ async function submit() {
             try { msg = (await res.json()).error || msg; } catch (e) {}
             throw new Error(msg);
         }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
         let first = true;
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            let nl;
-            while ((nl = buffer.indexOf("\n")) >= 0) {
-                const line = buffer.slice(0, nl).trim();
-                buffer = buffer.slice(nl + 1);
-                if (!line) continue;
-                const msg = JSON.parse(line);
-                if (msg.error) { errorMsg = msg.error; partial = !!msg.partial; continue; }
-                if (msg.t) {
-                    if (first) { first = false; target.classList.add("streaming"); }
-                    text += msg.t;
-                    rerender.request();
-                }
-                if (msg.done) { finished = true; text = msg.text; }
+        await readNdjson(res, (msg) => {
+            if (msg.error) { errorMsg = msg.error; partial = !!msg.partial; return; }
+            if (msg.t) {
+                if (first) { first = false; target.classList.add("streaming"); }
+                text += msg.t;
+                rerender.request();
             }
-        }
+            if (msg.done) { finished = true; text = msg.text; }
+        });
     } catch (e) {
         if (e.name === "AbortError") errorMsg = "__abort__";
         else if (e instanceof TypeError) { errorMsg = OFFLINE_TEXT.gone; showOffline("gone"); }
@@ -1164,6 +1178,103 @@ function markIncomplete(target, partial) {
 }
 
 
+/* ================= FIRST ANSWER, STREAMED (stream mode) ================= */
+
+/* The page opens as soon as the key is pressed and asks once for the first answer
+   (the server refuses a second time: a reload never generates again). Stop and Esc stop
+   it, and so does holding Esc for 2 s anywhere (main.ahk drops a cancel flag the server sees). */
+function showFirstStatus(text) {
+    const waiting = $("firstWaiting");
+    if (waiting) waiting.textContent = text;
+    setStatus(text + " Press Esc to stop it.");
+}
+
+/* After a first answer that did not finish there is nothing to ask about */
+function lockComposer() {
+    state.locked = true;
+    askInput.readOnly = true;
+    askInput.setAttribute("aria-disabled", "true");
+    askInput.placeholder = "To start again, select the text and press the hotkey.";
+    askSend.disabled = true;
+    $("suggest").hidden = true;
+}
+
+async function streamFirst() {
+    let text = "";
+    const rerender = scheduleRender(resultEl, () => text);
+    resultEl.setAttribute("aria-busy", "true");
+    setBusy(true);
+
+    const controller = new AbortController();
+    state.controller = controller;
+    let finished = false;
+    let errorMsg = null;
+    let partial = false;
+
+    try {
+        const res = await fetch("/api/first", {
+            method: "POST",
+            headers: { "X-Token": DATA.token },
+            signal: controller.signal
+        });
+        if (res.status === 403) { showOffline("gone"); throw new Error(OFFLINE_TEXT.gone); }
+        if (!res.ok || !res.body) {
+            let msg = "The server responded with error " + res.status + ".";
+            try { msg = (await res.json()).error || msg; } catch (e) {}
+            throw new Error(msg);
+        }
+        let first = true;
+        await readNdjson(res, (msg) => {
+            if (msg.status) { if (first) showFirstStatus(msg.status); return; }
+            if (msg.error) { errorMsg = msg.cancelled ? "__abort__" : msg.error; partial = !!msg.partial; return; }
+            if (msg.t) {
+                if (first) {
+                    first = false;
+                    resultEl.classList.add("streaming");
+                    setStatus("The AI is writing. Press Esc to stop it.");
+                }
+                text += msg.t;
+                rerender.request();
+            }
+            if (msg.done) { finished = true; text = msg.text; DATA.meta = msg.meta || {}; }
+        });
+    } catch (e) {
+        if (e.name === "AbortError") errorMsg = "__abort__";
+        else if (e instanceof TypeError) { errorMsg = OFFLINE_TEXT.gone; showOffline("gone"); }
+        else errorMsg = e.message || String(e);
+    } finally {
+        state.controller = null;
+        rerender.cancel();
+        resultEl.classList.remove("streaming");
+        resultEl.removeAttribute("aria-busy");
+        setBusy(false);
+    }
+
+    state.versions[0].text = text;
+    if (finished) {
+        showCurrent();
+        renderMeta();
+        setStatus("Answer ready.");
+        askInput.focus({ preventScroll: true });
+        return;
+    }
+
+    // Stopped (Stop, Esc, Esc 2 s) or error: what was written stays, marked
+    const stopped = errorMsg === "__abort__";
+    if (!text) {
+        resultEl.innerHTML = '<p class="' + (stopped ? "waiting" : "error-text") + '"></p>';
+        resultEl.firstChild.textContent = stopped ? "Stopped before the answer." : (errorMsg || "No answer.");
+    } else {
+        renderMarkdown(resultEl, text + (stopped ? "\n\n*Stopped here.*" : ""));
+        if (!stopped) markIncomplete(resultEl, partial);
+    }
+    lockComposer();
+    if (stopped) setStatus("Stopped. To start again, select the text and press the hotkey.");
+    else setStatus((errorMsg || "The AI did not answer. Check that Ollama is running.")
+                   + (text ? " The answer above is incomplete." : ""), true);
+}
+
+
 /* ================= CONNECTION TO THE SERVER ================= */
 
 const OFFLINE_TEXT = {
@@ -1193,6 +1304,8 @@ function ping() {
 }
 setInterval(ping, 15000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) ping(); });
+
+if (DATA.stream) streamFirst();
 </script>
 
 </body>

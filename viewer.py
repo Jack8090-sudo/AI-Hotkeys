@@ -4,7 +4,9 @@ AI-Hotkeys — HTML viewer with "✦ Ask AI" popup.
 Usage (called from main.ahk):
     python viewer.py --run-dir=<work\\runs\\id> "<Action name>" [rewrite|summarize|explain]
     python viewer.py <input.txt> <output.txt> "<Action name>" [rewrite|summarize|explain]   (old form, K3)
-  options: --key=End (the pressed key), --no-browser (print the URL instead)
+  options: --key=End (the pressed key), --no-browser (print the URL instead),
+           --stream (with --run-dir: only input.txt exists; the page streams the
+           first answer from POST /api/first, STREAM1)
 
 Privacy (S9): once the files are loaded they are deleted. A run directory
 (work\\runs\\<id>) is removed entirely; with the old form, input/output are
@@ -20,6 +22,7 @@ How it works:
 """
 
 import json
+import queue
 import secrets
 import sys
 import threading
@@ -145,6 +148,108 @@ class Session:
             self.thread.append({"q": question, "a": answer})
             return len(self.thread) - 1
 
+    def ready(self):
+        """True once there is a first answer to ask about (always, outside stream mode)."""
+        return self.first is None or self.first.succeeded
+
+    first = None        # FirstRun in stream mode (STREAM1)
+
+
+# =========================================================
+# FIRST ANSWER, STREAMED (stream mode, STREAM1)
+# =========================================================
+# main.ahk opens the page right after writing input.txt (viewer.py --stream):
+# the page asks once for the first answer (POST /api/first) and receives it
+# as it is written. The selected text is read and input.txt deleted at once
+# (no plaintext stays on disk, S9); the run directory itself stays until the
+# first answer ends, as the place where main.ahk drops the Esc-2-s cancel flag.
+
+CANCEL_FLAG = "cancel"
+CANCEL_POLL = 0.2
+INTERRUPTED = "The answer was interrupted: try again."
+
+
+class FirstRun:
+    """State of the one first answer of a stream-mode page."""
+
+    def __init__(self, run_dir):
+        self.run_dir = run_dir
+        self.claimed = False            # single use: a reload never generates again
+        self.succeeded = False
+        self.finished = threading.Event()
+        self.cancel = threading.Event()     # Esc 2 s (flag file) or the page went away
+        self.t0 = time.monotonic()
+
+    def watch_cancel(self):
+        """Poll the run directory for main.ahk's cancel flag until the first answer ends."""
+        flag = self.run_dir / CANCEL_FLAG
+        while not self.finished.wait(CANCEL_POLL):
+            if flag.exists():
+                self.cancel.set()
+                self.cleanup()
+                return
+
+    def cleanup(self):
+        """Delete the run directory (only a real work\\runs\\<id>, as load_run does)."""
+        if qwen_client.is_run_dir(self.run_dir):
+            qwen_client.remove_run_dir(self.run_dir)
+
+
+def first_answer_events(mode, testo, stop, emit):
+    """Produce the first answer as events, the shared pipeline of qwen_client.run_action.
+
+    emit(dict) receives, in order: {"status": text}..., {"t": piece}..., then one of
+    {"done": True, "text": final, "meta": {...}, "sources": [...]} or {"error": msg[, "partial": True]}.
+    stop (threading.Event) ends the work early: nothing more is emitted.
+    """
+    try:
+        qwen_client.check_input(mode, testo)
+    except qwen_client.ActionStop as e:
+        emit({"error": e.message})
+        return
+    if stop.is_set():
+        return
+
+    if mode == "explain":
+        websearch.STATUS_HOOK = lambda text: stop.is_set() or emit({"status": text})
+    try:
+        fonti, meta = qwen_client.first_sources(mode, testo, save=False)
+    finally:
+        websearch.STATUS_HOOK = None
+    if stop.is_set():
+        return
+    if mode != "explain":
+        emit({"status": {"rewrite": "The AI is fixing the text…",
+                         "summarize": "The AI is writing the summary…"}.get(mode, "The AI is writing…")})
+
+    parts = []
+    try:
+        messages = qwen_client.first_request_messages(mode, testo, fonti)
+        response = qwen_client.open_stream(messages, mode, timeout=600)
+        with response:
+            for piece in qwen_client.stream_pieces(response):
+                if stop.is_set():
+                    return              # closing the response stops Ollama
+                parts.append(piece)
+                emit({"t": piece})
+    except qwen_client.TruncatedAnswer:
+        emit({"error": qwen_client.TRUNCATED_FIRST, "partial": True})
+        return
+    except qwen_client.StreamIncomplete:
+        emit({"error": INTERRUPTED, "partial": True})
+        return
+    except Exception as e:
+        if not stop.is_set():
+            emit({"error": qwen_client.describe_error(e)[0]})
+        return
+
+    try:
+        final = qwen_client.finish_first(mode, testo, "".join(parts), fonti)
+    except qwen_client.ActionStop as e:
+        emit({"error": e.message})
+        return
+    emit({"done": True, "text": final, "meta": meta, "sources": fonti})
+
 
 # =========================================================
 # HTTP SERVER
@@ -226,7 +331,8 @@ def make_handler(session, token, page_html):
         # ---------------------------------------------
 
         def do_POST(self):
-            if urlparse(self.path).path != "/api/ask":
+            path = urlparse(self.path).path
+            if path not in ("/api/ask", "/api/first"):
                 self.send_error(404)
                 return
 
@@ -236,6 +342,14 @@ def make_handler(session, token, page_html):
 
             if not self._authorized():
                 self.send_error(403)
+                return
+
+            if path == "/api/first":
+                self._first_answer()
+                return
+
+            if not session.ready():
+                self._send_json(409, {"error": "There is no first answer to ask about."})
                 return
 
             try:
@@ -275,6 +389,78 @@ def make_handler(session, token, page_html):
             line = json.dumps(obj, ensure_ascii=False) + "\n"
             self.wfile.write(line.encode("utf-8"))
             self.wfile.flush()
+
+        # ---------------------------------------------
+
+        def _first_answer(self):
+            """POST /api/first: the first answer as NDJSON, once per page (stream mode)."""
+            first = session.first
+            with session.lock:
+                claimed = first is None or first.claimed
+                if not claimed:
+                    first.claimed = True
+                    session.active_requests += 1
+            if claimed:
+                self._send_json(409, {"error": "This page was already used. To start again, "
+                                               "select the text and press the hotkey."})
+                return
+            session.touch()
+            try:
+                self._stream_first(first)
+            finally:
+                first.finished.set()
+                first.cleanup()
+                with session.lock:
+                    session.active_requests -= 1
+                session.touch()
+
+        def _stream_first(self, first):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+
+            # The pipeline runs in its own thread, so a cancel (Esc 2 s) is
+            # honoured at once even while it waits for the web or for Ollama
+            events = queue.Queue()
+            worker = threading.Thread(
+                target=first_answer_events,
+                args=(session.mode, session.original, first.cancel, events.put),
+                daemon=True)
+            worker.start()
+
+            while True:
+                if first.cancel.is_set():
+                    self._safe_emit({"error": "Cancelled.", "cancelled": True})
+                    return
+                try:
+                    event = events.get(timeout=0.1)
+                except queue.Empty:
+                    if not worker.is_alive() and events.empty():
+                        self._safe_emit({"error": INTERRUPTED, "partial": True})
+                        return
+                    continue
+                if event.get("done"):
+                    meta = dict(event["meta"], seconds=round(time.monotonic() - first.t0, 1))
+                    with session.lock:
+                        session.versions[0]["text"] = event["text"]
+                        session.meta = meta
+                        # As load_sources() would give them: without the full page text
+                        session.sources = [{k: v for k, v in s.items() if k != "text"}
+                                           for s in event["sources"]] if session.mode == "explain" else []
+                        first.succeeded = True
+                    self._safe_emit({"done": True, "text": event["text"], "meta": meta})
+                    return
+                try:
+                    self._emit(event)
+                except OSError:
+                    # The page stopped the answer (Stop, Esc, tab closed)
+                    first.cancel.set()
+                    return
+                if "error" in event:
+                    return
+                session.touch()
 
         def _stream_answer(self, question, base_index):
             self.send_response(200)
@@ -368,10 +554,31 @@ def load_run(argv):
     key_label = next((a.split("=", 1)[1] for a in options if a.startswith("--key=")), "")
     run_dir = next((Path(a.split("=", 1)[1]) for a in options if a.startswith("--run-dir=")), None)
 
-    if len(args) < (1 if run_dir else 3):
-        print("Usage: viewer.py --run-dir=<dir> <action name> [mode] [--key=End] [--no-browser]\n"
+    stream = "--stream" in options
+
+    if len(args) < (1 if run_dir else 3) or (stream and run_dir is None):
+        print("Usage: viewer.py --run-dir=<dir> <action name> [mode] [--key=End] [--no-browser] [--stream]\n"
               "       viewer.py <input> <output> <action name> [mode] [--key=End] [--no-browser]")
         raise SystemExit(1)
+
+    if stream:
+        # Stream mode (STREAM1): only input.txt exists; the page asks for the answer.
+        # The selection is kept in memory and input.txt deleted at once (S9); the
+        # folder stays (cancel flag) until the first answer ends.
+        action_name = args[0]
+        mode = detect_mode(action_name, args[1] if len(args) > 1 else None)
+        input_file = run_dir / "input.txt"
+        try:
+            original = input_file.read_text(encoding="utf-8-sig")
+        finally:
+            if qwen_client.is_run_dir(run_dir):
+                try:
+                    input_file.unlink()
+                except OSError:
+                    qwen_client.remove_run_dir(run_dir)
+        return {"original": original, "result": "", "action_name": action_name, "mode": mode,
+                "key_label": key_label, "no_browser": "--no-browser" in options,
+                "meta": {"mode": mode}, "sources": [], "stream": True, "run_dir": run_dir}
 
     if run_dir is not None:
         input_file, output_file = run_dir / "input.txt", run_dir / "output.txt"
@@ -405,7 +612,7 @@ def load_run(argv):
 
     return {"original": original, "result": result, "action_name": action_name, "mode": mode,
             "key_label": key_label, "no_browser": "--no-browser" in options,
-            "meta": meta, "sources": sources}
+            "meta": meta, "sources": sources, "stream": False, "run_dir": run_dir}
 
 
 def build_page(session, token, key_label=""):
@@ -419,6 +626,8 @@ def build_page(session, token, key_label=""):
         "key": key_label,
         "original": session.original,
         "result": session.versions[0]["text"],
+        # Stream mode: the page fetches the first answer from /api/first
+        "stream": session.first is not None,
         "time": datetime.now().strftime("%H:%M"),
         "look": pages.look_settings(qwen_client.CONFIG),
         "meta": ((read_meta() if session.meta is None else session.meta)
@@ -438,11 +647,23 @@ def build_page(session, token, key_label=""):
 # MAIN
 # =========================================================
 
+def start_session(run):
+    """Session for a loaded run; in stream mode also its FirstRun, with the cancel-flag watcher running."""
+    session = Session(run["original"], run["result"], run["mode"], run["action_name"],
+                      sources=run["sources"], meta=run["meta"])
+    if run["stream"]:
+        session.first = FirstRun(run["run_dir"])
+        threading.Thread(target=session.first.watch_cancel, daemon=True).start()
+    return session
+
+
 def main():
     run = load_run(sys.argv[1:])
 
-    session = Session(run["original"], run["result"], run["mode"], run["action_name"],
-                      sources=run["sources"], meta=run["meta"])
+    session = start_session(run)
+    first = session.first
+    if first is not None:
+        qwen_client.report_config_warnings()
     token = secrets.token_urlsafe(18)
     page_html = build_page(session, token, run["key_label"])
 
@@ -470,8 +691,14 @@ def main():
     else:
         webbrowser.open_new_tab(url)
 
-    server.serve_forever()
-    server.server_close()
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        if first is not None:
+            # The page never asked for the answer (browser closed, idle shutdown)
+            first.finished.set()
+            first.cleanup()
 
 
 if __name__ == "__main__":

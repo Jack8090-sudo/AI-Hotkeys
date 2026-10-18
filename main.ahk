@@ -56,6 +56,10 @@ global busy       := false
 global cancelRequested := false
 global currentPid      := 0
 global escTracking     := false
+; Run folders of results pages that stream their first answer (STREAM1). A page
+; deletes its folder when the first answer ends; until then Esc 2 s (with no
+; job of our own) drops a "cancel" flag in it, which the page polls (I5).
+global streamDirs      := []
 ; Progress popup: defined early, before any key or timer
 global toastGui   := 0
 global toastPos   := ""
@@ -491,6 +495,12 @@ RunCapturedJob(action, keyLbl, testo, hwnd, proc, runDir)
 
     jobSerial++
 
+    ; STREAM1: unless this is a direct replace (which needs the whole text),
+    ; the results page opens now and streams the first answer as it is written
+    if ResultGoesToPage(action.HasOwnProp("replace") && action.replace, REPLACE_ENABLED,
+                        EDITABLE_APPS.Has(proc), hwnd)
+        return StartStreamPage(action, keyLbl, runDir)
+
     if SHOW_PROGRESS
         ProgressShow(action.doing . "  ·  Esc 2 s = cancel", keyLbl)
 
@@ -632,7 +642,7 @@ OpenResultsPage(action, keyLbl, runDir)
     global PYTHON, viewer, BASE
     try
     {
-        Run(PYTHON ' "' viewer '" "--run-dir=' runDir '" "' action.name '" ' action.mode ' "--key=' CmdArgSafe(keyLbl) '"', BASE, "Hide")
+        Run(ViewerCommand(PYTHON, viewer, runDir, action.name, action.mode, keyLbl), BASE, "Hide")
         return true
     }
     catch as e
@@ -640,6 +650,79 @@ OpenResultsPage(action, keyLbl, runDir)
         ShowError("Could not open the results page: " e.Message, keyLbl)
         return false
     }
+}
+
+; STREAM1: opens the results page right away (viewer.py --stream); the page
+; writes the first answer itself, streaming it. Waits (at most 10 s) until the
+; page has taken the selection: it deletes input.txt once it holds the text in
+; memory. Returns true then (the page owns runDir, busy ends). Esc 2 s before
+; that kills the page and the caller deletes the folder; after it, CheckEscHold
+; drops a cancel flag in the folder, which the page polls while it writes (I5).
+StartStreamPage(action, keyLbl, runDir)
+{
+    global PYTHON, viewer, BASE, SHOW_PROGRESS, cancelRequested, currentPid, streamDirs
+
+    if SHOW_PROGRESS
+        ProgressShow("Opening the results page  ·  Esc 2 s = cancel", keyLbl)
+    try
+        Run(ViewerCommand(PYTHON, viewer, runDir, action.name, action.mode, keyLbl, true), BASE, "Hide", &currentPid)
+    catch as e
+    {
+        ProgressEnd()
+        currentPid := 0
+        ShowError("Could not open the results page: " e.Message, keyLbl)
+        return false
+    }
+
+    pid := currentPid
+    taken := false
+    deadline := A_TickCount + 10000
+    Loop
+    {
+        Sleep 50
+        if cancelRequested
+            break
+        if !FileExist(runDir "\input.txt")
+        {
+            taken := true
+            break
+        }
+        try
+        {
+            if !ProcessExist(pid)
+                break
+        }
+        if (A_TickCount > deadline)
+            break
+    }
+    currentPid := 0
+    ProgressEnd()
+
+    if (cancelRequested || !taken)
+    {
+        try ProcessClose(pid)
+        if cancelRequested
+            ToastShow("Cancelled", keyLbl, 2000)
+        else
+            ShowError("The results page did not start. Try again; if it keeps happening, reinstall AI-Hotkeys.", keyLbl)
+        return false        ; the caller deletes the folder
+    }
+
+    streamDirs := LiveStreamDirs(streamDirs, DirExist)
+    streamDirs.Push(runDir)
+    return true
+}
+
+; Esc 2 s with no job of our own: stop the first answers that results pages
+; are still streaming (STREAM1). Returns true if there was one.
+CancelStreams()
+{
+    global streamDirs
+    live := LiveStreamDirs(streamDirs, DirExist)
+    streamDirs := []
+    for dir in live
+        try FileAppend("", dir "\cancel", "UTF-8-RAW")
+    return live.Length > 0
 }
 
 
@@ -759,10 +842,15 @@ CheckEscHold()
     ; Esc already released before 2 seconds: nothing to do
     if !GetKeyState("Esc", "P")
         return
-    ; Nothing running: Esc just keeps its normal function.
+    ; No job of our own: stop a first answer a results page is streaming
+    ; (STREAM1); with none, Esc just keeps its normal function.
     ; While capturing, the request is kept and WaitPid acts on it at once.
     if !(busy || capturing)
+    {
+        if CancelStreams()
+            ToastShow("Cancelled", "", 2000)
         return
+    }
     if cancelRequested
         return
     cancelRequested := true

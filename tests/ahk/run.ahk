@@ -24,7 +24,8 @@ for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToC
              TestErrorFileLine1, TestWarningSummary, TestHotkeyId, TestResolveKeys,
              TestPromptsUserTemplate, TestProcExitCode,
              TestNewRunId, TestIsRunId, TestRunDirOf, TestRunIsStale, TestWorkAclArgs,
-             TestSid, TestCmdArgSafe, TestTreeDeletable, TestIsLocalSearxUrl]
+             TestSid, TestCmdArgSafe, TestTreeDeletable, TestIsLocalSearxUrl,
+             TestResultGoesToPage, TestViewerCommand, TestLiveStreamDirs]
 {
     try
         test()
@@ -637,6 +638,42 @@ TestCmdArgSafe()
     Assert("CmdArgSafe trailing backslash", CmdArgSafe("Ctrl+\"), "Ctrl+")
     Assert("CmdArgSafe inner backslash kept", CmdArgSafe("a\b"), "a\b")
     Assert("CmdArgSafe KeyLabel of a quote key", InStr(CmdArgSafe(KeyLabel('^"')), '"'), 0)
+}
+
+TestResultGoesToPage()
+{
+    ; I6: only the fix, replace on, an editable app and a window replace directly
+    Assert("page: direct replace case", ResultGoesToPage(true, true, true, 0x1234), false)
+    Assert("page: replace off", ResultGoesToPage(true, false, true, 0x1234), true)
+    Assert("page: not an editable app", ResultGoesToPage(true, true, false, 0x1234), true)
+    Assert("page: summarize/explain never replace", ResultGoesToPage(false, true, true, 0x1234), true)
+    Assert("page: no window", ResultGoesToPage(true, true, true, 0), true)
+}
+
+TestViewerCommand()
+{
+    py := '"C:\App\python\python.exe" -E -s'
+    run := "C:\App\work\runs\20261018120000-0123456789abcdef"
+    base := py ' "C:\App\viewer.py" "--run-dir=' run '" "Explanation" explain "--key=End"'
+    Assert("ViewerCommand K3 form", ViewerCommand(py, "C:\App\viewer.py", run, "Explanation", "explain", "End"), base)
+    Assert("ViewerCommand stream", ViewerCommand(py, "C:\App\viewer.py", run, "Explanation", "explain", "End", true),
+           base " --stream")
+    ; a quote or trailing backslash in the key label cannot end the argument early
+    Assert("ViewerCommand quote-safe key", SubStr(ViewerCommand(py, "v.py", run, "Fix", "rewrite", 'Ctrl+"\'), -14),
+           ' "--key=Ctrl+"')
+}
+
+TestLiveStreamDirs()
+{
+    global TMP
+    a := TMP "\stream-a", b := TMP "\stream-b"
+    DirCreate(a)
+    live := LiveStreamDirs([a, b, ""], DirExist)
+    Assert("LiveStreamDirs count", live.Length, 1)
+    Assert("LiveStreamDirs keeps existing", live.Length ? live[1] : "", a)
+    Assert("LiveStreamDirs empty", LiveStreamDirs([], DirExist).Length, 0)
+    DirDelete(a)
+    Assert("LiveStreamDirs after delete", LiveStreamDirs([a], DirExist).Length, 0)
 }
 
 TestTreeDeletable()
