@@ -60,6 +60,26 @@ L'aggiornamento non modifica mai il tuo `config.ini`, quindi resta il modello ch
 Per tenere Qwen non serve fare niente. Per la massima qualità c'è anche `gemma4:12b-it-qat`
 (circa 7,4 GB di VRAM, circa due volte più lento).
 
+### Scegliere il modello
+
+Gemma 4 è il modello predefinito e consigliato; se vuoi puoi usare un altro modello, purché sia
+installato in locale in Ollama. In **Settings → Model** trovi in alto i tre Gemma 4 consigliati:
+
+- `gemma4:e4b-it-qat`: predefinito, consigliato;
+- `gemma4:e2b-it-qat`: leggero, per schede video con 4 GB o meno;
+- `gemma4:12b-it-qat`: massima qualità, più lento.
+
+Accanto a ciascuno c'è scritto "Installed" (installato) oppure il comando `ollama pull <nome>` per
+scaricarlo. Sotto, in **Other local models**, ci sono gli altri modelli già installati in Ollama sul tuo PC.
+Puoi salvare solo un modello installato oppure uno dei tre Gemma consigliati (se non è ancora scaricato, la
+pagina ti mostra il comando `ollama pull`). Dopo aver scaricato un modello premi **Check installed models
+again** per aggiornare l'elenco.
+
+I modelli cloud di Ollama (quelli con `:cloud` o `-cloud` nel nome) non sono mai permessi: girano sui
+server di Ollama e il testo selezionato uscirebbe dal tuo PC. Non compaiono nell'elenco e, se qualcuno li
+scrive a mano in `config.ini`, AI-Hotkeys usa `gemma4:e4b-it-qat` e mostra un avviso. Se Ollama non è
+avviato, la pagina mostra il modello attuale in sola lettura e l'elenco dei consigliati.
+
 ## Uso
 
 Seleziona del testo in qualsiasi programma e premi:
@@ -136,8 +156,9 @@ Le più utili:
   soli non sono ammessi, perché servono per scrivere.
 - `[comportamento] sostituisci_testo = si | no`: PgUp sostituisce il testo o apre la pagina.
 - `[comportamento] lunghezza = breve | normale | dettagliata`: lunghezza di riassunti e spiegazioni.
-- `[qwen] model`: il modello di Ollama (predefinito `gemma4:e4b-it-qat`). La sezione si chiama
-  `[qwen]` per motivi storici e vale per qualsiasi modello.
+- `[qwen] model`: il modello di Ollama (predefinito `gemma4:e4b-it-qat`). Deve girare in locale: i
+  modelli cloud non sono ammessi. La sezione si chiama `[qwen]` per motivi storici e vale per qualsiasi
+  modello locale.
 - `[qwen] keep_alive`: per quanto tempo il modello resta pronto in memoria (predefinito `30m`).
 - `[comportamento] clip_wait_ms` (facoltativa): quanti millisecondi un tasto aspetta la copia della
   selezione (predefinito 2000). Abbassala, per esempio a `500`, se senza selezione i tasti ti sembrano

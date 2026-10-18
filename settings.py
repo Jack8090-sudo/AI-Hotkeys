@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import config_edit
 import pages
+import qwen_client
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_FILE = BASE_DIR / "config.ini"
@@ -57,6 +58,112 @@ TEXTS = {
     ("qwen", "model"): ("gemma4:e4b-it-qat", re.compile(r"^[\w.:\-/]{1,80}$")),
     ("qwen", "ollama_url"): ("http://localhost:11434", re.compile(r"^https?://[\w.\-]+(:\d{1,5})?(/[\w.\-/]*)?$")),
 }
+
+# =========================================================
+# MODEL PICKER: Gemma 4 by default, other models only if installed locally
+# =========================================================
+
+DEFAULT_MODEL = TEXTS[("qwen", "model")][0]
+
+# Shown first, in this order, even when not installed yet (saving one shows the pull command)
+RECOMMENDED_MODELS = (
+    ("gemma4:e4b-it-qat", "Default, recommended"),
+    ("gemma4:e2b-it-qat", "Light: for GPUs with 4 GB or less"),
+    ("gemma4:12b-it-qat", "Maximum quality, slower"),
+)
+RECOMMENDED_NAMES = {n for n, _ in RECOMMENDED_MODELS}
+
+MODELS_TIMEOUT = 2
+
+
+def _tagged(name):
+    """Ollama lists an untagged model as name:latest."""
+    return name if ":" in name else name + ":latest"
+
+
+def _ollama_url(updates=None):
+    url = (updates or {}).get("qwen", {}).get("ollama_url") or current_values()["qwen.ollama_url"]
+    return url.rstrip("/")
+
+
+def installed_models(url=None, timeout=MODELS_TIMEOUT):
+    """(local, cloud_count) from Ollama /api/tags, or (None, 0) when Ollama cannot be reached.
+
+    local: [{"name", "detail"}] for models that run on this PC. Cloud models (":cloud" /
+    "-cloud" tags, or entries with remote_host / remote_model) are left out and only counted.
+    Uses qwen_client's opener: never through a system proxy.
+    """
+    try:
+        with qwen_client._OPENER.open((url or _ollama_url()) + "/api/tags", timeout=timeout) as r:
+            entries = json.load(r).get("models", [])
+        if not isinstance(entries, list):
+            raise ValueError("bad /api/tags answer")
+    except Exception:
+        return None, 0
+    local, cloud = [], 0
+    for m in entries:
+        if not isinstance(m, dict):
+            continue
+        name = str(m.get("name") or m.get("model") or "").strip()
+        if not name:
+            continue
+        if qwen_client.is_cloud_model(name) or m.get("remote_host") or m.get("remote_model"):
+            cloud += 1
+            continue
+        details = m.get("details") if isinstance(m.get("details"), dict) else {}
+        detail = " · ".join(str(details[k]) for k in ("parameter_size", "quantization_level") if details.get(k))
+        local.append({"name": name, "detail": detail})
+    return local, cloud
+
+
+def model_choices(timeout=MODELS_TIMEOUT):
+    """Data for the model picker on the settings page."""
+    local, cloud = installed_models(timeout=timeout)
+    raw = config_edit.read_values(CONFIG_FILE).get("qwen", {}).get("model", "").strip()
+    installed = {_tagged(m["name"]) for m in local or []}
+    recommended = {_tagged(n) for n in RECOMMENDED_NAMES}
+    return {
+        "reachable": local is not None,
+        "current": current_values()["qwen.model"],
+        "default": DEFAULT_MODEL,
+        "recommended": [{"name": n, "label": label, "installed": _tagged(n) in installed}
+                        for n, label in RECOMMENDED_MODELS],
+        "others": sorted((m for m in local or [] if _tagged(m["name"]) not in recommended),
+                         key=lambda m: m["name"].lower()),
+        "cloud_hidden": cloud,
+        "cloud_in_config": raw if qwen_client.is_cloud_model(raw) else "",
+    }
+
+
+def check_model(name, url=None):
+    """Error text for a model that cannot be saved, None when it is allowed.
+
+    Allowed: one of the recommended Gemma models (installed or not), or a model
+    installed in Ollama on this PC. Never a cloud model.
+    """
+    if qwen_client.is_cloud_model(name):
+        return "Cloud models are not allowed: AI-Hotkeys keeps your text on this PC. Choose a local model."
+    if name in RECOMMENDED_NAMES:
+        return None
+    local, _ = installed_models(url)
+    if local is None:
+        return "Ollama cannot be reached, so only the recommended Gemma models can be chosen now."
+    if _tagged(name) not in {_tagged(m["name"]) for m in local}:
+        return (f"{name} is not installed in Ollama on this PC: run  ollama pull {name}  first, "
+                "or choose a recommended Gemma model.")
+    return None
+
+
+def model_note(updates):
+    """After saving a recommended model that is not downloaded yet: the command that gets it."""
+    name = updates.get("qwen", {}).get("model")
+    if not name:
+        return None
+    local, _ = installed_models(_ollama_url(updates))
+    if local is not None and _tagged(name) in {_tagged(m["name"]) for m in local}:
+        return None
+    return f"{name} is not downloaded yet: run  ollama pull {name}  in a terminal before using AI-Hotkeys."
+
 
 KEYS = {
     ("tasti", "correggi"): "PgUp",
@@ -105,7 +212,8 @@ def current_values():
         out[f"{sec}.{key}"] = max(lo, min(hi, v))
     for (sec, key), (default, rx) in TEXTS.items():
         v = raw.get(sec, {}).get(key, default)
-        out[f"{sec}.{key}"] = v if rx.fullmatch(v) else default
+        ok = rx.fullmatch(v) and not (key == "model" and qwen_client.is_cloud_model(v))
+        out[f"{sec}.{key}"] = v if ok else default
     for (sec, key), default in KEYS.items():
         v = raw.get(sec, {}).get(key, default)
         out[f"{sec}.{key}"] = v if valid_hotkey(v) else default
@@ -148,6 +256,16 @@ def validate(data):
             continue  # unknown fields: ignored
         updates.setdefault(sec, {})[key] = value
 
+    # The model: a recommended Gemma, or one installed locally; never a cloud model
+    model = updates.get("qwen", {}).get("model")
+    if model is not None and "qwen.ollama_url" not in errors:
+        problem = check_model(model, _ollama_url(updates))
+        if problem:
+            errors["qwen.model"] = problem
+            del updates["qwen"]["model"]
+            if not updates["qwen"]:
+                del updates["qwen"]
+
     # New keys plus saved ones: the page only sends what changed
     current = current_values()
     keys = [updates.get("tasti", {}).get(k) or current[f"tasti.{k}"] for k in ("correggi", "riassumi", "spiega")]
@@ -188,7 +306,8 @@ def build_page(token):
         "tema": values["aspetto.tema"], "colore": values["aspetto.colore"],
         "testo": values["aspetto.testo"], "larghezza": values["aspetto.larghezza"],
     }
-    data = {"token": token, "values": values, "defaults": defaults(), "look": look}
+    data = {"token": token, "values": values, "defaults": defaults(), "look": look,
+            "models": model_choices()}
     return (
         template
         .replace("/*__THEME__*/", pages.theme_css())
@@ -250,6 +369,13 @@ def make_handler(state, token):
                 state.touch()
                 self._json(200, {"ok": True})
                 return
+            if url.path == "/api/models":
+                if not self._authorized():
+                    self.send_error(403)
+                    return
+                state.touch()
+                self._json(200, model_choices())
+                return
             self.send_error(404)
 
         def do_POST(self):
@@ -287,6 +413,10 @@ def make_handler(state, token):
             warning = url_warning(updates)
             if warning:
                 reply["warning"] = warning
+            note = model_note(updates)
+            if note:
+                reply["model_note"] = note
+            reply["models"] = model_choices()
             self._json(200, reply)
 
     return Handler

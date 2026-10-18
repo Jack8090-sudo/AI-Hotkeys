@@ -43,6 +43,11 @@ Plan: `plans/ai-hotkeys-production-readiness.md`. Step ids (S1–S15) refer to i
   search engines. On the Settings page as "Search words". (S6b, S10, D5)
 - `[comportamento] clip_wait_ms`: how long a key waits for the copy, 100–10000 ms, default 2000. (S8b1, D12)
 - A "What leaves this PC" notice on the Settings page and the installer's finish page. (S10, S13b)
+- **Model picker** in Settings → Model, replacing the free-text field: the three recommended Gemma 4 models
+  first (`gemma4:e4b-it-qat` default, `gemma4:e2b-it-qat` light, `gemma4:12b-it-qat` maximum quality), each
+  marked installed or with its `ollama pull` command, then the other models installed in Ollama on this PC.
+  Only an installed model or a recommended Gemma can be saved; with Ollama down the current model is shown
+  read-only. (MODEL2)
 - Tray Reload and Exit ask for confirmation while a job is running. (S8b2)
 - Installer: license page, `/NOOLLAMA`, `Uninstall.exe /PURGE`, version metadata, uninstall registry
   details, and a finish page with the model, VRAM and web-search notes. (S13b)
@@ -120,6 +125,9 @@ Plan: `plans/ai-hotkeys-production-readiness.md`. Step ids (S1–S15) refer to i
 
 ### Security
 
+- Ollama cloud models (`:cloud` / `-cloud` tags, or `remote_host` entries) are never offered or saved, and
+  the health check and every action refuse them: they would send the selected text off this PC. A
+  `config.ini` that names one falls back to `gemma4:e4b-it-qat` with a configuration warning. (MODEL2)
 - Install folder private to the user; custom folders outside the profile get an explicit ACL; folders inside a
   git repository, drive roots and unwritable folders are refused. (S13a, C09, D1)
 - `work\` is private, and the selected text no longer stays on disk: each job uses `work\runs\<id>\`, deleted
