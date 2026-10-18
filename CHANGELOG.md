@@ -30,6 +30,12 @@ Plan: `plans/ai-hotkeys-production-readiness.md`. Step ids (S1–S15) refer to i
 
 ### Added
 
+- **The first answer streams into the results page.** PgDn, End, and PgUp outside a direct replace open
+  the page at once and show the answer as it is written, with the search and reading phases. Measured on
+  `gemma4:e4b-it-qat` (warm, RTX 3060): first text in 0.35 s median (0.9 s max) from the key's page
+  start, against 1.6-10 s for the whole answer. Holding Esc for 2 s, the page's Stop button or Esc inside
+  the page stops it, and nothing is left in `work\`. A reload never generates again. Direct replace in
+  editable apps is unchanged. (STREAM1, E1, D7)
 - Specific error messages instead of "Qwen did not respond…": Ollama not running, model missing (with the
   `ollama pull` command), Ollama too old, text too long, answer cut off, Ollama stopped while answering,
   nothing selected. Follow-up questions use the same messages. (S4, S8b3, S9)

@@ -239,6 +239,13 @@ class FirstStreamTest(unittest.TestCase):
         events = self.page("summarize", "Un testo.").first()[1]
         self.assertIn("error", events[-1])
 
+    def test_cloud_model_is_refused_before_any_request(self):
+        # MODEL2 guard in qwen_client._request also covers the streamed first answer
+        with mock.patch.object(self.qc, "MODEL", "glm-4.6:cloud"):
+            events = self.page("summarize", "Un testo.").first()[1]
+        self.assertEqual(events[-1]["error"], self.qc.CLOUD_MODEL_MESSAGE)
+        self.assertEqual(self.ollama.chat_bodies(), [])
+
     def test_no_followups_after_a_failed_first_answer(self):
         self.ollama.scenario = "http404"
         p = self.page("summarize", "Un testo.")
