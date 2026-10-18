@@ -1,0 +1,152 @@
+# Draft release (plan step S14). Builds the installer from the tagged commit and creates a DRAFT
+# GitHub Release with the Setup.exe, SHA256SUMS.txt, the payload manifest, the third-party
+# source archives (AutoHotkey GPL-2.0, SearXNG AGPL-3.0) and a build-provenance attestation.
+# Publishing the draft is manual and done by the maintainer.
+# Triggers: a pushed tag v* that equals "v" + the VERSION file, or a manual run (which drafts
+# v<VERSION> on the selected commit). No cache: a release always downloads and re-verifies the pins.
+name: Release (draft)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  draft:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write      # create the draft release and upload its assets
+      id-token: write      # OIDC token for the provenance attestation
+      attestations: write  # store the attestation
+    defaults:
+      run:
+        shell: powershell
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: The tag must equal v<VERSION>
+        run: |
+          $version = (Get-Content -Raw VERSION).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION must be MAJOR.MINOR.PATCH, got '$version'" }
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            if ($env:GITHUB_REF_NAME -ne $tag) {
+              Write-Host "::error::Tag $($env:GITHUB_REF_NAME) does not match VERSION ($tag). Fix VERSION or the tag; no release was created."
+              exit 1
+            }
+          }
+          else {
+            # Manual run: the tag may not exist yet (gh creates it when the draft is published),
+            # but if it exists it must point at this commit.
+            $ErrorActionPreference = 'Continue'
+            $json = gh api "repos/$env:GH_REPO/git/ref/tags/$tag" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $json) {
+              $ref = $json | ConvertFrom-Json
+              $sha = $ref.object.sha
+              if ($ref.object.type -eq 'tag') { $sha = (gh api "repos/$env:GH_REPO/git/tags/$sha" | ConvertFrom-Json).object.sha }
+              if ($sha -ne $env:GITHUB_SHA) { Write-Host "::error::Tag $tag already exists at $sha, not at $env:GITHUB_SHA"; exit 1 }
+            }
+          }
+          $ErrorActionPreference = 'Continue'
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) { Write-Host "::error::A release for $tag already exists (draft or published). Delete it first to rebuild it."; exit 1 }
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "AIH_VERSION=$version`nRELEASE_TAG=$tag`n")
+          Write-Host "Drafting $tag from $env:GITHUB_SHA"
+          exit 0
+      - name: Build (build\build.ps1, clean tree, notices required, H16 smoke test)
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File build\build.ps1 -HostPython python
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Download the third-party source archives (SHA-256 verified)
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci\get-sources.ps1 -Dest build\out\third-party-sources
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stage the release assets and write SHA256SUMS.txt
+        run: |
+          $out = (Resolve-Path build\out).Path
+          $buildSums = @{}
+          foreach ($line in Get-Content "$out\SHA256SUMS.txt") { $sha, $name = $line -split '  ', 2; $buildSums[$name] = $sha }
+          $dist = New-Item -ItemType Directory -Force dist
+          $setupName = "AI-Hotkeys-Setup-$env:AIH_VERSION.exe"
+          foreach ($name in @($setupName, 'manifest.txt')) {
+            $actual = (Get-FileHash -Algorithm SHA256 "$out\$name").Hash.ToLowerInvariant()
+            if ($buildSums[$name] -ne $actual) { throw "$name does not match the build's SHA256SUMS.txt" }
+            Copy-Item "$out\$name" $dist
+          }
+          # GitHub release assets are flat: the third-party-sources/ folder becomes a name prefix.
+          $sources = @(Get-ChildItem "$out\third-party-sources" -File)
+          if ($sources.Count -ne 2) { throw "Expected 2 source archives, found $($sources.Count)" }
+          foreach ($f in $sources) { Copy-Item $f.FullName (Join-Path $dist ('third-party-sources.' + $f.Name)) }
+          $sums = foreach ($f in Get-ChildItem $dist -File | Sort-Object Name) {
+            (Get-FileHash -Algorithm SHA256 $f.FullName).Hash.ToLowerInvariant() + '  ' + $f.Name
+          }
+          [IO.File]::WriteAllText((Join-Path $dist.FullName 'SHA256SUMS.txt'), (($sums -join "`n") + "`n"))
+          $sums | ForEach-Object { Write-Host $_ }
+      - name: Build-provenance attestation
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/AI-Hotkeys-Setup-*.exe
+            dist/manifest.txt
+            dist/third-party-sources.*
+      - name: Create the DRAFT release
+        run: |
+          $v = $env:AIH_VERSION
+          $exe = "AI-Hotkeys-Setup-$v.exe"
+          $notes = @(
+            "AI-Hotkeys $v, built by GitHub Actions from commit $env:GITHUB_SHA.",
+            '',
+            '## Install',
+            "Download ``$exe`` and run it. The installer is not code-signed yet, so Windows SmartScreen",
+            'may warn: choose "More info", then "Run anyway", after checking the SHA-256 below.',
+            '',
+            '## Verify the download',
+            "- SHA-256: compare ``Get-FileHash .\$exe`` with ``SHA256SUMS.txt``.",
+            "- Provenance: ``gh attestation verify $exe --repo $env:GH_REPO``.",
+            '- `manifest.txt` lists every installed file with its SHA-256.',
+            '',
+            '## Third-party sources',
+            'The `third-party-sources.*` assets are the corresponding sources of the bundled AutoHotkey',
+            '(GPL-2.0) and SearXNG (AGPL-3.0-or-later, unmodified), as promised in THIRD_PARTY_NOTICES.md.',
+            '',
+            '## Rollback',
+            'Uninstall AI-Hotkeys (config.ini and the work folder are kept), then reinstall the previous version.',
+            'Before the first GitHub release there is no earlier asset: reinstall your local v1.0.0 Setup.exe instead.'
+          ) -join "`n"
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\notes.md", $notes + "`n")
+          $assets = @(Get-ChildItem dist -File | ForEach-Object { $_.FullName })
+          $ghArgs = @('release', 'create', $env:RELEASE_TAG, '--draft', '--target', $env:GITHUB_SHA,
+            '--title', "AI-Hotkeys $v", '--notes-file', "$env:RUNNER_TEMP\notes.md")
+          if ($env:GITHUB_REF_TYPE -eq 'tag') { $ghArgs += '--verify-tag' }
+          gh @ghArgs @assets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "::notice::Draft release $env:RELEASE_TAG created. Review it and publish it manually."
+      - name: Keep the release assets as a workflow artifact too
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: dist
+          if-no-files-found: warn
+          retention-days: 30
