@@ -203,6 +203,37 @@ h1 {
 .text:focus, .select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .text[aria-invalid="true"] { border-color: var(--danger); border-width: 2px; }
 
+/* model picker: native radios, recommended Gemma first */
+.models { width: 100%; margin: 6px 0 0; padding: 0; border: 0; min-inline-size: 0; }
+.models[aria-invalid="true"] .mgroup:first-child { outline: 2px solid var(--danger); outline-offset: 4px; border-radius: 8px; }
+.mgroup + .mgroup { margin-top: 14px; }
+.mgroup[hidden] { display: none; }
+.gtitle { margin: 0 0 6px; color: var(--muted); font: 600 calc(var(--fs) * .8)/1.2 var(--f-ui); letter-spacing: .04em; text-transform: uppercase; }
+.mopt {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 2px 10px;
+    align-items: baseline;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+}
+.mopt + .mopt { margin-top: 6px; }
+.mopt:hover { border-color: var(--edge); }
+.mopt:has(input:checked) { border-color: var(--accent); background: var(--surface); }
+.mopt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mopt:has(input:disabled) { cursor: default; }
+.mopt input { grid-row: 1 / span 2; margin: 0; accent-color: var(--accent); width: 16px; height: 16px; align-self: center; }
+.mopt .mname { font: 600 calc(var(--fs) * .92)/1.3 var(--f-code); color: var(--text); overflow-wrap: anywhere; }
+.mopt .mlabel { margin-left: 8px; color: var(--text-2); font: 500 calc(var(--fs) * .86)/1.3 var(--f-ui); }
+.mopt .mstat { grid-column: 2; color: var(--muted); font-size: calc(var(--fs) * .84); line-height: 1.4; }
+.mopt .mstat.ok { color: var(--text-2); }
+.mopt .mstat.ok::before { content: "\2713  "; color: var(--accent); }
+.mopt .mstat code, .field .warn code { font-family: var(--f-code); font-size: .95em; padding: .05em .3em; border-radius: 4px; background: var(--surface-2); }
+.mempty { margin: 0; color: var(--muted); font-size: calc(var(--fs) * .86); }
+.mactions { margin-top: 4px; }
+
 /* key to record */
 .capture {
     display: flex;
@@ -515,11 +546,23 @@ h1 {
             <h2 id="s-model">Model</h2>
             <p>The Ollama model that does the work.</p>
 
-            <div class="field">
-                <label class="name" for="f-model">Model</label>
-                <p class="hint">The name of a model already downloaded, for example with <code>ollama pull gemma4:e4b-it-qat</code>.</p>
-                <input class="control text" id="f-model" data-name="qwen.model" spellcheck="false">
+            <div class="field wide" id="modelField">
+                <span class="name" id="l-model">Model</span>
+                <p class="hint">Gemma 4 is the default and the recommended choice. You can pick another model only if it is installed in Ollama on this PC. Cloud models are never offered: they would send your text off this PC. To download the default: <code>ollama pull gemma4:e4b-it-qat</code></p>
+                <fieldset class="control models" id="modelPicker" data-name="qwen.model" aria-labelledby="l-model">
+                    <div class="mgroup" role="group" aria-labelledby="g-rec">
+                        <p class="gtitle" id="g-rec">Recommended: Gemma 4</p>
+                        <div id="recList"></div>
+                    </div>
+                    <div class="mgroup" role="group" aria-labelledby="g-other" id="otherGroup">
+                        <p class="gtitle" id="g-other">Other local models</p>
+                        <div id="otherList"></div>
+                    </div>
+                </fieldset>
+                <p class="warn" id="modelNote" hidden></p>
                 <p class="error"></p>
+                <div class="mactions"><button type="button" class="link" id="modelRefresh">Check installed models again</button></div>
+                <p class="sr-only" id="modelLive" role="status" aria-live="polite"></p>
             </div>
 
             <div class="field">
@@ -712,6 +755,7 @@ function render() {
         reset.setAttribute("aria-label", "Restore the default " + action + " key (" + readable(DATA.defaults[f.dataset.key]) + ")");
     });
     showUrlWarning();
+    renderModels();
     applyLook();
     updateBar();
 }
@@ -758,17 +802,13 @@ const KEY_FORMAT = "Use a key like PgUp or F8, or a letter or digit together wit
 
 /* Expected formats, mirrored from settings.py (the server still has the last word) */
 const TEXT_RULES = {
-    "qwen.model": {
-        rx: /^[\p{L}\p{N}_.:\-/]{1,80}$/u,
-        msg: "Write the name of a downloaded Ollama model, for example gemma4:e4b-it-qat: letters, digits and . : - / _ only, up to 80 characters."
-    },
     "qwen.ollama_url": {
         rx: /^https?:\/\/[\p{L}\p{N}_.-]+(:\d{1,5})?(\/[\p{L}\p{N}_.\-/]*)?$/u,
         msg: "Write an address like http://localhost:11434: http:// or https://, then a computer name or IP address and an optional :port."
     }
 };
 
-const controlOf = (f) => f.querySelector(".rec, input, select, .switch, [role=radiogroup], .stepper");
+const controlOf = (f) => f.querySelector("fieldset, .rec, input, select, .switch, [role=radiogroup], .stepper");
 
 function setFieldError(f, text) {
     const box = f.querySelector(".error");
@@ -831,6 +871,133 @@ function showUrlWarning() {
     box.append(b, serverWarning || ("Ollama is on another computer (" + host + "): the text you select will be sent there."));
     box.hidden = false;
 }
+
+/* ---------- model picker: Gemma 4 by default, other models only if installed locally ---------- */
+
+let MODELS = DATA.models;
+
+function codeText(parent, before, code, after) {
+    const c = document.createElement("code");
+    c.textContent = code;
+    parent.append(before, c, after || "");
+}
+
+function modelOption(m, i, kind) {
+    const label = document.createElement("label");
+    label.className = "mopt";
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "model";
+    input.value = m.name;
+    input.disabled = !MODELS.reachable;
+    const name = document.createElement("span");
+    name.className = "mname";
+    name.textContent = m.name;
+    const head = document.createElement("span");
+    head.appendChild(name);
+    if (m.label || m.detail) {
+        const extra = document.createElement("span");
+        extra.className = "mlabel";
+        extra.textContent = m.label || m.detail;
+        head.appendChild(extra);
+    }
+    const stat = document.createElement("span");
+    stat.className = "mstat";
+    stat.id = "ms-" + kind + "-" + i;
+    if (!MODELS.reachable) stat.textContent = "Not checked: Ollama cannot be reached.";
+    else if (m.installed) { stat.textContent = "Installed"; stat.classList.add("ok"); }
+    else codeText(stat, "Not installed: run ", "ollama pull " + m.name, "");
+    input.setAttribute("aria-describedby", stat.id);
+    label.append(input, head, stat);
+    return label;
+}
+
+function buildModels() {
+    const rec = $("recList"), other = $("otherList");
+    rec.replaceChildren(...MODELS.recommended.map((m, i) => modelOption(m, i, "r")));
+    const others = MODELS.others.map((m) => ({ ...m, installed: true }));
+    // The saved model, when it is neither recommended nor in the list (removed, or Ollama is down)
+    const cur = saved["qwen.model"];
+    if (cur && !MODELS.recommended.some((m) => m.name === cur) && !others.some((m) => m.name === cur)
+        && !/[:-]cloud$/i.test(cur)) {
+        others.unshift({ name: cur, detail: "Current model", installed: false });
+    }
+    if (others.length) other.replaceChildren(...others.map((m, i) => modelOption(m, i, "o")));
+    else {
+        const p = document.createElement("p");
+        p.className = "mempty";
+        p.textContent = MODELS.reachable ? "No other models are installed in Ollama." : "Not available while Ollama cannot be reached.";
+        other.replaceChildren(p);
+    }
+    if (MODELS.cloud_hidden) {
+        const p = document.createElement("p");
+        p.className = "mempty";
+        p.textContent = (MODELS.cloud_hidden === 1 ? "1 cloud model is" : MODELS.cloud_hidden + " cloud models are")
+            + " hidden: cloud models run on Ollama's servers and would send your text off this PC.";
+        other.appendChild(p);
+    }
+}
+
+function showModelNote() {
+    const box = $("modelNote");
+    const v = values["qwen.model"];
+    box.replaceChildren();
+    const b = document.createElement("strong");
+    if (!MODELS.reachable) {
+        b.textContent = "Ollama cannot be reached. ";
+        box.append(b, "The model stays " + saved["qwen.model"] + " (read-only) until Ollama is running: start Ollama, then press “Check installed models again”.");
+    } else if (MODELS.cloud_in_config && saved["qwen.model"] === MODELS.cloud_in_config) {
+        b.textContent = "Cloud model not allowed. ";
+        box.append(b, "config.ini names " + MODELS.cloud_in_config + ", which runs on Ollama's servers. AI-Hotkeys uses "
+            + MODELS.default + " instead: press Save to store the local model selected below.");
+    } else {
+        const m = MODELS.recommended.find((r) => r.name === v);
+        if (!m || m.installed) { box.hidden = true; return; }
+        b.textContent = "Not downloaded yet. ";
+        box.appendChild(b);
+        codeText(box, "After saving, run ", "ollama pull " + v, " in a terminal, then press “Check installed models again”.");
+    }
+    box.hidden = false;
+}
+
+function renderModels() {
+    document.querySelectorAll('#modelPicker input[name="model"]').forEach((r) => {
+        r.checked = r.value === values["qwen.model"];
+    });
+    showModelNote();
+}
+
+$("modelPicker").addEventListener("change", (e) => {
+    if (e.target.name !== "model") return;
+    setFieldError($("modelField"), "");
+    set("qwen.model", e.target.value);
+});
+
+function setModels(data) {
+    MODELS = data;
+    if (data.cloud_in_config && saved["qwen.model"] === data.current) saved["qwen.model"] = data.cloud_in_config;
+    buildModels();
+    render();
+}
+
+$("modelRefresh").addEventListener("click", async () => {
+    const live = $("modelLive");
+    live.textContent = "Checking the installed models…";
+    try {
+        const res = await fetch("/api/models", { headers: { "X-Token": DATA.token }, cache: "no-store" });
+        if (res.status === 403) { showOffline("gone"); return; }
+        if (!res.ok) throw new Error("Error " + res.status);
+        setModels(await res.json());
+        const n = MODELS.others.length;
+        live.textContent = MODELS.reachable
+            ? "Model list updated. " + MODELS.recommended.filter((m) => m.installed).length + " of 3 recommended models installed, "
+              + n + (n === 1 ? " other local model." : " other local models.")
+            : "Ollama cannot be reached: the model list is not available.";
+    } catch (err) {
+        if (err instanceof TypeError) showOffline("gone");
+        live.textContent = "The model list could not be checked.";
+    }
+});
 
 /* ---------- key recording ---------- */
 
@@ -971,8 +1138,11 @@ $("form").addEventListener("submit", async (e) => {
         saved = { ...out.values };
         values = { ...out.values };
         serverWarning = out.warning || "";
-        render();
-        if (out.warning) updateBar("Saved, with a warning: " + out.warning, "warn");
+        if (out.models) setModels(out.models);
+        else render();
+        if (out.warning || out.model_note) {
+            updateBar("Saved, with a warning: " + [out.warning, out.model_note].filter(Boolean).join(" "), "warn");
+        }
         else updateBar("Saved. AI-Hotkeys will apply them in a moment.", "ok");
     } catch (err) {
         const gone = err instanceof TypeError;
@@ -1020,7 +1190,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) ping
 
 /* ================= STARTUP ================= */
 
-render();
+setModels(DATA.models);
 </script>
 
 </body>

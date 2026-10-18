@@ -48,6 +48,13 @@ it already names (before 1.1.0 the default was `qwen3.5:9b`). To use Gemma 4, ru
 `gemma4:e4b-it-qat` (or write `model = gemma4:e4b-it-qat` under `[qwen]` in `config.ini` and choose
 **Reload**). To keep Qwen, change nothing; `ollama rm qwen3.5:9b` frees its disk space once you switch.
 
+Choosing the model: **Settings → Model** lists the three recommended Gemma 4 models first (`gemma4:e4b-it-qat`,
+the default; `gemma4:e2b-it-qat`, light; `gemma4:12b-it-qat`, maximum quality), each marked installed or with
+its `ollama pull` command, and below them the other models installed in Ollama on this PC. Only those can be
+chosen. Ollama cloud models (`:cloud` / `-cloud` tags) are never offered and are refused at run time, because
+they would send your selected text off this PC; a `config.ini` that names one falls back to the default with
+a warning.
+
 ## Run from source
 
 For development or if you prefer not to run an installer.

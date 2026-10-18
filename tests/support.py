@@ -251,10 +251,12 @@ class FakeOllama(_FakeServer):
       "http404"     404 {"error": "model ... not found"}
       "no_done"     stream ends without a done chunk
     delay: seconds to sleep before answering /api/chat
+    models: the /api/tags "models" list (entries are dicts, plain names become {"name": ...})
     """
 
-    def __init__(self, text="Risposta di prova.", scenario="ok", delay=0.0, version="0.12.0"):
+    def __init__(self, text="Risposta di prova.", scenario="ok", delay=0.0, version="0.12.0", models=None):
         self.text = text
+        self.models = models if models is not None else ["test-model:1b"]
         self.version = version
         self.scenario = scenario
         self.delay = delay
@@ -268,7 +270,7 @@ class FakeOllama(_FakeServer):
         if path == "/api/version":
             return self.send(h, 200, {"version": self.version})
         if path == "/api/tags":
-            return self.send(h, 200, {"models": [{"name": "test-model:1b"}]})
+            return self.send(h, 200, {"models": [m if isinstance(m, dict) else {"name": m} for m in self.models]})
         if path == "/api/generate":
             return self.send(h, 200, {"done": True, "done_reason": "unload"})
         if path != "/api/chat":

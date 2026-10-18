@@ -76,6 +76,17 @@ def _config_error_text(e):
     return str(e).strip().splitlines()[0][:160]
 
 
+CLOUD_MODEL_MESSAGE = ("Cloud models are not allowed: AI-Hotkeys keeps your text on this PC. "
+                       "Choose a local model in Settings.")
+
+
+def is_cloud_model(name):
+    """True for an Ollama cloud model ("gpt-oss:120b-cloud", "glm-4.6:cloud"): it runs on
+    Ollama's servers, so the selected text would leave this PC."""
+    name = str(name or "").strip().lower()
+    return name.endswith(":cloud") or name.endswith("-cloud")
+
+
 def load_config():
     """Settings from config.ini merged over DEFAULTS.
 
@@ -102,6 +113,10 @@ def load_config():
                 value = _unquote(value)
             if value:
                 cfg[key] = value
+    if is_cloud_model(cfg["model"]):
+        CONFIG_WARNINGS.append(f"config.ini names a cloud model ({cfg['model']}): {CLOUD_MODEL_MESSAGE} "
+                               f"Using {DEFAULTS['model']} for now.")
+        cfg["model"] = DEFAULTS["model"]
     return cfg
 
 
@@ -170,6 +185,10 @@ class StreamIncomplete(RuntimeError):
     """A streamed answer ended without Ollama's final "done" chunk."""
 
 
+class CloudModelRefused(RuntimeError):
+    """The model is an Ollama cloud model: the text would leave this PC."""
+
+
 def describe_error(exc):
     """(message for the user, technical detail) for an exception."""
     detail = f"{type(exc).__name__}: {exc}"
@@ -196,7 +215,7 @@ def describe_error(exc):
         return "Ollama stopped while answering: try again.", detail
     if isinstance(exc, (urllib.error.URLError, ConnectionError)):
         return "Ollama is not running: start Ollama, then try again.", detail
-    if isinstance(exc, (TruncatedAnswer, StreamIncomplete)):
+    if isinstance(exc, (TruncatedAnswer, StreamIncomplete, CloudModelRefused)):
         return str(exc), detail
     if isinstance(exc, RuntimeError) and "not found" in str(exc).lower():
         return f"Model '{MODEL}' not found: run  ollama pull {MODEL}", detail
@@ -308,6 +327,8 @@ def _options(mode):
 
 
 def _request(messages, mode, stream):
+    if is_cloud_model(MODEL):
+        raise CloudModelRefused(CLOUD_MODEL_MESSAGE)
     payload = {
         "model": MODEL,
         "messages": messages,
@@ -399,11 +420,15 @@ def _version_tuple(text):
 
 def health(timeout=3):
     """(ok, message): is Ollama running, recent enough, and is the model there?"""
+    if is_cloud_model(MODEL):
+        return False, CLOUD_MODEL_MESSAGE
     try:
         with _OPENER.open(OLLAMA_URL + "/api/version", timeout=timeout) as r:
             version = json.load(r).get("version", "")
         with _OPENER.open(OLLAMA_URL + "/api/tags", timeout=timeout) as r:
-            names = [m.get("name", "") for m in json.load(r).get("models", [])]
+            models = json.load(r).get("models", [])
+        names = [m.get("name", "") for m in models]
+        remote = {m.get("name", "") for m in models if m.get("remote_host") or m.get("remote_model")}
     except Exception as e:
         return False, describe_error(e)[0]
     # "0.0.0" is reported by builds from source: no check possible
@@ -413,6 +438,8 @@ def health(timeout=3):
     wanted = MODEL if ":" in MODEL else MODEL + ":latest"
     if wanted not in names:
         return False, f"Model '{MODEL}' not found: run  ollama pull {MODEL}"
+    if wanted in remote:
+        return False, CLOUD_MODEL_MESSAGE
     return True, f"Ollama {version}, model {MODEL} ready."
 
 
