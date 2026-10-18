@@ -163,5 +163,5 @@ with its English meaning. A missing key always falls back to its default.
 AI-Hotkeys' own code is under the MIT license ([LICENSE](LICENSE)). The installer also ships Python,
 AutoHotkey (GPL-2.0), SearXNG (AGPL-3.0) and other libraries, each under its own license: see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the [`licenses/`](licenses) folder. The source archives
-for AutoHotkey 2.0.19 and SearXNG are attached to every GitHub Release as `third-party-sources.*` files,
-next to the installer. Ollama and the AI model are not included; their own licenses apply.
+for AutoHotkey 2.0.19, SearXNG, and lxml with the GNU libiconv it bundles are attached to every GitHub
+Release as `third-party-sources.*` files, next to the installer. Ollama and the AI model are not included; their own licenses apply.

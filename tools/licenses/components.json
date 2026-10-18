@@ -144,10 +144,10 @@
       "_comment": "Native libraries statically linked into a wheel's extension modules, verified for the pinned version.",
       "lxml": {
         "version": "6.1.3",
-        "bundles": "libxml2 2.14.6 (MIT), libxslt/libexslt 1.1.43 (MIT), zlib 1.3.2 (Zlib), libiconv 1.18 (LGPL-2.1-or-later)",
+        "bundles": "libxml2 2.11.9 (MIT), libxslt/libexslt 1.1.45 (MIT), zlib 1.3.2 (Zlib), libiconv 1.17 (LGPL-2.1-or-later)",
         "notices": [
-          "licenses/bundled-in-wheels/libxml2-2.14.6-Copyright.txt",
-          "licenses/bundled-in-wheels/libxslt-1.1.43-Copyright.txt",
+          "licenses/bundled-in-wheels/libxml2-2.11.9-Copyright.txt",
+          "licenses/bundled-in-wheels/libxslt-1.1.45-Copyright.txt",
           "licenses/bundled-in-wheels/zlib-1.3.2-LICENSE.txt",
           "licenses/bundled-in-wheels/LGPL-2.1.txt"
         ]

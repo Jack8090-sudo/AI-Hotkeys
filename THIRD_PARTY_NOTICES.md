@@ -25,17 +25,47 @@ installation next to this file.
 
 ## 1. Source code for copyleft components
 
-Three bundled components come with source-code obligations.
+Three bundled components come with source-code obligations. **Every AI-Hotkeys GitHub Release
+attaches their corresponding source archives**, next to the installer, as assets named
+`third-party-sources.<file>`. The release notes list each archive with its license, and
+`SHA256SUMS.txt` lists its SHA-256.
 
-| Component | License | Where the corresponding source is |
+| Component | License | Corresponding source attached to every Release |
 |---|---|---|
-| AutoHotkey 2.0.19 (`ahk/AutoHotkey64.exe`) | GPL-2.0-only | The AutoHotkey **v2.0.19** source archive is attached to every AI-Hotkeys GitHub Release that ships this binary, next to the installer. Upstream tag: <https://github.com/AutoHotkey/AutoHotkey/tree/v2.0.19>. |
-| SearXNG `2026.10.7+6671d89` (`searxng/app/`) | AGPL-3.0-or-later | The SearXNG source tarball for commit [`6671d89`](https://github.com/searxng/searxng/tree/6671d89bede8c9fc108b17bb98916170f5657650) is attached to every AI-Hotkeys GitHub Release, next to the installer. Any changes AI-Hotkeys makes to the SearXNG sources are listed in [§4](#4-searxng). |
-| GNU libiconv 1.18, statically linked into lxml 6.1.3's extension modules (`searxng/lib/lxml/*.pyd`) | LGPL-2.1-or-later | lxml 6.1.3 sources: <https://pypi.org/project/lxml/6.1.3/#files>. libiconv 1.18 sources: <https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz>. The lxml modules are separate, unmodified files from the official lxml wheel, so you can rebuild them from those sources and replace them. |
+| AutoHotkey 2.0.19 (`ahk/AutoHotkey64.exe`) | GPL-2.0-only | `third-party-sources.AutoHotkey-v2.0.19-source.zip`: the source archive of tag [`v2.0.19`](https://github.com/AutoHotkey/AutoHotkey/tree/v2.0.19), the release the shipped binary comes from. It includes the Visual Studio project used to build it. |
+| SearXNG `2026.10.7+6671d89` (`searxng/app/`) | AGPL-3.0-or-later | `third-party-sources.searxng-6671d89bede8c9fc108b17bb98916170f5657650-source.tar.gz`: the source tarball of commit [`6671d89`](https://github.com/searxng/searxng/tree/6671d89bede8c9fc108b17bb98916170f5657650), including the web-client sources. AI-Hotkeys ships this SearXNG unmodified (see [§4](#4-searxng)). |
+| GNU libiconv 1.17, statically linked into lxml 6.1.3's extension modules (`searxng/lib/lxml/*.pyd`) | LGPL-2.1-or-later | `third-party-sources.libiconv-1.17.tar.gz`: GNU libiconv 1.17 from <https://ftp.gnu.org/gnu/libiconv/>.<br>`third-party-sources.libiconv-winlibs-880a1fa8b5581e37e136a7b051947d3ea39097b6-source.tar.gz`: the exact tree the Windows library was compiled from ([winlibs/libiconv](https://github.com/winlibs/libiconv/tree/880a1fa8b5581e37e136a7b051947d3ea39097b6): libiconv 1.17 with MSVC project files).<br>`third-party-sources.libxml2-win-binaries-2026.05.17-source.tar.gz`: the build script and patch that lxml used to compile it ([lxml/libxml2-win-binaries](https://github.com/lxml/libxml2-win-binaries/tree/2026.05.17) tag `2026.05.17`).<br>`third-party-sources.lxml-6.1.3.tar.gz`: the lxml 6.1.3 source distribution from PyPI, the work that uses the library, so that you can rebuild and relink the modules. |
 
-Releases attach the archives through the release workflow (plan step S14). If an archive is missing
-from a Release, open an issue at <https://github.com/Jack8090-sudo/AI-Hotkeys/issues> and the
-maintainer will provide it.
+If one of these archives is missing from a Release, open an issue at
+<https://github.com/Jack8090-sudo/AI-Hotkeys/issues> and the maintainer will provide it.
+
+How each choice was made:
+
+- **libiconv version.** The shipped modules report `etree.ICONV_COMPILED_VERSION == (1, 17)`. The lxml
+  6.1.3 Windows wheels were built with the libraries of the `lxml/libxml2-win-binaries` release
+  `2026.05.17`: libiconv 1.17, libxml2 2.11.9, libxslt 1.1.45 and zlib 1.3.2. The modules report the same
+  libxml2 and libxslt versions. lxml's Linux and macOS wheels use other versions; those are not shipped.
+- **lxml.** lxml itself is BSD-3-Clause. Its sources are attached because LGPL-2.1 §6 requires that you
+  can relink the work that uses the library. The lxml modules are separate files, unmodified from the
+  official wheel (installed from PyPI with its hash pinned in `build/requirements-searxng.txt`), so you can rebuild them from these sources
+  and replace them.
+- **libxml2, libxslt and zlib**, also in the lxml modules, are under MIT and Zlib licenses. They do
+  not require source, so no archive is attached for them.
+- **certifi** (MPL-2.0) ships only in source form. Its `.py` files and `cacert.pem` in
+  `searxng/lib/certifi/` are the unmodified source, and the MPL-2.0 text is in
+  `licenses/python-packages/certifi-*/`, so no separate archive is needed. Upstream:
+  <https://github.com/certifi/python-certifi>.
+- **zstd** in libcurl-impersonate is dual-licensed BSD-3-Clause or GPL-2.0, and is used under BSD-3-Clause
+  ([§6](#6-curl_cffi-and-libcurl-impersonate)).
+- **No other component requires a source offer.** Everything else in the payload is under permissive
+  licenses that do not require one: PSF, MIT, BSD, Apache-2.0, ISC, Zlib, curl, the Unicode license, OFL-1.1
+  and CC-BY-2.5 for one icon. The NSIS installer stub (zlib license) is one of them. The list is kept
+  current by `tools/licenses/components.json` and `tools/licenses/check_notices.py`.
+
+The archives come from the official upstream locations and are pinned by SHA-256 in
+`scripts/ci/third-party-sources.json`. The release workflow (`.github/workflows/release.yml`) downloads and
+verifies them, using `scripts/ci/get-sources.ps1`. That script also fails if a pinned version no longer
+matches the shipped AutoHotkey, SearXNG, lxml or libiconv.
 
 AI-Hotkeys launches SearXNG and AutoHotkey as separate programs. SearXNG listens only on
 `127.0.0.1` and serves only the person using that computer.
@@ -72,9 +102,11 @@ AI-Hotkeys launches SearXNG and AutoHotkey as separate programs. SearXNG listens
   Upstream: <https://github.com/searxng/searxng>, commit `6671d89bede8c9fc108b17bb98916170f5657650`.
 - **License:** GNU Affero General Public License v3.0 or later. Text: [`licenses/searxng/LICENSE.txt`](licenses/searxng/LICENSE.txt),
   identical to upstream `LICENSE` at that commit and to `searxng/LICENSE-searxng.txt`.
-- **Modifications:** AI-Hotkeys vendors SearXNG's `searx/` package as published at that commit. Whether it
-  differs from upstream is checked by plan step S11 (hypothesis H17). If that check finds a difference, the
-  patch is published here and attached to the Release with the source tarball. AI-Hotkeys' own files around
+- **Modifications:** none. The release build unpacks SearXNG's `searx/` package from the upstream
+  tarball of that commit (SHA-256 pinned in `build/pins.json`), the same tarball attached to each Release.
+  The tree was also compared file by file with the previously vendored copy, and no differences were
+  found. If AI-Hotkeys ever modifies SearXNG, the patch will be published here and attached to the Release
+  next to the source tarball. AI-Hotkeys' own files around
   SearXNG (`searxng/avvia_searxng.py`, the launcher, and `searxng/settings.yml`, its configuration) are MIT
   and are not part of SearXNG.
 - **Web client libraries.** The minified scripts and styles in `searx/static/themes/simple/` include these
@@ -159,7 +191,8 @@ in typer, and the Silk icon credit (CC-BY-2.5, by Mark James) in Werkzeug's debu
 statically link native libraries, whose notices are in [`licenses/bundled-in-wheels/`](licenses/bundled-in-wheels/):
 lxml (libxml2, libxslt, zlib, libiconv; see §1 for libiconv's LGPL), PyYAML (libyaml) and cffi (libffi).
 
-certifi is under MPL-2.0. Its unmodified source is at <https://github.com/certifi/python-certifi> and
+certifi is under MPL-2.0. It ships in source form only (`.py` files and `cacert.pem`, unmodified), so
+the installed files are its source code. Upstream: <https://github.com/certifi/python-certifi> and
 <https://pypi.org/project/certifi/#files>.
 
 The table below is generated by `tools/licenses/gen_notices.py` from the packages' `*.dist-info` metadata.
@@ -182,7 +215,7 @@ Do not edit it by hand.
 | [isodate](https://github.com/gweis/isodate/) | 0.7.2 | BSD-3-Clause | `isodate-0.7.2/` |
 | [itsdangerous](https://github.com/pallets/itsdangerous/) | 2.2.0 | BSD-3-Clause | `itsdangerous-2.2.0/` |
 | [jinja2](https://github.com/pallets/jinja/) | 3.1.6 | BSD-3-Clause | `jinja2-3.1.6/` |
-| [lxml](https://github.com/lxml/lxml) | 6.1.3 | BSD-3-Clause | `lxml-6.1.3/`; statically bundles libxml2 2.14.6 (MIT), libxslt/libexslt 1.1.43 (MIT), zlib 1.3.2 (Zlib), libiconv 1.18 (LGPL-2.1-or-later) |
+| [lxml](https://github.com/lxml/lxml) | 6.1.3 | BSD-3-Clause | `lxml-6.1.3/`; statically bundles libxml2 2.11.9 (MIT), libxslt/libexslt 1.1.45 (MIT), zlib 1.3.2 (Zlib), libiconv 1.17 (LGPL-2.1-or-later) |
 | [markdown-it-py](https://github.com/executablebooks/markdown-it-py) | 4.2.0 | MIT | `markdown-it-py-4.2.0/` |
 | [markupsafe](https://github.com/pallets/markupsafe/) | 3.0.4 | BSD-3-Clause | `markupsafe-3.0.4/` |
 | [mdurl](https://github.com/executablebooks/mdurl) | 0.1.2 | MIT | `mdurl-0.1.2/` |
@@ -241,3 +274,8 @@ AI-Hotkeys does not include Ollama or any language model. You install them yours
   without its notices being re-verified. The registry it uses is `tools/licenses/components.json`.
 - When AutoHotkey, SearXNG, CPython, curl_cffi, lxml, PyYAML or cffi is upgraded, refresh the matching
   texts in `licenses/` from upstream at the new version, then update `components.json` and this file.
+- When AutoHotkey, SearXNG or lxml changes, update `scripts/ci/third-party-sources.json` and §1. For lxml,
+  read the bundled versions from the shipped wheel with `etree.LIBXML_COMPILED_VERSION`,
+  `etree.LIBXSLT_COMPILED_VERSION` and `etree.ICONV_COMPILED_VERSION`. Then find the
+  `lxml/libxml2-win-binaries` release that matches them. Re-pin every SHA-256 by downloading the file
+  twice. `scripts/ci/get-sources.ps1` fails until the versions match again.

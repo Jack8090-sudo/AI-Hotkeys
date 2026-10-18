@@ -180,7 +180,8 @@ All workflows pin actions by commit SHA and downloads by SHA-256.
   file, registry, shortcut and ACL assertions, an optional upgrade test from v1.0.0, and an experimental
   Notepad end-to-end test against a fake Ollama.
 - **`.github/workflows/release.yml`** (a `v*` tag, or manual): checks that the tag equals `v` + `VERSION`,
-  builds without cache, downloads the AutoHotkey and SearXNG source archives, attests the build
+  runs in the `release` GitHub Environment (required reviewers), builds without cache, downloads and
+  verifies the third-party source archives pinned in `scripts/ci/third-party-sources.json`, attests the build
   provenance, and creates a **draft** GitHub release with the Setup, `manifest.txt`, the
   `third-party-sources.*` archives and `SHA256SUMS.txt`. Publishing is always a manual step.
 
