@@ -36,3 +36,6 @@ installer/sorgente/payload/
 # Binari (AutoHotkey, Uninstall generato da NSIS)
 *.exe
 *.rar
+
+# Benchmark output (S3)
+tools/bench/out/
