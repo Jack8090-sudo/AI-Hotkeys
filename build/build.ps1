@@ -105,7 +105,19 @@ function Get-Pin([object]$Pin) {
     if (-not (Test-Path -LiteralPath $dst)) {
         Write-Host "    downloading $($Pin.url)"
         $tmp = "$dst.part"
-        Invoke-WebRequest -UseBasicParsing -Uri $Pin.url -OutFile $tmp
+        # SourceForge answers PowerShell's browser-like default user agent with an HTML mirror page
+        # instead of the file: identify as a plain download tool. Retried for transient network errors.
+        for ($try = 1; ; $try++) {
+            try {
+                Invoke-WebRequest -UseBasicParsing -Uri $Pin.url -OutFile $tmp -UserAgent 'Wget/1.21.4'
+                break
+            }
+            catch {
+                if ($try -ge 3) { throw }
+                Write-Host "    retry $try after: $($_.Exception.Message)"
+                Start-Sleep -Seconds (5 * $try)
+            }
+        }
         Move-Item -LiteralPath $tmp -Destination $dst -Force
     }
     $actual = Get-Sha256 $dst

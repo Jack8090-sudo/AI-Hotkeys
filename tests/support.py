@@ -88,7 +88,8 @@ class AppTree:
 
     def __init__(self, config_text=None, **config):
         self._tmp = tempfile.TemporaryDirectory(prefix="aihk-test-")
-        self.root = Path(self._tmp.name)
+        # resolve(): on CI runners %TEMP% is an 8.3 short path (RUNNER~1), the app resolves to the long one
+        self.root = Path(self._tmp.name).resolve()
         for f in REPO.glob("*.py"):
             if not f.name.startswith("test_"):
                 shutil.copy2(f, self.root / f.name)
