@@ -224,16 +224,18 @@ IsConfiguredPython(exePath, pythonExe)
 ;   ctime      creation FILETIME of record.pid (0 = unknown)
 ;   pythonExe  the configured interpreter, unquoted
 ; K5 record: the interpreter must match and the creation time must be equal.
-; Legacy record (no creation time): the full interpreter path must match.
+; Legacy record (no creation time): never (SEC1). A reused pid that happens to
+; be another python.exe of the same interpreter cannot be told apart, so the
+; caller leaves that process running and logs it.
 SearxngPidIsOurs(record, exePath, ctime, pythonExe)
 {
     if !IsObject(record) || exePath = ""
         return false
     if !IsConfiguredPython(exePath, pythonExe)
         return false
-    if record.ctime
-        return (ctime != 0 && ctime = record.ctime)
-    return InStr(pythonExe, "\") > 0
+    if !record.ctime
+        return false
+    return (ctime != 0 && ctime = record.ctime)
 }
 
 
@@ -418,10 +420,57 @@ RunIsStale(stamp, now := "", maxAgeS := 3600)
 
 ; icacls arguments that give the folder to the current user (plus SYSTEM and
 ; Administrators, so backups and an elevated uninstaller still work), and the
-; arguments that then drop the inherited entries. user = "DOMAIN\name" or "name".
-WorkAclArgs(dir, user)
+; arguments that then drop the inherited entries. sid = the user's SID
+; ("S-1-5-21-…", see SidFromWhoamiCsv): a SID, unlike DOMAIN\name, cannot be
+; broken by localized names, spaces or quotes (SEC1). "" if sid is not one.
+WorkAclArgs(dir, sid)
 {
+    if !IsSid(sid)
+        return ""
     perm := ":(OI)(CI)F"
-    grant := '"' dir '" /grant:r "' user perm '" "*S-1-5-18' perm '" "*S-1-5-32-544' perm '"'
+    grant := '"' dir '" /grant:r "*' sid perm '" "*S-1-5-18' perm '" "*S-1-5-32-544' perm '"'
     return {grant: grant, inherit: '"' dir '" /inheritance:r'}
+}
+
+; True for a string SID such as S-1-5-21-1004336348-1177238915-682003330-1001
+IsSid(sid)
+{
+    return RegExMatch(sid, "D)^S-1-\d{1,14}(-\d{1,10}){1,15}$") ? true : false
+}
+
+; The SID in the output of  whoami /user /fo csv /nh  ("DOMAIN\user","S-1-5-21-…"),
+; or "" when there is none. Same parsing as the installer's AihSecureDir.
+SidFromWhoamiCsv(text)
+{
+    if RegExMatch(text, '"(S-1-[0-9-]+)"', &m) && IsSid(m[1])
+        return m[1]
+    return ""
+}
+
+
+; ---------------------------------------------------------
+; SEC1: command-line and deletion guards
+; ---------------------------------------------------------
+
+; A label that is safe inside "…" on a command line: double quotes are removed
+; (they would end the argument) and so are trailing backslashes (\" escapes the
+; closing quote for the Microsoft C runtime that parses Python's argv).
+CmdArgSafe(s)
+{
+    return RTrim(StrReplace(s, '"'), "\")
+}
+
+; May a folder with these attributes (FileExist / DirExist / FileGetAttrib
+; string) be deleted recursively? Only a real directory: never a reparse point
+; ("L": junction or symbolic link), whose target lies somewhere else.
+TreeDeletable(attr)
+{
+    return (InStr(attr, "D") && !InStr(attr, "L")) ? true : false
+}
+
+; SearXNG is always on this PC: http(s) to 127.0.0.1 or localhost, any port.
+; Anything else in searxng_url is never opened (SEC1).
+IsLocalSearxUrl(url)
+{
+    return RegExMatch(url, "iD)^https?://(127\.0\.0\.1|localhost)(:\d{1,5})?(/[^\s\\]*)?$") ? true : false
 }

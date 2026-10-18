@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -69,7 +70,20 @@ def _clamp(value, low, high):
     return max(low, min(high, value))
 
 
-SEARX_URL = (CFG.get("searxng_url") or "http://127.0.0.1:8888").rstrip("/")
+DEFAULT_SEARX_URL = "http://127.0.0.1:8888"
+# SearXNG is always local: http(s) to 127.0.0.1 or localhost, any port (SEC1).
+_LOCAL_SEARX_RE = re.compile(r"https?://(127\.0\.0\.1|localhost)(:\d{1,5})?(/[^\s\\]*)?", re.IGNORECASE)
+
+
+def local_searx_url(value):
+    """The configured searxng_url if it points at this PC, else the default."""
+    url = (value or "").strip()
+    if not _LOCAL_SEARX_RE.fullmatch(url):
+        return DEFAULT_SEARX_URL
+    return url.rstrip("/")
+
+
+SEARX_URL = local_searx_url(CFG.get("searxng_url"))
 MAX_RESULTS = _clamp(_int(CFG.get("results"), 5), 1, 10)
 PAGES_TO_READ = _clamp(_int(CFG.get("pages_to_read"), 3), 0, 5)
 
@@ -107,10 +121,21 @@ def status(text):
 # SearXNG
 # =========================================================
 
+class _HttpOnlyRedirects(urllib.request.HTTPRedirectHandler):
+    """Redirects are followed only to http(s) URLs (urllib would also follow ftp)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urllib.parse.urlsplit(newurl).scheme.lower() not in ("http", "https"):
+            raise urllib.error.HTTPError(newurl, code, "redirect to a non-http URL refused", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _get(url, timeout):
+    if urllib.parse.urlsplit(url).scheme.lower() not in ("http", "https"):
+        raise ValueError(f"not an http(s) URL: {url!r}")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     # No system proxy for 127.0.0.1
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _HttpOnlyRedirects)
     return opener.open(req, timeout=timeout)
 
 
@@ -512,6 +537,9 @@ def _is_plain_text(ctype):
 ALLOWED_PORTS = (80, 443)
 MAX_REDIRECTS = 5
 _REDIRECT_CODES = (301, 302, 303, 307, 308)
+# Characters left as they are when the path and query are percent-encoded
+# (RFC 3986 reserved + unreserved, and "%" so existing escapes survive).
+_URL_SAFE = "/:@!$&'()*+,;=-._~%"
 
 _BLOCKED_HOSTS = {
     "localhost", "metadata", "metadata.google.internal", "metadata.goog",
@@ -610,14 +638,26 @@ def safe_url(url):
         return None
     if "%" in host or any(c.isspace() for c in host):
         return None
-    bare = host.rstrip(".")
-    if bare in _BLOCKED_HOSTS or bare.endswith(".localhost"):
+    # One canonical ASCII form of the host (SEC1): no trailing dot, IDN labels in
+    # punycode. It is what is resolved, pinned (CURLOPT_RESOLVE key), put in the
+    # URL handed to curl and sent as Host/SNI, so curl can never look up a
+    # different spelling of the name than the one that was checked.
+    host = host.rstrip(".")
+    if not host:
         return None
-
     try:
         literal = ipaddress.ip_address(host)
     except ValueError:
         literal = None
+    if literal is None:
+        try:
+            host = host.encode("idna").decode("ascii").lower()
+        except UnicodeError:
+            return None
+        if not host or not re.fullmatch(r"[a-z0-9_.-]+", host):
+            return None
+    if host in _BLOCKED_HOSTS or host.endswith(".localhost"):
+        return None
     if literal is None and _looks_numeric(host):
         return None             # decimal / hex / octal / short IPv4 forms: never legitimate here
 
@@ -638,10 +678,19 @@ def safe_url(url):
     if port not in ALLOWED_PORTS and any(a != "127.0.0.1" for a in addresses):
         return None             # test ports are only for the 127.0.0.1 fixtures
 
-    path = parts.path or "/"
+    if literal is not None:
+        host = str(literal)
+    path = urllib.parse.quote(parts.path or "/", safe=_URL_SAFE)
     if parts.query:
-        path += "?" + parts.query
-    return Target(url, scheme, host, port, addresses[0].split("%")[0], path)
+        path += "?" + urllib.parse.quote(parts.query, safe=_URL_SAFE + "?")
+    # The URL actually requested is rebuilt from the validated parts only
+    # (no credentials, no fragment, the ASCII host): nothing curl could parse
+    # differently from what was checked.
+    netloc = f"[{host}]" if literal is not None and literal.version == 6 else host
+    if port != (443 if scheme == "https" else 80):
+        netloc += f":{port}"
+    clean = f"{scheme}://{netloc}{path}"
+    return Target(clean, scheme, host, port, addresses[0].split("%")[0], path)
 
 
 # =========================================================
@@ -679,11 +728,13 @@ def _download_cffi(cr, url, deadline):
             CurlOpt.NOPROXY: "*",
         })
         try:
-            r = session.get(url, impersonate="chrome", timeout=_remaining(deadline),
+            # target.url: rebuilt from the checked parts, with the same ASCII
+            # host as the RESOLVE entry, so curl never resolves the name itself
+            r = session.get(target.url, impersonate="chrome", timeout=_remaining(deadline),
                             stream=True, allow_redirects=False)
             try:
                 if r.status_code in _REDIRECT_CODES:
-                    url = _next_hop(url, r.headers.get("location"))
+                    url = _next_hop(target.url, r.headers.get("location"))
                     if not url:
                         return None, ""
                     continue
@@ -780,7 +831,7 @@ def _download_stdlib(url, deadline):
         sock, r, watchdog = _open_pinned(target, deadline)
         try:
             if r.status in _REDIRECT_CODES:
-                url = _next_hop(url, r.getheader("Location"))
+                url = _next_hop(target.url, r.getheader("Location"))
                 if not url:
                     return None, ""
                 continue
