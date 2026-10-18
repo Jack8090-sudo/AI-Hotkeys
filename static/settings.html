@@ -5,6 +5,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>AI-Hotkeys Settings</title>
 
 <style>/*__THEME__*/</style>
@@ -13,6 +14,9 @@
 /* =========================================================
    Settings
    ========================================================= */
+
+/* keep the focused field above the sticky save bar */
+html { scroll-padding-bottom: 120px; }
 
 .wrap { width: min(100% - 48px, 1120px); margin: 0 auto; }
 
@@ -59,7 +63,25 @@ h1 {
 .field .hint { grid-column: 1; margin: 0; color: var(--muted); font-size: calc(var(--fs) * .86); line-height: 1.45; }
 .field .control { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
 .field .error { grid-column: 1 / -1; margin: 0; color: var(--danger); font-size: calc(var(--fs) * .86); }
+.field .error:not(:empty)::before { content: "\26A0\FE0E  "; }
 .field .error:empty { display: none; }
+.field .warn { grid-column: 1 / -1; margin: 0; color: var(--text); font-size: calc(var(--fs) * .86); }
+.field .warn strong { color: var(--danger); }
+.field .warn[hidden] { display: none; }
+
+/* what leaves this PC when searching the web (D5) */
+.egress {
+    margin: 0 0 8px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    color: var(--text-2);
+    font-size: calc(var(--fs) * .88);
+    line-height: 1.5;
+}
+.egress p { margin: 0; }
+.egress p + p { margin-top: 6px; }
+.egress strong { color: var(--text); }
 
 .field.wide { grid-template-columns: minmax(0, 1fr); }
 .field.wide .control { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
@@ -68,8 +90,9 @@ h1 {
 
 .seg {
     display: inline-flex;
+    flex-wrap: wrap;
     padding: 2px;
-    border: 1px solid var(--line-2);
+    border: 1px solid var(--edge);
     border-radius: 8px;
 }
 .seg button {
@@ -90,7 +113,7 @@ h1 {
     position: relative;
     width: 46px;
     height: 26px;
-    border: 1px solid var(--line-2);
+    border: 1px solid var(--edge);
     border-radius: 13px;
     background: var(--bg);
     cursor: pointer;
@@ -109,6 +132,10 @@ h1 {
 .switch[aria-checked="true"]::after { transform: translateX(20px); background: var(--on-accent); }
 
 .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+/* each swatch shows its colour as it looks in the current theme */
+.swatch { --sw: var(--acc-d); }
+[data-theme="light"] .swatch { --sw: var(--acc-l); }
+@media (prefers-color-scheme: light) { [data-theme="auto"] .swatch { --sw: var(--acc-l); } }
 .swatch {
     display: grid;
     justify-items: center;
@@ -125,8 +152,8 @@ h1 {
     width: 44px;
     height: 34px;
     border-radius: 7px;
-    background: var(--cap-skirt);
-    box-shadow: inset 0 0 0 1px var(--line-2);
+    background: var(--swatch-bg);
+    box-shadow: inset 0 0 0 1px var(--edge);
     position: relative;
 }
 .swatch i::after {
@@ -137,14 +164,22 @@ h1 {
     border-radius: 2px;
     background: var(--sw);
 }
-.swatch[aria-checked="true"] { color: var(--text); }
+.swatch[aria-checked="true"] { color: var(--text); text-decoration: underline 2px; text-underline-offset: 4px; }
 .swatch[aria-checked="true"] i { box-shadow: inset 0 0 0 2px var(--sw); }
+/* selected: a check mark, not only a colour */
+.swatch[aria-checked="true"] i::before {
+    content: "\2713";
+    position: absolute;
+    right: 6px; bottom: 3px;
+    color: var(--sw);
+    font: 600 14px/1 var(--f-ui);
+}
 
 .range { display: flex; align-items: center; gap: 12px; }
 .range input { width: 180px; accent-color: var(--accent); }
 .range output { min-width: 3.2em; font: 500 calc(var(--fs) * .9)/1 var(--f-ui); color: var(--text-2); }
 
-.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-2); border-radius: 8px; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--edge); border-radius: 8px; }
 .stepper button {
     width: 34px; height: 34px;
     border: 0; background: transparent; color: var(--text);
@@ -158,14 +193,15 @@ h1 {
     height: 36px;
     min-width: 240px;
     padding: 0 11px;
-    border: 1px solid var(--line-2);
+    border: 1px solid var(--edge);
     border-radius: 8px;
     background: var(--bg);
     color: var(--text);
     font: inherit;
     font-size: calc(var(--fs) * .94);
 }
-.text:focus, .select:focus { outline: none; border-color: var(--accent); }
+.text:focus, .select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.text[aria-invalid="true"] { border-color: var(--danger); border-width: 2px; }
 
 /* key to record */
 .capture {
@@ -180,7 +216,7 @@ h1 {
     min-width: 132px;
     min-height: 48px;
     padding: 6px 8px;
-    border: 1px dashed var(--line-2);
+    border: 1px dashed var(--edge);
     border-radius: 9px;
     background: transparent;
     color: var(--muted);
@@ -189,7 +225,8 @@ h1 {
     text-align: left;
 }
 .capture .rec:hover { border-color: var(--text-2); }
-.capture .rec.listening { border-style: solid; border-color: var(--accent); color: var(--text); }
+.capture .rec.listening { border-style: solid; border-width: 2px; border-color: var(--accent); color: var(--text); }
+.capture .rec[aria-invalid="true"] { border-color: var(--danger); }
 .capture .rec .key.small { color: var(--accent); height: 36px; font-size: 14px; padding: 5px 10px 0 9px; }
 .capture .rec .key.small.mod { color: var(--text-2); }
 .link {
@@ -253,11 +290,13 @@ h1 {
 .savebar .msg { flex: 1; margin: 0; color: var(--muted); font-size: calc(var(--fs) * .88); }
 .savebar .msg.ok { color: var(--text-2); }
 .savebar .msg.error { color: var(--danger); }
+.savebar .msg.warn { color: var(--text); }
+.savebar .msg.error::before, .savebar .msg.warn::before { content: "\26A0\FE0E  "; color: var(--danger); }
 
 .btn {
     height: 38px;
     padding: 0 14px;
-    border: 1px solid var(--line-2);
+    border: 1px solid var(--edge);
     border-radius: 8px;
     background: transparent;
     color: var(--text);
@@ -269,6 +308,24 @@ h1 {
 .btn.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .btn.primary:hover { filter: brightness(1.06); }
 .btn.primary:disabled { border-color: var(--line-2); background: var(--surface-2); color: var(--muted); filter: none; }
+
+/* small windows and high zoom: the save bar and the preview scroll with the page */
+@media (max-width: 640px), (max-height: 560px) {
+    html { scroll-padding-bottom: 0; }
+    .savebar { position: static; background: none; }
+    .preview { position: static; }
+}
+
+@media (forced-colors: active) {
+    .switch { forced-color-adjust: none; border-color: ButtonText; background: Canvas; }
+    .switch::after { background: ButtonText; }
+    .switch[aria-checked="true"] { background: Highlight; border-color: Highlight; }
+    .switch[aria-checked="true"]::after { background: HighlightText; }
+    .swatch i { forced-color-adjust: none; box-shadow: inset 0 0 0 1px CanvasText; }
+    .swatch[aria-checked="true"] i { outline: 3px solid Highlight; outline-offset: 2px; }
+    .capture .rec.listening { border-color: Highlight; }
+    .btn.primary { border-color: ButtonText; }
+}
 
 @media (max-width: 980px) {
     .layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
@@ -285,6 +342,8 @@ h1 {
 </head>
 
 <body>
+
+<p class="offline" id="offline" role="alert" hidden></p>
 
 <header class="top">
     <div class="wrap">
@@ -319,12 +378,12 @@ h1 {
                 <span class="name" id="l-colore">Color</span>
                 <p class="hint">The color of the lit key, citations and buttons.</p>
                 <div class="control swatches" role="radiogroup" aria-labelledby="l-colore" data-name="aspetto.colore">
-                    <button type="button" class="swatch" role="radio" data-value="ambra" style="--sw:#F5A623"><i></i>Amber</button>
-                    <button type="button" class="swatch" role="radio" data-value="ghiaccio" style="--sw:#62C9F2"><i></i>Ice</button>
-                    <button type="button" class="swatch" role="radio" data-value="menta" style="--sw:#52D3A3"><i></i>Mint</button>
-                    <button type="button" class="swatch" role="radio" data-value="corallo" style="--sw:#FF8473"><i></i>Coral</button>
-                    <button type="button" class="swatch" role="radio" data-value="viola" style="--sw:#AC9EFF"><i></i>Purple</button>
-                    <button type="button" class="swatch" role="radio" data-value="neutro" style="--sw:#DCE1E8"><i></i>Neutral</button>
+                    <button type="button" class="swatch" role="radio" data-value="ambra" data-accent="ambra"><i></i>Amber</button>
+                    <button type="button" class="swatch" role="radio" data-value="ghiaccio" data-accent="ghiaccio"><i></i>Ice</button>
+                    <button type="button" class="swatch" role="radio" data-value="menta" data-accent="menta"><i></i>Mint</button>
+                    <button type="button" class="swatch" role="radio" data-value="corallo" data-accent="corallo"><i></i>Coral</button>
+                    <button type="button" class="swatch" role="radio" data-value="viola" data-accent="viola"><i></i>Purple</button>
+                    <button type="button" class="swatch" role="radio" data-value="neutro" data-accent="neutro"><i></i>Neutral</button>
                 </div>
             </div>
 
@@ -362,7 +421,9 @@ h1 {
 
         <section class="section" aria-labelledby="s-keys">
             <h2 id="s-keys">Keys</h2>
-            <p>Select text in any program and press the action key. To change it, click the box and press the new key or combination.</p>
+            <p>Select text in any program and press the action key. To change it, click the box (or press Enter on it) and press the new key or combination. Esc cancels, Tab leaves the box.</p>
+            <p class="sr-only" id="recHelp">With a screen reader, switch to focus mode (NVDA+Space or JAWS Insert+Z) before pressing the new key.</p>
+            <p class="sr-only" id="keyLive" role="status" aria-live="polite"></p>
 
             <div class="field" data-key="tasti.correggi">
                 <span class="name">Fix</span>
@@ -407,7 +468,12 @@ h1 {
 
         <section class="section" aria-labelledby="s-web">
             <h2 id="s-web">Web search</h2>
-            <p>Before explaining, AI-Hotkeys can search with SearXNG on your PC and read the pages found.</p>
+            <p>Before explaining, AI-Hotkeys can search the web through SearXNG and read the pages found.</p>
+
+            <div class="egress" id="egress">
+                <p><strong>What leaves this PC.</strong> SearXNG runs on your PC, but it sends the search words to public search engines (Startpage and Yahoo), and AI-Hotkeys then downloads the pages found from their websites.</p>
+                <p>The search words come from your selected text. Your full text and Qwen's answer stay on this PC. Choose "Never" below to keep everything local.</p>
+            </div>
 
             <div class="field">
                 <span class="name" id="l-web">When to search</span>
@@ -420,18 +486,27 @@ h1 {
             </div>
 
             <div class="field">
+                <span class="name" id="l-qm">Search words</span>
+                <p class="hint" id="h-qm">"Qwen or from the text": Qwen writes the search; if it writes none, the technical terms or the first 10 words of your selection are searched as they are. "Only Qwen's": only searches written by Qwen are sent, nothing is taken word for word from your selection; without one, the explanation is made without the web.</p>
+                <div class="control seg" role="radiogroup" aria-labelledby="l-qm" aria-describedby="h-qm" data-name="searxng.query_mode">
+                    <button type="button" role="radio" data-value="allow_fallback">Qwen or from the text</button>
+                    <button type="button" role="radio" data-value="model">Only Qwen's</button>
+                </div>
+            </div>
+
+            <div class="field">
                 <span class="name" id="l-res">Results to use</span>
                 <p class="hint">How many sources to pass to Qwen.</p>
-                <div class="control stepper" data-name="searxng.results" data-min="3" data-max="8" aria-labelledby="l-res">
-                    <button type="button" data-step="-1" aria-label="Less">−</button><output></output><button type="button" data-step="1" aria-label="More">+</button>
+                <div class="control stepper" role="group" data-name="searxng.results" data-min="3" data-max="8" aria-labelledby="l-res">
+                    <button type="button" data-step="-1" aria-label="Fewer results">−</button><output aria-label="Results to use"></output><button type="button" data-step="1" aria-label="More results">+</button>
                 </div>
             </div>
 
             <div class="field">
                 <span class="name" id="l-pages">Pages to read in full</span>
                 <p class="hint">Qwen only sees the preview of the other sources. More pages give more context but the answer arrives later.</p>
-                <div class="control stepper" data-name="searxng.pages_to_read" data-min="0" data-max="5" aria-labelledby="l-pages">
-                    <button type="button" data-step="-1" aria-label="Less">−</button><output></output><button type="button" data-step="1" aria-label="More">+</button>
+                <div class="control stepper" role="group" data-name="searxng.pages_to_read" data-min="0" data-max="5" aria-labelledby="l-pages">
+                    <button type="button" data-step="-1" aria-label="Fewer pages">−</button><output aria-label="Pages to read in full"></output><button type="button" data-step="1" aria-label="More pages">+</button>
                 </div>
             </div>
         </section>
@@ -442,7 +517,7 @@ h1 {
 
             <div class="field">
                 <label class="name" for="f-model">Model</label>
-                <p class="hint">It must already be downloaded, for example with <code>ollama pull qwen3.5:9b</code>.</p>
+                <p class="hint">The name of a model already downloaded, for example with <code>ollama pull qwen3.5:9b</code>.</p>
                 <input class="control text" id="f-model" data-name="qwen.model" spellcheck="false">
                 <p class="error"></p>
             </div>
@@ -462,9 +537,10 @@ h1 {
 
             <div class="field">
                 <label class="name" for="f-url">Ollama address</label>
-                <p class="hint">Change it only if Ollama runs on another computer or port.</p>
-                <input class="control text" id="f-url" data-name="qwen.ollama_url" spellcheck="false">
+                <p class="hint">Change it only if Ollama runs on another computer or port. Format: http://localhost:11434</p>
+                <input class="control text" id="f-url" data-name="qwen.ollama_url" spellcheck="false" inputmode="url">
                 <p class="error"></p>
+                <p class="warn" id="urlWarn" hidden></p>
             </div>
         </section>
 
@@ -480,7 +556,7 @@ h1 {
 
     <aside class="preview" aria-label="Preview">
         <h2>Results page preview</h2>
-        <div class="sample" id="sample">
+        <div class="sample" id="sample" aria-hidden="true">
             <div class="head">
                 <span class="keys" id="sampleKeys"></span>
                 <div>
@@ -492,7 +568,7 @@ h1 {
             <p><code>StreamingEnabled</code> makes the game world load in pieces, based on where the player is, so large maps stay smooth<span class="cite">[1]</span>.</p>
             <div class="bar"><span>Ask for more detail</span><b>Send</b></div>
         </div>
-        <p class="note" id="widthNote"></p>
+        <p class="note" id="widthNote" aria-live="polite"></p>
     </aside>
 
 </main>
@@ -556,8 +632,19 @@ function eventToHotkey(e) {
     if (!mods && !SPECIAL.has(key)) {
         return { error: "Alone it is used for typing: use a key like PgUp or F8, or add Ctrl or Alt." };
     }
+    const blocked = BLOCKED[(mods + key).toLowerCase()];
+    if (blocked) return { error: blocked + ": choose another key." };
     return { hotkey: mods + key };
 }
+
+/* Shortcuts that must keep working everywhere (AI-Hotkeys itself copies the selection with Ctrl+C) */
+const BLOCKED = {
+    "^c": "Ctrl+C copies text", "^v": "Ctrl+V pastes text", "^x": "Ctrl+X cuts text",
+    "^z": "Ctrl+Z undoes", "^a": "Ctrl+A selects everything", "!f4": "Alt+F4 closes windows",
+    "+tab": "Shift+Tab moves between fields", "!tab": "Alt+Tab switches windows"
+};
+
+const readable = (hk) => keyParts(hk).join(" + ");
 
 /* ================= LIVE APPEARANCE ================= */
 
@@ -615,9 +702,16 @@ function render() {
     });
     document.querySelectorAll("[data-key]").forEach((f) => {
         const rec = f.querySelector(".rec");
-        if (!rec.classList.contains("listening")) keycaps(rec, values[f.dataset.key], "small");
-        f.querySelector("[data-reset]").hidden = values[f.dataset.key] === DATA.defaults[f.dataset.key];
+        const action = f.querySelector(".name").textContent;
+        if (!rec.classList.contains("listening")) {
+            keycaps(rec, values[f.dataset.key], "small");
+            rec.setAttribute("aria-label", action + " key: " + readable(values[f.dataset.key]) + ". Press Enter to change it.");
+        }
+        const reset = f.querySelector("[data-reset]");
+        reset.hidden = values[f.dataset.key] === DATA.defaults[f.dataset.key];
+        reset.setAttribute("aria-label", "Restore the default " + action + " key (" + readable(DATA.defaults[f.dataset.key]) + ")");
     });
+    showUrlWarning();
     applyLook();
     updateBar();
 }
@@ -658,56 +752,149 @@ document.querySelectorAll(".stepper[data-name]").forEach((st) => {
     });
 });
 
-document.querySelectorAll("input.text[data-name], select[data-name]").forEach((i) => {
-    i.addEventListener("input", () => { values[i.dataset.name] = i.value.trim(); updateBar(); });
-    i.addEventListener("change", () => set(i.dataset.name, i.value.trim()));
+/* ---------- field errors: visible text, aria-invalid, described by the control ---------- */
+
+const KEY_FORMAT = "Use a key like PgUp or F8, or a letter or digit together with Ctrl, Alt, Shift or Win.";
+
+/* Expected formats, mirrored from settings.py (the server still has the last word) */
+const TEXT_RULES = {
+    "qwen.model": {
+        rx: /^[\p{L}\p{N}_.:\-/]{1,80}$/u,
+        msg: "Write the name of a downloaded Ollama model, for example qwen3.5:9b: letters, digits and . : - / _ only, up to 80 characters."
+    },
+    "qwen.ollama_url": {
+        rx: /^https?:\/\/[\p{L}\p{N}_.-]+(:\d{1,5})?(\/[\p{L}\p{N}_.\-/]*)?$/u,
+        msg: "Write an address like http://localhost:11434: http:// or https://, then a computer name or IP address and an optional :port."
+    }
+};
+
+const controlOf = (f) => f.querySelector(".rec, input, select, .switch, [role=radiogroup], .stepper");
+
+function setFieldError(f, text) {
+    const box = f.querySelector(".error");
+    if (box) box.textContent = text || "";
+    const c = controlOf(f);
+    if (c) {
+        if (text) c.setAttribute("aria-invalid", "true");
+        else c.removeAttribute("aria-invalid");
+    }
+}
+
+function checkText(input) {
+    const rule = TEXT_RULES[input.dataset.name];
+    const ok = !rule || rule.rx.test(input.value.trim());
+    setFieldError(input.closest(".field"), ok ? "" : rule.msg);
+    return ok;
+}
+
+// Each control is described by its hint and its error message
+let uid = 0;
+document.querySelectorAll(".field").forEach((f) => {
+    const c = controlOf(f);
+    if (!c) return;
+    const ids = [];
+    [f.querySelector(".hint"), f.querySelector(".error"), f.querySelector(".warn")].forEach((el) => {
+        if (!el) return;
+        if (!el.id) el.id = "fd-" + (++uid);
+        ids.push(el.id);
+    });
+    if (f.dataset.key) ids.push("recHelp");
+    if (ids.length && !c.hasAttribute("aria-describedby")) c.setAttribute("aria-describedby", ids.join(" "));
 });
+
+document.querySelectorAll("input.text[data-name], select[data-name]").forEach((i) => {
+    i.addEventListener("input", () => {
+        values[i.dataset.name] = i.value.trim();
+        if (i.getAttribute("aria-invalid") === "true") checkText(i);   // clear the error as soon as it is fixed
+        updateBar();
+    });
+    i.addEventListener("change", () => { checkText(i); set(i.dataset.name, i.value.trim()); });
+});
+
+/* Warning when Ollama is on another computer (S7: the server also returns it on save) */
+function localHost(url) {
+    try { return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(new URL(url).hostname.toLowerCase()); }
+    catch (e) { return true; }
+}
+
+let serverWarning = "";
+
+function showUrlWarning() {
+    const box = $("urlWarn");
+    const url = values["qwen.ollama_url"] || "";
+    if (localHost(url)) { box.hidden = true; serverWarning = ""; return; }
+    box.replaceChildren();
+    const b = document.createElement("strong");
+    b.textContent = "Warning: ";
+    let host = url;
+    try { host = new URL(url).hostname; } catch (e) {}
+    box.append(b, serverWarning || ("Ollama is on another computer (" + host + "): the text you select will be sent there."));
+    box.hidden = false;
+}
 
 /* ---------- key recording ---------- */
 
 let listening = null;
 
-function stopListening() {
+function announce(text) {
+    const live = $("keyLive");
+    live.textContent = "";
+    setTimeout(() => { live.textContent = text; }, 30);   // same text twice is announced again
+}
+
+function stopListening(message) {
     if (!listening) return;
     listening.rec.classList.remove("listening");
     listening = null;
     render();
+    if (message) announce(message);
 }
 
 document.querySelectorAll("[data-key]").forEach((f) => {
     const rec = f.querySelector(".rec");
-    const err = f.querySelector(".error");
+    const action = f.querySelector(".name").textContent;
     rec.addEventListener("click", () => {
-        if (listening && listening.rec === rec) { stopListening(); return; }
+        if (listening && listening.rec === rec) { stopListening(action + " key not changed."); return; }
         stopListening();
         listening = { field: f, rec };
-        err.textContent = "";
+        setFieldError(f, "");
         rec.classList.add("listening");
         rec.textContent = "Press the key, Esc to cancel";
+        rec.setAttribute("aria-label", action + " key: listening. Press the new key or combination. Esc cancels, Tab leaves.");
+        announce("Listening for the new " + action + " key.");
     });
     rec.addEventListener("blur", () => { if (listening && listening.rec === rec) stopListening(); });
     f.querySelector("[data-reset]").addEventListener("click", () => {
-        err.textContent = "";
+        setFieldError(f, "");
         set(f.dataset.key, DATA.defaults[f.dataset.key]);
+        announce(action + " key set back to " + readable(DATA.defaults[f.dataset.key]) + ". Press Save to keep it.");
+        rec.focus();   // the Default button disappears: keep the focus on the field
     });
 });
 
 document.addEventListener("keydown", (e) => {
     if (!listening) return;
     if (["Control", "Alt", "Shift", "Meta", "AltGraph"].includes(e.key)) return;
+    const { field } = listening;
+    const action = field.querySelector(".name").textContent;
+    // Tab and Shift+Tab always leave the recorder (never recorded): the browser moves the focus
+    if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.metaKey) { stopListening(action + " key not changed."); return; }
     e.preventDefault();
     e.stopPropagation();
-    const { field } = listening;
-    const err = field.querySelector(".error");
-    if (e.key === "Escape" && !e.ctrlKey && !e.altKey) { stopListening(); return; }
+    if (e.key === "Escape" && !e.ctrlKey && !e.altKey) { stopListening(action + " key not changed."); return; }
     const r = eventToHotkey(e);
-    if (r.error) { err.textContent = r.error; return; }
+    if (r.error) { setFieldError(field, r.error); announce(r.error); return; }
     const other = ["tasti.correggi", "tasti.riassumi", "tasti.spiega"]
         .find((n) => n !== field.dataset.key && (values[n] || "").toLowerCase() === r.hotkey.toLowerCase());
-    if (other) { err.textContent = "This key is already used by another action."; return; }
-    err.textContent = "";
+    if (other) {
+        const msg = readable(r.hotkey) + " is already used by another action: choose a different key.";
+        setFieldError(field, msg);
+        announce(msg);
+        return;
+    }
+    setFieldError(field, "");
     values[field.dataset.key] = r.hotkey;
-    stopListening();
+    stopListening(action + " key set to " + readable(r.hotkey) + ". Press Save to keep it.");
 }, true);
 
 /* ================= SAVING ================= */
@@ -726,9 +913,16 @@ function updateBar(message, kind) {
 
 $("undo").addEventListener("click", () => {
     values = { ...saved };
-    document.querySelectorAll(".field .error").forEach((e) => (e.textContent = ""));
+    document.querySelectorAll(".field").forEach((f) => setFieldError(f, ""));
     render();
 });
+
+/* Server messages are short: add the expected format */
+function errorText(name, text) {
+    if (TEXT_RULES[name]) return TEXT_RULES[name].msg;
+    if (name.startsWith("tasti.")) return "This key is not allowed. " + KEY_FORMAT;
+    return text;
+}
 
 $("defaults").addEventListener("click", () => {
     values = { ...values, ...DATA.defaults };
@@ -741,6 +935,13 @@ $("form").addEventListener("submit", async (e) => {
     const diff = {};
     changed().forEach((k) => (diff[k] = values[k]));
     if (!Object.keys(diff).length) return;
+    // Check the text fields first: the errors say what format is expected
+    const bad = [...document.querySelectorAll("input.text[data-name]")].filter((i) => !checkText(i));
+    if (bad.length) {
+        updateBar("Some values are not valid: check the marked fields.", "error");
+        bad[0].focus();
+        return;
+    }
     $("save").disabled = true;
     updateBar("Saving…");
     try {
@@ -749,37 +950,77 @@ $("form").addEventListener("submit", async (e) => {
             headers: { "Content-Type": "application/json", "X-Token": DATA.token },
             body: JSON.stringify(diff)
         });
+        if (res.status === 403) { showOffline("gone"); throw new Error(OFFLINE_TEXT.gone); }
         const out = await res.json().catch(() => ({}));
         if (res.status === 422 && out.errors) {
+            let first = null;
             Object.entries(out.errors).forEach(([name, text]) => {
                 const f = document.querySelector(`[data-key="${name}"], [data-name="${name}"]`)?.closest(".field");
-                const box = f?.querySelector(".error");
-                if (box) box.textContent = text;
+                if (!f) return;
+                setFieldError(f, errorText(name, text));
+                first = first || controlOf(f);
             });
-            updateBar(out.errors.tasti || "Some values are not valid: check the marked fields.", "error");
+            updateBar(out.errors.tasti
+                ? "Two actions have the same key: give each action a different key."
+                : "Some values are not valid: check the marked fields.", "error");
+            $("save").disabled = false;
+            if (first) first.focus();
             return;
         }
         if (!res.ok) throw new Error(out.error || "Error " + res.status);
         saved = { ...out.values };
         values = { ...out.values };
+        serverWarning = out.warning || "";
         render();
-        updateBar("Saved. AI-Hotkeys will apply them in a moment.", "ok");
+        if (out.warning) updateBar("Saved, with a warning: " + out.warning, "warn");
+        else updateBar("Saved. AI-Hotkeys will apply them in a moment.", "ok");
     } catch (err) {
-        updateBar(err.message === "Failed to fetch"
-            ? "This page is no longer connected: reopen it from the AI-Hotkeys menu."
-            : err.message, "error");
+        const gone = err instanceof TypeError;
+        if (gone) showOffline("gone");
+        updateBar(gone ? OFFLINE_TEXT.gone : err.message, "error");
         $("save").disabled = false;
     }
 });
 
 window.addEventListener("beforeunload", (e) => { if (changed().length) { e.preventDefault(); e.returnValue = ""; } });
 
+/* ================= CONNECTION TO THE SERVER ================= */
+
+const OFFLINE_TEXT = {
+    gone: "This page is no longer connected to AI-Hotkeys. Reopen Settings from the AI-Hotkeys icon in the taskbar notification area.",
+    reload: "This page cannot be reloaded: reloading would disconnect it. To start again, reopen Settings from the AI-Hotkeys icon in the taskbar notification area."
+};
+
+/* Banner at the top: the server is gone (ping failed, idle shutdown) or the user tried to reload
+   (the token was removed from the address, so a reload could not open the page again). */
+function showOffline(kind) {
+    const box = $("offline");
+    box.replaceChildren();
+    const b = document.createElement("strong");
+    b.textContent = kind === "reload" ? "Reload not available. " : "Disconnected. ";
+    box.append(b, OFFLINE_TEXT[kind]);
+    box.hidden = false;
+}
+
+document.addEventListener("keydown", (e) => {
+    if (listening) return;
+    if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "r")) {
+        e.preventDefault();
+        showOffline("reload");
+    }
+});
+
+function ping() {
+    fetch("/api/ping", { headers: { "X-Token": DATA.token }, cache: "no-store" })
+        .then((res) => { if (!res.ok) showOffline("gone"); })
+        .catch(() => showOffline("gone"));
+}
+setInterval(ping, 20000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) ping(); });
+
 /* ================= STARTUP ================= */
 
 render();
-
-function ping() { fetch("/api/ping", { headers: { "X-Token": DATA.token }, cache: "no-store" }).catch(() => {}); }
-setInterval(ping, 20000);
 </script>
 
 </body>

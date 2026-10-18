@@ -67,6 +67,22 @@ class SettingsValidateTest(unittest.TestCase):
         self.assertEqual(v["tasti.spiega"], "End")                 # invalid key -> default (I2)
         self.assertEqual(v["tasti.correggi"], "PgUp")              # missing key -> default (I11)
 
+    def test_query_mode_choice_defaults_validates_and_saves(self):
+        """D5 (S10): [searxng] query_mode is optional, defaults to allow_fallback (I11)."""
+        self.assertEqual(self.s.defaults()["searxng.query_mode"], "allow_fallback")
+        self.assertEqual(self.s.current_values()["searxng.query_mode"], "allow_fallback")   # key missing
+        updates, errors = self.s.validate({"searxng.query_mode": "model"})
+        self.assertEqual(errors, {})
+        self.assertEqual(updates["searxng"], {"query_mode": "model"})
+        _, errors = self.s.validate({"searxng.query_mode": "always"})
+        self.assertIn("searxng.query_mode", errors)
+        original = self.tree.config_file.read_bytes()
+        self.tree.config_file.write_text("[searxng]\nquery_mode = bogus\n", encoding="utf-8")
+        try:
+            self.assertEqual(self.s.current_values()["searxng.query_mode"], "allow_fallback")
+        finally:
+            self.tree.config_file.write_bytes(original)
+
     def test_url_warning_only_for_other_computers(self):
         self.assertIsNone(self.s.url_warning({"qwen": {"ollama_url": "http://localhost:11434"}}))
         self.assertIsNone(self.s.url_warning({"qwen": {"ollama_url": "http://127.0.0.1:11434"}}))
