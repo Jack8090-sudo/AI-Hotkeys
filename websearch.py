@@ -109,7 +109,18 @@ USER_AGENT = (
 # STATUS (read by main.ahk for the tooltip near the mouse)
 # =========================================================
 
+# The results page in stream mode (viewer.py, STREAM1) sets a function that
+# receives each phase instead of status.txt
+STATUS_HOOK = None
+
+
 def status(text):
+    if STATUS_HOOK is not None:
+        try:
+            STATUS_HOOK(text)
+        except Exception:
+            pass
+        return
     try:
         WORK_DIR.mkdir(exist_ok=True)
         STATUS_FILE.write_text(text, encoding="utf-8")

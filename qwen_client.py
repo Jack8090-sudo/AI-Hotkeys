@@ -560,6 +560,92 @@ def max_input_chars(mode):
     return max(2000, limit)
 
 
+# ---------------------------------------------------------
+# First answer, shared by run_action (whole answer at once) and the results
+# page in stream mode (viewer.py /api/first, STREAM1): only the network call
+# differs, so the checks, the prompt, the web search and the cleanup cannot drift.
+# ---------------------------------------------------------
+
+class ActionStop(Exception):
+    """The first answer cannot be given: message for the user (K1 line 1), detail, exit code."""
+
+    def __init__(self, message, detail="", code=1):
+        super().__init__(message)
+        self.message = message
+        self.detail = detail
+        self.code = code
+
+
+TRUNCATED_FIRST = "The answer was cut off (too long for the model): select a shorter part."
+
+
+def check_input(mode, testo):
+    """ActionStop for an empty selection or one longer than max_input_chars(mode)."""
+    if not testo.strip():
+        raise ActionStop("Nothing selected: select some text first.", "empty input", 1)
+    limit = max_input_chars(mode)
+    if len(testo) > limit:
+        raise ActionStop(f"The selected text is too long ({len(testo):,} characters, about {limit:,} at most): "
+                         "select a shorter part.", f"len={len(testo)} limit={limit}", 3)
+
+
+def first_sources(mode, testo, sources_path=None, save=True):
+    """End's web search before the first answer: (sources, meta).
+
+    meta always has "mode"; for explain also "web", "query" and "fonti". With
+    save, the sources are saved for the results page (sources_path: as
+    websearch.save_sources); the page in stream mode keeps them in memory (save=False).
+    A failed search is not an error: the answer is written without the web.
+    """
+    meta = {"mode": mode}
+    if mode != "explain":
+        return [], meta
+    import sys
+
+    import websearch
+    try:
+        fonti, query = websearch.gather_sources(testo)
+    except Exception as e:
+        print(f"Web search failed: {e}", file=sys.stderr)
+        fonti, query = [], []
+    if save:
+        websearch.save_sources(fonti, query, path=sources_path)
+    meta.update({"web": bool(fonti), "query": query if fonti else [], "fonti": len(fonti)})
+    websearch.status("The AI is writing the explanation…" + (f" ({len(fonti)} sources)" if fonti else " (no web)"))
+    return fonti, meta
+
+
+def first_request_messages(mode, testo, fonti):
+    """The chat messages of the first answer (prompts.first_messages with the sources block)."""
+    fonti_txt = None
+    if fonti:
+        import websearch
+        fonti_txt = websearch.sources_block(fonti)
+    return prompts.first_messages(mode, testo, fonti_txt, lunghezza=CONFIG.get("lunghezza", "normale"))
+
+
+def finish_first(mode, testo, risposta, fonti, done_reason=None):
+    """The final first answer: cleaned, with the sources linked. ActionStop if cut off or empty."""
+    if done_reason == "length":
+        raise ActionStop(TRUNCATED_FIRST, "done_reason=length", 3)
+    risposta = clean_answer(risposta, mode, original=testo)
+    if not risposta:
+        raise ActionStop("The AI returned an empty answer: try again.", "empty answer", 1)
+    if fonti:
+        import websearch
+        risposta = websearch.add_sources(risposta, fonti)
+    return risposta
+
+
+def write_meta(meta, run_dir=None):
+    """meta.json for the results page: in the run directory (never created), or work/ (old form)."""
+    meta_file = run_dir / "meta.json" if run_dir else WORK_DIR / "meta.json"
+    try:
+        _write_atomic(meta_file, json.dumps(meta, ensure_ascii=False), create_dir=run_dir is None)
+    except Exception:
+        pass
+
+
 def run_action(mode, argv):
     """Usage: <script> --run-dir=<work\\runs\\id>   (main.ahk, S9)
            <script> <input.txt> <output.txt>      (old form, still accepted)
@@ -603,63 +689,38 @@ def _run_action(mode, input_file, output_file):
 
     testo = input_file.read_text(encoding="utf-8-sig")
 
-    if not testo.strip():
-        print("Empty text.", file=sys.stderr)
-        write_error("Nothing selected: select some text first.", "empty input")
-        return 1
+    try:
+        check_input(mode, testo)
+    except ActionStop as e:
+        print(e.message, file=sys.stderr)
+        write_error(e.message, e.detail)
+        return e.code
 
-    limit = max_input_chars(mode)
-    if len(testo) > limit:
-        write_error(f"The selected text is too long ({len(testo):,} characters, about {limit:,} at most): "
-                    "select a shorter part.", f"len={len(testo)} limit={limit}")
-        return 3
-
-    # End: first the web search with SearXNG (if enabled)
-    fonti, query = [], []
-    meta = {"mode": mode}
+    # End: first the web search with SearXNG (if enabled). The progress phases
+    # go to this run's own status.txt (old form: work/status.txt)
     if mode == "explain":
         import websearch
-        # The progress phases go to this run's own status.txt (old form: work/status.txt)
         websearch.STATUS_FILE = (run_dir or websearch.WORK_DIR) / "status.txt"
-        try:
-            fonti, query = websearch.gather_sources(testo)
-        except Exception as e:
-            print(f"Web search failed: {e}", file=sys.stderr)
-            fonti = []
-        websearch.save_sources(fonti, query, path=run_dir / "sources.json" if run_dir else None)
-        meta.update({"web": bool(fonti), "query": query if fonti else [], "fonti": len(fonti)})
-        websearch.status("The AI is writing the explanation…" + (f" ({len(fonti)} sources)" if fonti else " (no web)"))
+    fonti, meta = first_sources(mode, testo, run_dir / "sources.json" if run_dir else None)
 
     try:
-        fonti_txt = websearch.sources_block(fonti) if fonti else None
-        messages = prompts.first_messages(mode, testo, fonti_txt, lunghezza=CONFIG.get("lunghezza", "normale"))
+        messages = first_request_messages(mode, testo, fonti)
         risposta, done_reason = chat_ex(messages, mode)
     except Exception as e:
         print(f"Ollama error: {e}", file=sys.stderr)
         write_error(*describe_error(e))
         return 1
 
-    if done_reason == "length":
-        write_error("The answer was cut off (too long for the model): select a shorter part.",
-                    "done_reason=length")
-        return 3
-
-    risposta = clean_answer(risposta, mode, original=testo)
-    if not risposta:
-        write_error("The AI returned an empty answer: try again.", "empty answer")
-        return 1
-
-    if fonti:
-        risposta = websearch.add_sources(risposta, fonti)
+    try:
+        risposta = finish_first(mode, testo, risposta, fonti, done_reason)
+    except ActionStop as e:
+        write_error(e.message, e.detail)
+        return e.code
 
     # Details for the results page (time, web search done): written before
     # output.txt, so whoever sees output.txt also finds this run's meta.json
     meta["seconds"] = round(time.time() - t0, 1)
-    meta_file = run_dir / "meta.json" if run_dir else WORK_DIR / "meta.json"
-    try:
-        _write_atomic(meta_file, json.dumps(meta, ensure_ascii=False), create_dir=run_dir is None)
-    except Exception:
-        pass
+    write_meta(meta, run_dir)
 
     _write_atomic(output_file, risposta, create_dir=run_dir is None)
     return 0
