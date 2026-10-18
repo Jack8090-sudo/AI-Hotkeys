@@ -1,100 +1,154 @@
 # AI-Hotkeys
 
-Global hotkeys for using a local LLM on any selected text:
+Global hotkeys that run a local language model on any text you select, in any Windows program:
 
-- **PgUp** → fix the selected text
-- **PgDn** → summarize it
-- **End** → explain it (with optional web search)
+- **PgUp**: fix the selected text (spelling, grammar, style)
+- **PgDn**: summarize it
+- **End**: explain it, optionally with a web search
 
-Stack: AutoHotkey v2 (hotkeys + UI) → Python → Ollama → Qwen. Web search
-uses a local SearXNG on `127.0.0.1:8888`.
+Everything runs on your PC: AutoHotkey v2 handles the keys and the tray icon, Python talks to
+[Ollama](https://ollama.com), and Ollama runs the Qwen model. The optional web search for End uses a
+private SearXNG on `127.0.0.1:8888`. See [PRIVACY.md](PRIVACY.md) for what leaves your PC when it is on.
+
+Current version: see [`VERSION`](VERSION) (1.1.0). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Requirements
 
-- Windows 10/11 64-bit
-- [Ollama](https://ollama.com/download) + model `qwen3.5:9b` (~6.6 GB, Q4_K_M):
-  `ollama pull qwen3.5:9b` (~12 GB VRAM card recommended)
-- AutoHotkey v2 (bundled in the setup, or installed separately for source use)
-- SearXNG only for End's web search (wrapper code in `searxng/`, optional)
+| | |
+|---|---|
+| Windows | Windows 10 or 11, 64-bit (x64). |
+| Ollama | [Ollama](https://ollama.com/download) **0.9.0 or newer**. AI-Hotkeys checks this at startup, because older versions do not accept the `think: false` option it sends. Install the current Ollama release: older releases may not know the `qwen3.5` model family. |
+| Model | `qwen3.5:9b`, a 6.6 GB download (Q4_K_M). Get it with `ollama pull qwen3.5:9b`. The model is released by the Qwen team under the [Apache License 2.0](https://huggingface.co/Qwen/Qwen3.5-9B); it is not part of AI-Hotkeys. You can choose another Ollama model in the settings. |
+| Graphics card | About **8 GB of free VRAM** for the model plus its context; a **12 GB** card is recommended so Windows and other programs keep some room. |
+| Without enough VRAM | Ollama keeps working, but puts the part of the model that does not fit into system RAM and runs it on the CPU. Answers then get much slower (roughly ten times). |
+| Disk | About 7 GB: 6.6 GB for the model, about 110 MB for AI-Hotkeys itself. |
 
-## Usage
+## Install (Setup.exe)
 
-1. Download a release or clone the sources.
-2. Copy `config.example.ini` to `config.ini` and set your Obsidian file:
-   `todo_file = %USERPROFILE%\Documents\To-Do List.md`
-   and the matching title prefix (`window_title = To-Do List -`).
-3. Run `main.ahk`, select some text and press PgUp / PgDn / End.
-4. Settings: tray icon → Settings (or `config.ini` + "Reload").
+This is the normal way. Full walkthrough: [docs/INSTALL.md](docs/INSTALL.md).
 
-From source you need Python 3.x with stdlib modules only
-(`configparser`, `urllib`, `http.server` — no external dependencies).
+1. Download `AI-Hotkeys-Setup-<version>.exe` from the project's GitHub Releases page.
+   Releases are drafted by the release workflow and published by hand. Until the first one is
+   published, build the installer yourself ([CONTRIBUTING.md](CONTRIBUTING.md)).
+2. Run it. The installer is not code-signed, so Windows SmartScreen may say "Windows protected your
+   PC": choose **More info**, then **Run anyway**.
+3. It installs into `%LOCALAPPDATA%\Programs\AI-Hotkeys`, a folder private to your Windows account.
+   It bundles its own Python and AutoHotkey, so you need neither.
+4. If Ollama is missing, the installer offers to install it. Then run `ollama pull qwen3.5:9b` once.
+5. AI-Hotkeys starts with Windows (you can turn that off in the installer). Its ✦ icon sits in the
+   notification area.
 
-## Behavior
+Upgrading from v1.0.0 (the Italian build that installed into `C:\AI-Hotkeys`): run the new Setup.
+It offers to move your `config.ini` to the new folder, stop the old copy and disable its
+shortcuts. See [Migration from v1.0.0](docs/INSTALL.md#migration-from-v100).
 
-- **Cancel with Esc:** hold Esc for 2 seconds while Qwen is working
-  to kill the Python process and clean up half-written files in `work\`.
-  A short Esc press behaves normally.
-- **PgUp in Obsidian with To-Do List.md open** doesn't fix the selected
-  text: it reorganizes the whole file (`actions/obsidian_todo.py`,
-  atomic write + `To-Do List.backup_*.md` backup, safety checks that
-  block writing when tasks, links or tags go missing).
-- **Direct replace:** with `[comportamento] sostituisci_testo = si`,
-  the PgUp fix replaces the selected text in Notepad, Obsidian, Word,
-  VS Code and Notepad++; PgDn and End always open the results page.
-- **Web search (End):** `[searxng] web_search = auto` searches only when
-  needed (the model decides from the queries; recognized technical terms
-  force a search anyway), `always` always searches, `false` never.
-  Sources become clickable `[1] [2]…` citations + a list at the bottom.
-- **Ask Qwen:** the results page has a popup for follow-up questions
-  (iterative rewriting in fix mode, Q&A with the last 6 question/answer
-  pairs in the other modes, sources reused).
-- **Length:** `[comportamento] lunghezza = breve | normale | dettagliata`
-  (applies to summaries and explanations; values are Italian for
-  short / normal / detailed).
-- **VRAM:** the model stays in memory for `[qwen] keep_alive` (default
-  `30m`); right-click the tray icon → "Libera la VRAM" unloads it
-  immediately (`actions/unload.py`).
-- **Customizable hotkeys** in `[tasti]` (AutoHotkey syntax; bare letters
-  and digits are not allowed since you need them for typing). On the
-  Settings page you record hotkeys by pressing them.
-- **Secure local pages:** results and settings are servers on
-  `127.0.0.1` with a random port and an ephemeral token (`?t=…` +
-  `X-Token` header); they shut down by themselves after minutes of
-  inactivity (240 s results, 300 s settings). Requests not from
-  `127.0.0.1`/`localhost` → 403.
-- **Missing keys:** if `config.ini` lacks a key present in
-  `config.example.ini` (e.g. `[tasti]`, `aspetto.larghezza`), the code
-  default applies — no error.
+## Run from source
 
-## Layout
+For development or if you prefer not to run an installer.
 
-- `main.ahk` — hotkeys, dispatcher (`context|slot` → action), tray, SearXNG integration
-- `qwen_client.py`, `prompts.py`, `websearch.py` — Ollama client, prompts, search
-- `viewer.py`, `settings.py`, `pages.py` — results / settings pages (local 127.0.0.1 servers with ephemeral token)
-- `config_edit.py`, `test_config_edit.py` — comment-preserving config editing + tests (`python test_config_edit.py`)
-- `actions/` — `rewrite.py`, `summarize.py`, `explain.py`, `obsidian_todo.py`, `unload.py`
-- `ahk/` — versioned `license.txt` + local `AutoHotkey64.exe` (the binary ships with the setup, not via git)
-- `static/` — `viewer.html`, `settings.html`, `theme.css`, `marked.min.js`, `fonts/`
-- `searxng/` — only `avvia_searxng.py`, `settings.yml`, `LICENSE-searxng.txt`
-- `installer/sorgente/` — `installer.nsi`, `stop.ps1` (the setup builds its payload from `config.example.ini`, never from `config.ini`)
+- **Python 3.13 x64** (CPython). Only 3.13 is supported, because the SearXNG libraries are built for it.
+  The app itself uses only the standard library; the one exception is `curl_cffi`, which it reuses
+  from SearXNG's `searxng\lib` when that folder is present.
+- **AutoHotkey v2.0** (the project pins 2.0.19).
+- Ollama and the model, as above.
 
-## What is NOT in the repo (and why)
+```
+git clone https://github.com/Jack8090-sudo/AI-Hotkeys.git
+cd AI-Hotkeys
+copy config.example.ini config.ini
+```
 
-- `config.ini` — personal paths, ignored via `.gitignore`
-- `work/` — runtime files (`input.txt`, `output.txt`, logs, pids). Note: it holds
-  the latest selected texts in plaintext — never commit it, never back it up
-- `python/` (~31 MB), `searxng/app|lib/` (~82 MB), `*.exe`, `*.rar` — distributed via GitHub Releases, not via git
-- `graphify-out/`, `__pycache__/` — local derivatives
+Then start `main.ahk` with AutoHotkey v2. `main.ahk` uses `python\pythonw.exe` when that folder
+exists, otherwise the `pythonw` on your PATH. Every launch uses `-E -s`, so `PYTHONPATH` and
+your user site-packages are ignored.
+
+Web search needs the SearXNG runtime (`searxng\app` and `searxng\lib`), which is not in git. Without it,
+End explains using only the selected text. To get it, build the payload
+(`powershell -NoProfile -ExecutionPolicy Bypass -File build\build.ps1 -SkipInstaller`) and copy
+`build\out\payload\app\searxng\app` and `\lib`, plus `build\out\payload\python`, into your checkout.
+Details are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Using it
+
+- Select text and press **PgUp**, **PgDn** or **End**.
+- **PgUp** replaces the selection directly in Notepad, Notepad++, Obsidian, Word and VS Code
+  (`[comportamento] sostituisci_testo = si`, the default). Elsewhere, and for PgDn and End, the result
+  opens in a local results page in your browser.
+- Before pasting, PgUp checks that the same window is in front and that the selection is still the text
+  it sent. If not, nothing is pasted: a message says why, and the result opens in the results page.
+  After a successful paste the corrected text stays in the clipboard.
+- **Nothing selected**: the key keeps its normal function and your clipboard is restored. In consoles
+  (Windows Terminal, cmd, PowerShell, Git Bash) and on AI-Hotkeys' own pages the keys always act
+  normally.
+- **Cancel**: hold **Esc** for 2 seconds while Qwen is working. A short Esc press reaches the app as usual.
+- **Ask Qwen**: the results page has a box for follow-up questions. In fix mode each answer is a new
+  version of the text; otherwise it is a conversation that remembers the last 6 questions and answers
+  and reuses the web sources.
+- **Obsidian To-Do**: PgUp in Obsidian, with the note named in `[obsidian]` open, reorganizes the whole
+  note instead. It saves a backup first, writes atomically, and leaves the file untouched if any safety
+  check fails (lost tasks, links, tags, paragraphs or headings).
+- **Web search (End)**: with `web_search = auto`, Qwen decides whether the text needs a search
+  (technical terms force one). Sources become clickable `[1] [2]` citations plus a list.
+- **Results page**: reloading (F5) is not available, because the access token is removed from the
+  address after the page opens. Open the result again with the hotkey instead.
+
+### Tray menu
+
+Right-click the ✦ icon: **Settings**, **Free VRAM** (unloads the model from the graphics card at
+once), **Open SearXNG in browser**, **Edit prompts**, **Open config.ini**, **Open folder**, **Reload**, **Exit**.
+Reload and Exit ask first when a job is running.
+
+### When something goes wrong
+
+Errors appear as a toast near the mouse, and the hotkeys keep working while it is shown. Examples:
+
+- "Ollama is not running: start Ollama, then try again."
+- "Model 'qwen3.5:9b' not found: run  ollama pull qwen3.5:9b"
+- "Ollama 0.x is too old: update it to 0.9.0 or newer." (checked once at startup)
+- "The selected text is too long (N characters, about M at most): select a shorter part."
+- "The answer was cut off (too long for the model): select a shorter part." Nothing is pasted in that case.
+- A broken `config.ini` gives a warning that names the line, for example "line 3: 'model' appears twice
+  in [qwen]". AI-Hotkeys keeps working with the default settings.
+- A key that is invalid or used twice in `[tasti]` is reported at startup, and the default key is used.
+
+More in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
+### Your own prompts
+
+Tray → **Edit prompts** opens `prompts_user.py` in the install folder, and creates it the first time as a
+commented-out copy of the standard `prompts.py`. Uncomment and change only what you need. Updates never
+ship or overwrite this file. If it has an error, the standard prompts are used and a warning appears
+after the next reload. Delete the file to go back to the standard prompts. (The Start-menu shortcut
+"Edit prompts" still opens `prompts.py`; an upgrade saves a changed `prompts.py` as
+`prompts.py.bak-<old version>`.)
+
+## Configuration
+
+Settings live in `config.ini` in the install folder. Most of them can be changed on the Settings page;
+the Obsidian settings and a few others are edited in the file (tray → Open config.ini). Changes apply
+automatically ("Settings applied"). The section and key names, and values such as `si`/`no`, are Italian
+and stay that way for compatibility. The [configuration reference](docs/CONFIGURATION.md) lists every key
+with its English meaning. A missing key always falls back to its default.
+
+## Privacy and security
+
+- [PRIVACY.md](PRIVACY.md): what stays on your PC, what the web search sends, when your text is deleted.
+- [SECURITY.md](SECURITY.md): how the local pages are protected, the web-fetch rules, and how to report
+  a vulnerability.
 
 ## Documentation
 
-- Source-generated code map: [docs/CODEMAPS/INDEX.md](docs/CODEMAPS/INDEX.md)
-- Removal log: [docs/DELETION_LOG.md](docs/DELETION_LOG.md)
-- End-user instructions for the installed app (Italian): `installer/AI-Hotkeys/LEGGIMI.txt`
+- [docs/INSTALL.md](docs/INSTALL.md): installation, Ollama, first run, Obsidian, migration
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md): logs and common problems
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md): every `config.ini` key
+- [docs/guide-it.md](docs/guide-it.md): guida per l'utente in italiano
+- [CONTRIBUTING.md](CONTRIBUTING.md): development, tests, build and CI
+- [docs/CODEMAPS/INDEX.md](docs/CODEMAPS/INDEX.md): code map
 
-## Third-party licenses
+## Licenses
 
-- AutoHotkey: `ahk/license.txt` (GPLv2) — the binary is not versioned
-- SearXNG: `searxng/LICENSE-searxng.txt` (AGPLv3) — only wrapper + settings versioned
-- `static/marked.min.js` (MIT), Barlow / IBM Plex fonts (`static/fonts/OFL-*.txt`, SIL OFL)
-- Own code is MIT (`LICENSE`).
+AI-Hotkeys' own code is under the MIT license ([LICENSE](LICENSE)). The installer also ships Python,
+AutoHotkey (GPL-2.0), SearXNG (AGPL-3.0) and other libraries, each under its own license: see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the [`licenses/`](licenses) folder. The source archives
+for AutoHotkey 2.0.19 and SearXNG are attached to every GitHub Release as `third-party-sources.*` files,
+next to the installer. Ollama and the Qwen model are not included; their own licenses apply.
