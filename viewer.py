@@ -2,7 +2,13 @@
 AI-Hotkeys — HTML viewer with "✦ Ask Qwen" popup.
 
 Usage (called from main.ahk):
-    python viewer.py <input.txt> <output.txt> "<Action name>" [rewrite|summarize|explain]
+    python viewer.py --run-dir=<work\\runs\\id> "<Action name>" [rewrite|summarize|explain]
+    python viewer.py <input.txt> <output.txt> "<Action name>" [rewrite|summarize|explain]   (old form, K3)
+  options: --key=End (the pressed key), --no-browser (print the URL instead)
+
+Privacy (S9): once the files are loaded they are deleted. A run directory
+(work\\runs\\<id>) is removed entirely; with the old form, input/output are
+deleted only when they are inside work\\.
 
 How it works:
 - Starts a small local server (127.0.0.1 only, random port).
@@ -18,7 +24,6 @@ import secrets
 import sys
 import threading
 import time
-import urllib.error
 import webbrowser
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
@@ -82,10 +87,12 @@ def detect_mode(action_name, explicit=None):
 # =========================================================
 
 class Session:
-    def __init__(self, original, result, mode, action_name):
+    def __init__(self, original, result, mode, action_name, sources=None, meta=None):
         self.original = original
         self.mode = mode
         self.action_name = action_name
+        # Details of the run (time, web search): None = read work/meta.json (old form)
+        self.meta = meta
 
         # Result versions (used by rewrite).
         self.versions = [{"text": result, "request": None}]
@@ -94,7 +101,13 @@ class Session:
         self.thread = []
 
         # Web sources found by End (SearXNG): also needed for follow-ups.
-        self.sources = websearch.load_sources() if mode == "explain" else []
+        # sources=None: work/sources.json (old form).
+        if mode != "explain":
+            self.sources = []
+        elif sources is None:
+            self.sources = websearch.load_sources()
+        else:
+            self.sources = sources
 
         self.lock = threading.Lock()
         # monotonic: the idle timer must not jump after sleep/hibernate or a clock change
@@ -275,14 +288,10 @@ def make_handler(session, token, page_html):
 
             try:
                 response = qwen_client.open_stream(messages, session.mode, timeout=300)
-            except urllib.error.URLError:
-                self._safe_emit({
-                    "error": "Cannot reach Ollama. "
-                             "Check that Ollama is running."
-                })
-                return
-            except Exception:
-                self._safe_emit({"error": "Internal error, try again."})
+            except Exception as e:
+                # K1 messages (C21): a 404 "model not found" says "ollama pull",
+                # it is not reported as "Ollama is not running"
+                self._safe_emit({"error": qwen_client.describe_error(e)[0]})
                 return
 
             try:
@@ -301,8 +310,9 @@ def make_handler(session, token, page_html):
             except qwen_client.StreamIncomplete:
                 self._safe_emit({"error": "The answer was interrupted: try again.", "partial": True})
                 return
-            except Exception:
-                self._safe_emit({"error": "Generation error, try again."})
+            except Exception as e:
+                # e.g. {"error": "model ... not found"} inside the stream (K1)
+                self._safe_emit({"error": qwen_client.describe_error(e)[0]})
                 return
 
             answer = qwen_client.clean_answer("".join(parts), session.mode)
@@ -329,12 +339,73 @@ def make_handler(session, token, page_html):
 # PAGE
 # =========================================================
 
-def read_meta():
-    """Details of the last run (written by qwen_client.run_action)."""
+def read_meta(path=None):
+    """Details of a run (written by qwen_client.run_action); path None = work/meta.json (old form)."""
     try:
-        return json.loads((BASE_DIR / "work" / "meta.json").read_text(encoding="utf-8"))
+        return json.loads(Path(path or BASE_DIR / "work" / "meta.json").read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def _inside(path, folder):
+    try:
+        Path(path).resolve().relative_to(Path(folder).resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def load_run(argv):
+    """Parse the command line and load the run; the loaded files are then deleted (S9).
+
+    New form:  --run-dir=<work\\runs\\id> "<Action name>" [mode]
+    Old form:  <input.txt> <output.txt> "<Action name>" [mode]   (K3)
+    Returns a dict: original, result, action_name, mode, key_label, no_browser, meta, sources.
+    Raises SystemExit with the usage text on a bad command line.
+    """
+    options = [a for a in argv if a.startswith("--")]
+    args = [a for a in argv if not a.startswith("--")]
+    key_label = next((a.split("=", 1)[1] for a in options if a.startswith("--key=")), "")
+    run_dir = next((Path(a.split("=", 1)[1]) for a in options if a.startswith("--run-dir=")), None)
+
+    if len(args) < (1 if run_dir else 3):
+        print("Usage: viewer.py --run-dir=<dir> <action name> [mode] [--key=End] [--no-browser]\n"
+              "       viewer.py <input> <output> <action name> [mode] [--key=End] [--no-browser]")
+        raise SystemExit(1)
+
+    if run_dir is not None:
+        input_file, output_file = run_dir / "input.txt", run_dir / "output.txt"
+        rest = args
+    else:
+        input_file, output_file = Path(args[0]), Path(args[1])
+        rest = args[2:]
+    action_name = rest[0]
+    mode = detect_mode(action_name, rest[1] if len(rest) > 1 else None)
+
+    try:
+        original = input_file.read_text(encoding="utf-8-sig")
+        result = output_file.read_text(encoding="utf-8-sig")
+        if run_dir is not None:
+            meta = read_meta(run_dir / "meta.json")
+            sources = websearch.load_sources(run_dir / "sources.json") if mode == "explain" else []
+        else:
+            meta, sources = None, None      # Session / build_page read work\ as before
+    finally:
+        # No plaintext selection stays on disk once it is in memory (C32)
+        if run_dir is not None and qwen_client.is_run_dir(run_dir):
+            qwen_client.remove_run_dir(run_dir)
+        else:
+            work = BASE_DIR / "work"
+            for f in (input_file, output_file):
+                if _inside(f, work):
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+
+    return {"original": original, "result": result, "action_name": action_name, "mode": mode,
+            "key_label": key_label, "no_browser": "--no-browser" in options,
+            "meta": meta, "sources": sources}
 
 
 def build_page(session, token, key_label=""):
@@ -350,7 +421,8 @@ def build_page(session, token, key_label=""):
         "result": session.versions[0]["text"],
         "time": datetime.now().strftime("%H:%M"),
         "look": pages.look_settings(qwen_client.CONFIG),
-        "meta": read_meta() if session.mode in ("explain", "summarize", "rewrite") else {},
+        "meta": ((read_meta() if session.meta is None else session.meta)
+                 if session.mode in ("explain", "summarize", "rewrite") else {}),
     }
 
     return (
@@ -367,26 +439,12 @@ def build_page(session, token, key_label=""):
 # =========================================================
 
 def main():
-    if len([a for a in sys.argv[1:] if not a.startswith("--")]) < 3:
-        print("Usage: viewer.py <input> <output> <action name> [mode] [--key=End] [--no-browser]")
-        sys.exit(1)
+    run = load_run(sys.argv[1:])
 
-    # Optional args: --key=End (pressed key), --no-browser
-    options = [a for a in sys.argv[1:] if a.startswith("--")]
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    key_label = next((a.split("=", 1)[1] for a in options if a.startswith("--key=")), "")
-
-    input_file = Path(args[0])
-    output_file = Path(args[1])
-    action_name = args[2]
-    mode = detect_mode(action_name, args[3] if len(args) > 3 else None)
-
-    original = input_file.read_text(encoding="utf-8-sig")
-    result = output_file.read_text(encoding="utf-8-sig")
-
-    session = Session(original, result, mode, action_name)
+    session = Session(run["original"], run["result"], run["mode"], run["action_name"],
+                      sources=run["sources"], meta=run["meta"])
     token = secrets.token_urlsafe(18)
-    page_html = build_page(session, token, key_label)
+    page_html = build_page(session, token, run["key_label"])
 
     server = pages.LocalServer(
         ("127.0.0.1", 0),
@@ -406,7 +464,7 @@ def main():
 
     threading.Thread(target=watchdog, daemon=True).start()
 
-    if "--no-browser" in sys.argv:
+    if run["no_browser"]:
         print(url, flush=True)
         print("Warning: the URL contains a secret token, do not share it.", file=sys.stderr, flush=True)
     else:

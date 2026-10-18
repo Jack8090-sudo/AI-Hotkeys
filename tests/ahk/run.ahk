@@ -22,7 +22,8 @@ for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToC
              TestIsAppPageTitle, TestIsConsoleClass, TestParseClipWaitMs, TestSelectionMatches,
              TestParsePidRecord, TestIsConfiguredPython, TestSearxngPidIsOurs, TestProcHelpers,
              TestErrorFileLine1, TestWarningSummary, TestHotkeyId, TestResolveKeys,
-             TestPromptsUserTemplate, TestProcExitCode]
+             TestPromptsUserTemplate, TestProcExitCode,
+             TestNewRunId, TestIsRunId, TestRunDirOf, TestRunIsStale, TestWorkAclArgs]
 {
     try
         test()
@@ -532,4 +533,70 @@ TestProcExitCode()
     ProcClose(h)
     Assert("ProcExitCode(0) = -1", ProcExitCode(0), -1)
     Assert("ProcOpen(0) = 0", ProcOpen(0), 0)
+}
+
+
+; ---------------------------------------------------------
+; S9: run folders work\runs\<id> (C32, H04, C18)
+; ---------------------------------------------------------
+
+TestNewRunId()
+{
+    id := NewRunId("20261018123456")
+    Assert("NewRunId format", RegExMatch(id, "^20261018123456-[0-9a-f]{16}$") > 0, true)
+    Assert("NewRunId default time is A_Now", SubStr(NewRunId(), 1, 8), SubStr(A_Now, 1, 8))
+    Assert("NewRunId is a run id", IsRunId(NewRunId()), true)
+    ; Same Python rule (qwen_client.RUN_ID_RE): 14 digits, "-", 16 lowercase hex
+    seen := Map(), dup := 0
+    Loop 2000
+    {
+        id := NewRunId("20261018123456")
+        if seen.Has(id)
+            dup++
+        seen[id] := true
+    }
+    Assert("NewRunId 2000 ids in the same second are unique", dup, 0)
+}
+
+TestIsRunId()
+{
+    Assert("IsRunId valid", IsRunId("20261018123456-0123456789abcdef"), true)
+    for bad in ["", "runs", "20261018123456", "20261018123456-0123456789ABCDEF",
+                "2026101812345-0123456789abcdef", "20261018123456-0123456789abcde",
+                "20261018123456-0123456789abcdef0", "20261018123456_0123456789abcdef",
+                "..\20261018123456-0123456789abcdef", "20261018123456-0123456789abcdef\x",
+                " 20261018123456-0123456789abcdef", "20261018123456-0123456789abcdeg"]
+        Assert("IsRunId(" Show(bad) ") false", IsRunId(bad), false)
+}
+
+TestRunDirOf()
+{
+    Assert("RunDirOf", RunDirOf("C:\AI-Hotkeys\work", "X"), "C:\AI-Hotkeys\work\runs\X")
+    Assert("RunDirOf trailing backslash", RunDirOf("C:\AI Hotkeys\work\", "X"), "C:\AI Hotkeys\work\runs\X")
+    Assert("RunDirOf never ends in a backslash (argv quoting)", SubStr(RunDirOf("C:\w", NewRunId()), -1) != "\", true)
+}
+
+TestRunIsStale()
+{
+    now := "20261018120000"
+    Assert("RunIsStale 1 h ago", RunIsStale("20261018110000", now), true)
+    Assert("RunIsStale 2 h ago", RunIsStale("20261018100000", now), true)
+    Assert("RunIsStale yesterday", RunIsStale("20261017120000", now), true)
+    Assert("RunIsStale 59 min 59 s ago", RunIsStale("20261018110001", now), false)
+    Assert("RunIsStale just now", RunIsStale(now, now), false)
+    Assert("RunIsStale in the future", RunIsStale("20261018130000", now), false)
+    Assert("RunIsStale custom age", RunIsStale("20261018115900", now, 30), true)
+    Assert("RunIsStale empty stamp", RunIsStale("", now), false)
+    Assert("RunIsStale garbage stamp", RunIsStale("yesterday", now), false)
+    Assert("RunIsStale invalid date", RunIsStale("20261399000000", now), false)
+    Assert("RunIsStale default now: an old stamp", RunIsStale("20000101000000"), true)
+    Assert("RunIsStale default now: A_Now", RunIsStale(A_Now), false)
+}
+
+TestWorkAclArgs()
+{
+    a := WorkAclArgs("C:\AI Hotkeys\work", "PC\jack")
+    Assert("WorkAclArgs grant", a.grant,
+        '"C:\AI Hotkeys\work" /grant:r "PC\jack:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F"')
+    Assert("WorkAclArgs inheritance", a.inherit, '"C:\AI Hotkeys\work" /inheritance:r')
 }

@@ -20,8 +20,16 @@ BASE_DIR = Path(__file__).resolve().parent
 WORK_DIR = BASE_DIR / "work"
 CONFIG_FILE = BASE_DIR / "config.ini"
 
-# Error shown by main.ahk when an action fails (line 1 = message for the user)
+# Error shown by main.ahk when an action fails (line 1 = message for the user).
+# Selection jobs started with --run-dir write it inside their run directory
+# instead (S9); work/error.txt stays for the health check, unload and the old
+# argument form.
 ERROR_FILE = WORK_DIR / "error.txt"
+# Per-run directories: work/runs/<run id>/ (S9, contract K1 location)
+RUNS_DIR = WORK_DIR / "runs"
+RUN_ID_RE = re.compile(r"\d{14}-[0-9a-f]{16}")
+# A run directory older than this is left over from a crash: swept away
+STALE_RUN_SECONDS = 3600
 # Problems found in config.ini (one per line), shown by main.ahk after a reload
 CONFIG_WARNING_FILE = WORK_DIR / "config_warning.txt"
 
@@ -95,9 +103,16 @@ def load_config():
     return cfg
 
 
-def _write_atomic(path, text):
-    """Write via a unique temp file + replace; if the replace is refused (file held open), write directly."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _write_atomic(path, text, create_dir=True):
+    """Write via a unique temp file + replace; if the replace is refused (file held open), write directly.
+
+    create_dir=False: the folder must already exist (a run directory that main.ahk
+    deleted is never recreated, so a late writer leaves nothing behind).
+    """
+    if create_dir:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    elif not path.parent.is_dir():
+        raise FileNotFoundError(f"run directory is gone: {path.parent}")
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
         tmp.write_text(text, encoding="utf-8")
@@ -186,21 +201,94 @@ def describe_error(exc):
     return f"Something went wrong: {str(exc)[:150]}", detail
 
 
+# The run directory of the job in progress (--run-dir), None for the old form
+_RUN_DIR = None
+
+
+def _error_file():
+    return _RUN_DIR / "error.txt" if _RUN_DIR else ERROR_FILE
+
+
 def write_error(message, detail=""):
-    """Write work/error.txt: line 1 is shown to the user by main.ahk."""
+    """Write error.txt (K1): line 1 is shown to the user by main.ahk.
+
+    In a run started with --run-dir it goes to <run dir>/error.txt, else work/error.txt.
+    """
     line1 = re.sub(r"[\r\n\t]+", " ", message).strip()[:200]     # keeps the "run  ollama pull" spacing
     text = line1 + "\n" + (detail.strip() + "\n" if detail else "")
     try:
-        _write_atomic(ERROR_FILE, text)
+        _write_atomic(_error_file(), text, create_dir=_RUN_DIR is None)
     except OSError:
         pass
 
 
 def clear_error():
     try:
-        ERROR_FILE.unlink()
+        _error_file().unlink()
     except OSError:
         pass
+
+
+# =========================================================
+# RUN DIRECTORIES (work/runs/<id>/, S9)
+# =========================================================
+
+def is_run_dir(path):
+    """True for a folder directly inside work/runs whose name is a run id."""
+    path = Path(path)
+    return bool(RUN_ID_RE.fullmatch(path.name)) and path.parent.resolve() == RUNS_DIR.resolve()
+
+
+def sweep_stale_runs(max_age=STALE_RUN_SECONDS, keep=None, now=None):
+    """Delete run directories last modified more than max_age seconds ago.
+
+    Only folders named like a run id are touched; keep (a path) is never deleted.
+    Returns the names deleted. Best effort: a locked file leaves its folder for next time.
+    """
+    import shutil
+    import time
+
+    now = time.time() if now is None else now
+    keep = Path(keep).resolve() if keep else None
+    removed = []
+    try:
+        entries = list(RUNS_DIR.iterdir())
+    except OSError:
+        return removed
+    for d in entries:
+        try:
+            if not (d.is_dir() and RUN_ID_RE.fullmatch(d.name)) or (keep and d.resolve() == keep):
+                continue
+            if now - d.stat().st_mtime < max_age:
+                continue
+        except OSError:
+            continue
+        shutil.rmtree(d, ignore_errors=True)
+        if not d.exists():
+            removed.append(d.name)
+    return removed
+
+
+def remove_run_dir(run_dir):
+    """Delete a run directory and everything in it (best effort)."""
+    import shutil
+
+    shutil.rmtree(run_dir, ignore_errors=True)
+
+
+def parse_action_args(argv):
+    """(input file, output file, run dir or None) from an action's argv.
+
+    New form (S9):  <script> --run-dir=<work\\runs\\id>
+    Old form (K3):  <script> <input.txt> <output.txt>
+    """
+    for a in argv[1:]:
+        if a.startswith("--run-dir="):
+            run_dir = Path(a.split("=", 1)[1])
+            return run_dir / "input.txt", run_dir / "output.txt", run_dir
+    if len(argv) < 3:
+        raise ValueError("usage: <script> --run-dir=<dir>   or   <script> <input.txt> <output.txt>")
+    return Path(argv[1]), Path(argv[2]), None
 
 
 # =========================================================
@@ -444,28 +532,45 @@ def max_input_chars(mode):
 
 
 def run_action(mode, argv):
-    """Usage: <script> <input.txt> <output.txt>
+    """Usage: <script> --run-dir=<work\\runs\\id>   (main.ahk, S9)
+           <script> <input.txt> <output.txt>      (old form, still accepted)
+
+    With --run-dir, input.txt is read from the run directory and output.txt,
+    meta.json, sources.json, status.txt and error.txt are written there
+    atomically; the directory is never created, so a job whose directory was
+    deleted (cancelled, or main.ahk exited) leaves nothing behind.
 
     Exit codes: 0 = done, 1 = error, 3 = text too long / answer cut off.
-    On failure work/error.txt explains why (line 1 is shown to the user).
+    On failure error.txt explains why (line 1 is shown to the user).
     """
+    global _RUN_DIR
     try:
-        return _run_action(mode, argv)
+        input_file, output_file, _RUN_DIR = parse_action_args(argv)
+    except ValueError as e:
+        write_error("Internal error: the action was started without its files.", str(e))
+        return 1
+    try:
+        if _RUN_DIR is not None and not _RUN_DIR.is_dir():
+            return 1            # cancelled before we started: nothing to report to
+        return _run_action(mode, input_file, output_file)
     except Exception as e:
         message, detail = describe_error(e)
         write_error(message, detail + "\n" + traceback.format_exc())
         return 1
+    finally:
+        _RUN_DIR = None
 
 
-def _run_action(mode, argv):
+def _run_action(mode, input_file, output_file):
     import sys
     import time
 
     t0 = time.time()
+    run_dir = _RUN_DIR
     clear_error()
     report_config_warnings()
-    input_file = Path(argv[1])
-    output_file = Path(argv[2])
+    if run_dir is not None:
+        sweep_stale_runs(keep=run_dir)
 
     testo = input_file.read_text(encoding="utf-8-sig")
 
@@ -485,12 +590,14 @@ def _run_action(mode, argv):
     meta = {"mode": mode}
     if mode == "explain":
         import websearch
+        # The progress phases go to this run's own status.txt (old form: work/status.txt)
+        websearch.STATUS_FILE = (run_dir or websearch.WORK_DIR) / "status.txt"
         try:
             fonti, query = websearch.gather_sources(testo)
         except Exception as e:
             print(f"Web search failed: {e}", file=sys.stderr)
             fonti = []
-        websearch.save_sources(fonti, query)
+        websearch.save_sources(fonti, query, path=run_dir / "sources.json" if run_dir else None)
         meta.update({"web": bool(fonti), "query": query if fonti else [], "fonti": len(fonti)})
         websearch.status("Qwen is writing the explanation…" + (f" ({len(fonti)} sources)" if fonti else " (no web)"))
 
@@ -516,12 +623,14 @@ def _run_action(mode, argv):
     if fonti:
         risposta = websearch.add_sources(risposta, fonti)
 
-    output_file.write_text(risposta, encoding="utf-8")
-
-    # Details for the results page (time, web search done)
+    # Details for the results page (time, web search done): written before
+    # output.txt, so whoever sees output.txt also finds this run's meta.json
     meta["seconds"] = round(time.time() - t0, 1)
+    meta_file = run_dir / "meta.json" if run_dir else WORK_DIR / "meta.json"
     try:
-        (WORK_DIR / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+        _write_atomic(meta_file, json.dumps(meta, ensure_ascii=False), create_dir=run_dir is None)
     except Exception:
         pass
+
+    _write_atomic(output_file, risposta, create_dir=run_dir is None)
     return 0

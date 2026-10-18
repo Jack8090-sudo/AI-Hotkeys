@@ -1364,21 +1364,29 @@ def add_sources(text, sources):
     return text + "\n".join(lines)
 
 
-def save_sources(sources, queries):
+def save_sources(sources, queries, path=None):
+    """Write the sources for the results page, atomically.
+
+    path = <run dir>/sources.json for a run started with --run-dir (S9): that
+    folder is never created here, so a cancelled run leaves nothing behind.
+    None = work/sources.json (old argument form).
+    """
     # The viewer does not need full page text (it uses "body")
     light = [{k: v for k, v in s.items() if k != "text"} for s in sources]
+    text = json.dumps({"queries": queries, "sources": light}, ensure_ascii=False)
     try:
-        SOURCES_FILE.write_text(
-            json.dumps({"queries": queries, "sources": light}, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        if path is None:
+            qwen_client._write_atomic(SOURCES_FILE, text)
+        else:
+            qwen_client._write_atomic(Path(path), text, create_dir=False)
     except Exception:
         pass
 
 
-def load_sources():
+def load_sources(path=None):
+    """Sources saved by save_sources(); [] when there are none. path: as in save_sources."""
     try:
-        data = json.loads(SOURCES_FILE.read_text(encoding="utf-8"))
+        data = json.loads(Path(path or SOURCES_FILE).read_text(encoding="utf-8"))
         return data.get("sources", [])
     except Exception:
         return []
