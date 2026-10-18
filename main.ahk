@@ -29,11 +29,19 @@ global BASE       := A_ScriptDir
 global PYTHON_EXE := FindPython()
 global PYTHON     := '"' PYTHON_EXE '" -E -s'
 global CONFIG     := BASE "\config.ini"
-global inputFile  := BASE "\work\input.txt"
-global outputFile := BASE "\work\output.txt"
+global WORK_DIR   := BASE "\work"
 global viewer     := BASE "\viewer.py"
-global statusFile := BASE "\work\status.txt"
-; Contract K1: line 1 = the user-facing reason a Python job failed
+; Each selection job has its own folder work\runs\<random id>\ (S9): input.txt,
+; output.txt, meta.json, sources.json, status.txt and error.txt live there, so a
+; late writer (an orphaned job) can never touch a newer job's files. The
+; folder is deleted after a replace, an error or a cancel; the results page
+; (viewer.py) deletes it once it has loaded it. currentRunDir = the running
+; job's folder, "" when none (OnExit removes it).
+global currentRunDir := ""
+; The running job's status.txt, "" between jobs
+global statusFile := ""
+; Contract K1: line 1 = the user-facing reason a Python job failed. Jobs write
+; it in their run folder; work\error.txt stays for the health check.
 global errorFile  := BASE "\work\error.txt"
 ; Contract K6: config.ini / prompts_user.py warnings, one per line
 global configWarningFile := BASE "\work\config_warning.txt"
@@ -160,6 +168,11 @@ global TODO_TITLE_PREFIX := ReadConfig("window_title", "To-Do List -")
 global THEME := LoadTheme()
 
 DirCreate BASE "\work"
+; work\ holds the selected text while a job runs: only this user may read it
+SecureWorkDir()
+; Leftovers of a crash (run folders older than 1 h) and of older versions
+SweepRuns()
+LegacyWorkCleanup()
 RegisterKeys()
 SetupTrayMenu()
 
@@ -374,9 +387,8 @@ GetContexts()
 
 RunSelectionAction(action, hk)
 {
-    global inputFile, outputFile, viewer, PYTHON, BASE, EDITABLE_APPS, REPLACE_ENABLED, SHOW_PROGRESS
     global cancelRequested, currentPid, statusFile, busy, capturing, CLIP_WAIT_S
-    global errorFile, jobSerial
+    global WORK_DIR, currentRunDir
 
     cancelRequested := false
     currentPid := 0
@@ -418,6 +430,52 @@ RunSelectionAction(action, hk)
     busy := true
     capturing := false
 
+    ; A fresh folder for this job (S9): nothing left by an earlier or orphaned
+    ; job can be mistaken for this job's input, result or error
+    SweepRuns()
+    runDir := ""
+    Loop 5
+    {
+        dir := RunDirOf(WORK_DIR, NewRunId())
+        if DirExist(dir)
+            continue
+        try
+        {
+            DirCreate(dir)
+            runDir := dir
+        }
+        break
+    }
+    if (runDir = "")
+    {
+        ShowError("Could not create a work folder in " WORK_DIR "\runs", keyLbl)
+        return
+    }
+    currentRunDir := runDir
+    handedOff := false
+    try
+        handedOff := RunCapturedJob(action, keyLbl, testo, hwnd, proc, runDir)
+    finally
+    {
+        ; The results page owns the folder from now on (it deletes it once
+        ; loaded); otherwise no copy of the selection stays on disk (C32)
+        statusFile := ""
+        currentRunDir := ""
+        if !handedOff
+            DeleteRunDir(runDir)
+    }
+}
+
+; Runs Python on the captured text in runDir and shows the outcome.
+; Returns true when the results page was started (it then owns runDir).
+RunCapturedJob(action, keyLbl, testo, hwnd, proc, runDir)
+{
+    global PYTHON, BASE, EDITABLE_APPS, REPLACE_ENABLED, SHOW_PROGRESS
+    global cancelRequested, currentPid, statusFile, jobSerial
+
+    inputFile  := runDir "\input.txt"
+    outputFile := runDir "\output.txt"
+
     ; Save the selected text as UTF-8
     try
     {
@@ -428,34 +486,21 @@ RunSelectionAction(action, hk)
     catch as e
     {
         ShowError("Could not write " inputFile ": " e.Message, keyLbl)
-        return
+        return false
     }
 
-    ; A leftover output.txt would be shown as this job's result
-    try
-    {
-        if FileExist(outputFile)
-            FileDelete(outputFile)
-    }
-    catch as e
-    {
-        ShowError("Could not delete the previous result " outputFile
-            . " (is another program using it?): " e.Message, keyLbl)
-        return
-    }
-
-    ; K1: a leftover error.txt would explain someone else's failure
-    try FileDelete(errorFile)
     jobSerial++
 
     if SHOW_PROGRESS
         ProgressShow(action.doing . "  ·  Esc 2 s = cancel", keyLbl)
 
-    comando := PYTHON ' "' action.script '" "' inputFile '" "' outputFile '"'
+    ; Python reads input.txt from the run folder and writes output.txt,
+    ; meta.json, sources.json, status.txt and error.txt there (S9)
+    comando := PYTHON ' "' action.script '" "--run-dir=' runDir '"'
 
-    ; Python writes its progress to work\status.txt (web search,
+    ; Python writes its progress to status.txt (web search,
     ; reading pages, writing): the progress popup shows it.
-    try FileDelete(statusFile)
+    statusFile := runDir "\status.txt"
     ShowStatus("", true)
     statusTimer := ShowStatus.Bind(keyLbl)
     if SHOW_PROGRESS
@@ -476,39 +521,37 @@ RunSelectionAction(action, hk)
         ProgressEnd()
         currentPid := 0
         ShowError("Could not start Python: " e.Message, keyLbl)
-        return
+        return false
     }
 
     cancelled := WaitPid(currentPid)
     currentPid := 0
 
     SetTimer statusTimer, 0
-    try FileDelete(statusFile)
     ProgressEnd()
 
+    ; Cancelled: the caller deletes the run folder (I5)
     if cancelled
     {
-        CleanupWorkFiles()
         ToastShow("Cancelled", keyLbl, 2000)
-        return
+        return false
     }
 
     ; The process ended on its own: if Python exited with an error
-    ; it did not write output.txt, and work\error.txt line 1 says why (K1).
+    ; it did not write output.txt, and error.txt in the run folder says why (K1).
     if !FileExist(outputFile)
     {
         ; Cancelled at the last moment while the process was dying
         if cancelRequested
         {
-            CleanupWorkFiles()
             ToastShow("Cancelled", keyLbl, 2000)
-            return
+            return false
         }
-        msg := ReadErrorLine()
+        msg := ReadErrorLine(runDir "\error.txt")
         if (msg = "")
             msg := "Qwen did not respond. Check that Ollama is running and that the model is downloaded."
         ShowError(msg, keyLbl)
-        return
+        return false
     }
 
     try
@@ -516,13 +559,13 @@ RunSelectionAction(action, hk)
     catch as e
     {
         ShowError("Could not read the result " outputFile ": " e.Message, keyLbl)
-        return
+        return false
     }
 
     if Trim(risposta) = ""
     {
         ShowError("Qwen returned an empty response.", keyLbl)
-        return
+        return false
     }
 
     ; -----------------------------------------------------
@@ -534,7 +577,7 @@ RunSelectionAction(action, hk)
     {
         why := ReplaceSelection(hwnd, testo, risposta)
         if (why = "")
-            return          ; pasted: the result stays in the clipboard (I15, D10)
+            return false    ; pasted: the result stays in the clipboard (I15, D10); folder deleted
         ; Not pasted: nothing was overwritten, the result opens in the results page
         ToastShow(why " — opened in the results page", keyLbl, 4000)
     }
@@ -543,7 +586,7 @@ RunSelectionAction(action, hk)
     ; EVERYTHING ELSE → results page
     ; -----------------------------------------------------
 
-    OpenResultsPage(action, keyLbl)
+    return OpenResultsPage(action, keyLbl, runDir)
 }
 
 ; Direct replace (C05). Pastes risposta over the selection only if the
@@ -582,13 +625,21 @@ ReplaceSelection(hwnd, original, risposta)
     return ""
 }
 
-; Opens the result in the results page (viewer.py, contract K3)
-OpenResultsPage(action, keyLbl)
+; Opens the result in the results page (viewer.py, new --run-dir form of K3).
+; The viewer deletes runDir once it has loaded it. Returns true if started.
+OpenResultsPage(action, keyLbl, runDir)
 {
-    global PYTHON, viewer, inputFile, outputFile, BASE
-    try Run(PYTHON ' "' viewer '" "' inputFile '" "' outputFile '" "' action.name '" ' action.mode ' "--key=' keyLbl '"', BASE, "Hide")
+    global PYTHON, viewer, BASE
+    try
+    {
+        Run(PYTHON ' "' viewer '" "--run-dir=' runDir '" "' action.name '" ' action.mode ' "--key=' keyLbl '"', BASE, "Hide")
+        return true
+    }
     catch as e
+    {
         ShowError("Could not open the results page: " e.Message, keyLbl)
+        return false
+    }
 }
 
 
@@ -754,14 +805,78 @@ WaitPid(pid)
     }
 }
 
-; Removes the half-written files of a cancelled action, so all is clean.
-CleanupWorkFiles()
+; Deletes a job's run folder (input, result, error...). Only folders inside
+; work\runs named like a run id; retried once if a file is briefly locked.
+DeleteRunDir(dir)
 {
-    global BASE
-    for f in ["input.txt", "output.txt", "status.txt", "meta.json", "sources.json"]
+    global WORK_DIR
+    SplitPath(dir, &name, &parent)
+    if (dir = "" || !IsRunId(name) || parent != WORK_DIR "\runs")
+        return
+    Loop 2
     {
-        try FileDelete(BASE "\work\" f)
+        try
+        {
+            if DirExist(dir)
+                DirDelete(dir, true)
+            return
+        }
+        Sleep 200
     }
+}
+
+; Deletes run folders not modified for an hour: left by a crash, or by a
+; results page that never started. Never the running job's folder.
+SweepRuns()
+{
+    global WORK_DIR, currentRunDir
+    Loop Files, WORK_DIR "\runs\*", "D"
+    {
+        if !IsRunId(A_LoopFileName) || (A_LoopFileFullPath = currentRunDir)
+            continue
+        try stamp := FileGetTime(A_LoopFileFullPath, "M")
+        catch
+            continue
+        if RunIsStale(stamp)
+            try DirDelete(A_LoopFileFullPath, true)
+    }
+}
+
+; Versions before S9 kept the selection and the result in work\ itself
+LegacyWorkCleanup()
+{
+    global WORK_DIR
+    for f in ["input.txt", "output.txt", "status.txt", "meta.json", "sources.json"]
+        try FileDelete(WORK_DIR "\" f)
+}
+
+; Best effort, once: work\ (which holds the selection while a job runs) is
+; restricted to the current user, SYSTEM and Administrators. The inherited
+; entries are removed only after the grant succeeded, so a failure never
+; locks the user out. work\acl.done remembers that it was tried.
+SecureWorkDir()
+{
+    global WORK_DIR
+    marker := WORK_DIR "\acl.done"
+    if FileExist(marker)
+        return
+    domain := EnvGet("USERDOMAIN")
+    user := (domain != "" ? domain "\" : "") A_UserName
+    a := WorkAclArgs(WORK_DIR, user)
+    icacls := A_WinDir "\System32\icacls.exe"
+    result := "failed"
+    try
+    {
+        code := RunWait('"' icacls '" ' a.grant, , "Hide")
+        if (code = 0)
+        {
+            code := RunWait('"' icacls '" ' a.inherit, , "Hide")
+            result := (code = 0) ? "ok" : "grant ok, inheritance kept (" code ")"
+        }
+        else
+            result := "grant failed (" code ")"
+    }
+    try FileAppend(result " " A_Now "`n", marker, "UTF-8-RAW")
 }
 
 
@@ -859,6 +974,8 @@ ShowStatus(keyLbl, reset := false)
         return
     }
 
+    if (statusFile = "")
+        return
     try
     {
         s := FileExist(statusFile) ? Trim(FileRead(statusFile, "UTF-8")) : ""
@@ -1020,14 +1137,20 @@ ConfirmIfBusy(what)
 ; instance owns the cleanup, as the plan decided for S8b2.
 OnExitCleanup(reason, *)
 {
-    global currentPid
+    global currentPid, currentRunDir
     if (reason != "Single" && currentPid)
     {
         pid := currentPid
         currentPid := 0
         try ProcessClose(pid)
-        ; No half-written files for the next run
-        CleanupWorkFiles()
+    }
+    ; No copy of the selection stays behind (I5, C32). Also on "Single": a job
+    ; that keeps running finds its folder gone and writes nothing (S9).
+    if (currentRunDir != "")
+    {
+        dir := currentRunDir
+        currentRunDir := ""
+        DeleteRunDir(dir)
     }
     StopSearxng(reason)
 }
@@ -1105,14 +1228,17 @@ EditPrompts()
         MsgBox "Could not open " userFile ":`n" e.Message, "AI-Hotkeys", "Iconx"
 }
 
-; Line 1 of work\error.txt (contract K1), "" if there is none
-ReadErrorLine()
+; Line 1 of an error.txt (contract K1), "" if there is none.
+; file = "" means work\error.txt (health check); jobs pass their run folder's.
+ReadErrorLine(file := "")
 {
     global errorFile
+    if (file = "")
+        file := errorFile
     try
     {
-        if FileExist(errorFile)
-            return ErrorFileLine1(FileRead(errorFile, "UTF-8"))
+        if FileExist(file)
+            return ErrorFileLine1(FileRead(file, "UTF-8"))
     }
     return ""
 }

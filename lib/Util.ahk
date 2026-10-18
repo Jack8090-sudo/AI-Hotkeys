@@ -374,3 +374,54 @@ PromptsUserTemplate(promptsText)
         out .= (A_LoopField = "" ? "#" : "# " A_LoopField) "`n"
     return out
 }
+
+
+; ---------------------------------------------------------
+; S9: per-run directories work\runs\<id>\ (C32, H04, C18)
+; ---------------------------------------------------------
+; Same rules as qwen_client.RUN_ID_RE / sweep_stale_runs.
+
+; A new run id: local time (yyyyMMddHHmmss) + 16 random hex digits.
+; now = A_Now unless given (tests).
+NewRunId(now := "")
+{
+    if (now = "")
+        now := A_Now
+    return SubStr(now, 1, 14) "-" Format("{:08x}{:08x}", Random(0, 0xFFFFFFFF), Random(0, 0xFFFFFFFF))
+}
+
+; True for a name made by NewRunId: only such folders are ever swept away
+IsRunId(name)
+{
+    return RegExMatch(name, "^\d{14}-[0-9a-f]{16}$") ? true : false
+}
+
+; work\runs\<id> (no trailing backslash: it is passed inside quotes to Python)
+RunDirOf(workDir, id)
+{
+    return RTrim(workDir, "\") "\runs\" id
+}
+
+; Is a run folder last modified at stamp (yyyyMMddHHmmss) old enough to sweep?
+; An unreadable stamp is never stale (nothing is deleted on doubt).
+RunIsStale(stamp, now := "", maxAgeS := 3600)
+{
+    if (now = "")
+        now := A_Now
+    if !RegExMatch(stamp, "^\d{14}$") || !RegExMatch(now, "^\d{14}$")
+        return false
+    try
+        return DateDiff(now, stamp, "Seconds") >= maxAgeS
+    catch
+        return false
+}
+
+; icacls arguments that give the folder to the current user (plus SYSTEM and
+; Administrators, so backups and an elevated uninstaller still work), and the
+; arguments that then drop the inherited entries. user = "DOMAIN\name" or "name".
+WorkAclArgs(dir, user)
+{
+    perm := ":(OI)(CI)F"
+    grant := '"' dir '" /grant:r "' user perm '" "*S-1-5-18' perm '" "*S-1-5-32-544' perm '"'
+    return {grant: grant, inherit: '"' dir '" /inheritance:r'}
+}

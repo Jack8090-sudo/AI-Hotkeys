@@ -131,9 +131,8 @@ class ViewerHttpTest(unittest.TestCase):
 
     # ---- known defects ----
 
-    @unittest.expectedFailure
     def test_C21_missing_model_is_not_reported_as_ollama_unreachable(self):
-        """C21 (fixed in S9): HTTPError 404 is caught as URLError -> 'Cannot reach Ollama'."""
+        """C21 (fixed in S9): a 404 'model not found' says 'ollama pull', not 'Cannot reach Ollama'."""
         self.ollama.scenario = "http404"
         events = self.ndjson(self.ask("ancora")[2])
         self.assertNotIn("Cannot reach Ollama", events[-1].get("error", ""))
