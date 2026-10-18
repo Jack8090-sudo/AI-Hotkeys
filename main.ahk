@@ -632,7 +632,7 @@ OpenResultsPage(action, keyLbl, runDir)
     global PYTHON, viewer, BASE
     try
     {
-        Run(PYTHON ' "' viewer '" "--run-dir=' runDir '" "' action.name '" ' action.mode ' "--key=' keyLbl '"', BASE, "Hide")
+        Run(PYTHON ' "' viewer '" "--run-dir=' runDir '" "' action.name '" ' action.mode ' "--key=' CmdArgSafe(keyLbl) '"', BASE, "Hide")
         return true
     }
     catch as e
@@ -818,11 +818,23 @@ DeleteRunDir(dir)
         try
         {
             if DirExist(dir)
-                DirDelete(dir, true)
+                DeleteRunTree(dir)
             return
         }
         Sleep 200
     }
+}
+
+; DirDelete(dir, true), but never through a junction or symbolic link (SEC1):
+; neither the run folder nor work\runs may be a reparse point, or the recursive
+; delete would empty the folder it points to. Such a link is left alone.
+DeleteRunTree(dir)
+{
+    SplitPath(dir, , &parent)
+    if !TreeDeletable(DirExist(dir)) || !TreeDeletable(DirExist(parent))
+        return false
+    DirDelete(dir, true)
+    return true
 }
 
 ; Deletes run folders not modified for an hour: left by a crash, or by a
@@ -838,7 +850,7 @@ SweepRuns()
         catch
             continue
         if RunIsStale(stamp)
-            try DirDelete(A_LoopFileFullPath, true)
+            try DeleteRunTree(A_LoopFileFullPath)
     }
 }
 
@@ -850,33 +862,45 @@ LegacyWorkCleanup()
         try FileDelete(WORK_DIR "\" f)
 }
 
-; Best effort, once: work\ (which holds the selection while a job runs) is
-; restricted to the current user, SYSTEM and Administrators. The inherited
-; entries are removed only after the grant succeeded, so a failure never
-; locks the user out. work\acl.done remembers that it was tried.
+; Best effort: work\ (which holds the selection while a job runs) is
+; restricted to the current user (by SID, from whoami as in the installer),
+; SYSTEM and Administrators. The inherited entries are removed only after the
+; grant succeeded, so a failure never locks the user out. work\acl.done is
+; written only once both steps succeeded: a failure is retried at the next
+; start (SEC1).
 SecureWorkDir()
 {
     global WORK_DIR
     marker := WORK_DIR "\acl.done"
     if FileExist(marker)
         return
-    domain := EnvGet("USERDOMAIN")
-    user := (domain != "" ? domain "\" : "") A_UserName
-    a := WorkAclArgs(WORK_DIR, user)
+    a := WorkAclArgs(WORK_DIR, CurrentUserSid())
+    if !IsObject(a)
+        return
     icacls := A_WinDir "\System32\icacls.exe"
-    result := "failed"
     try
     {
-        code := RunWait('"' icacls '" ' a.grant, , "Hide")
-        if (code = 0)
-        {
-            code := RunWait('"' icacls '" ' a.inherit, , "Hide")
-            result := (code = 0) ? "ok" : "grant ok, inheritance kept (" code ")"
-        }
-        else
-            result := "grant failed (" code ")"
+        if RunWait('"' icacls '" ' a.grant, , "Hide") != 0
+            return
+        if RunWait('"' icacls '" ' a.inherit, , "Hide") != 0
+            return
+        FileAppend("ok " A_Now "`n", marker, "UTF-8-RAW")
     }
-    try FileAppend(result " " A_Now "`n", marker, "UTF-8-RAW")
+}
+
+; The current user's SID, from  whoami /user /fo csv /nh  ("" if unknown)
+CurrentUserSid()
+{
+    out := A_Temp "\aihk-whoami-" ProcessExist() ".txt"
+    whoami := A_WinDir "\System32\whoami.exe"
+    sid := ""
+    try
+    {
+        RunWait(A_ComSpec ' /d /c ""' whoami '" /user /fo csv /nh > "' out '""', , "Hide")
+        sid := SidFromWhoamiCsv(FileRead(out))
+    }
+    try FileDelete(out)
+    return sid
 }
 
 
@@ -1417,6 +1441,13 @@ StopSearxng(reason, *)
             try FileDelete(pidFile)     ; process gone: stale
         return
     }
+    if !record.ctime
+    {
+        ; Old pid-file format, without a creation time: the pid may have been
+        ; reused, so the process is never closed on its say-so (SEC1).
+        LogSearxng("searxng.pid has no creation time (old format): PID " record.pid " (" exePath ") was left running")
+        return
+    }
     if SearxngPidIsOurs(record, exePath, ProcessCreationTime(record.pid), PYTHON_EXE)
     {
         try ProcessClose(record.pid)
@@ -1426,8 +1457,24 @@ StopSearxng(reason, *)
     ; leave both alone. The launcher removes its own pid file on a clean exit.
 }
 
+; One line in work\searxng.log (the launcher's log) and in the debugger output
+LogSearxng(msg)
+{
+    line := FormatTime(, "yyyy-MM-dd HH:mm:ss") " main.ahk: " msg
+    OutputDebug(line)
+    try FileAppend(line "`n", A_ScriptDir "\work\searxng.log", "UTF-8-RAW")
+}
+
 OpenSearxng()
 {
+    url := SearxngUrl()
+    ; Only the local engine is ever opened (SEC1): config.ini cannot turn this
+    ; menu item into a launcher for another URL, file or program.
+    if !IsLocalSearxUrl(url)
+    {
+        ShowError("searxng_url in config.ini must be http://127.0.0.1:<port> or http://localhost:<port>: " url, "SearXNG")
+        return
+    }
     StartSearxng()
-    Run SearxngUrl()
+    Run url
 }

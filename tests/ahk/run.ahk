@@ -23,7 +23,8 @@ for test in [TestReadConfig, TestIsNo, TestValidHotkey, TestKeyLabel, TestHexToC
              TestParsePidRecord, TestIsConfiguredPython, TestSearxngPidIsOurs, TestProcHelpers,
              TestErrorFileLine1, TestWarningSummary, TestHotkeyId, TestResolveKeys,
              TestPromptsUserTemplate, TestProcExitCode,
-             TestNewRunId, TestIsRunId, TestRunDirOf, TestRunIsStale, TestWorkAclArgs]
+             TestNewRunId, TestIsRunId, TestRunDirOf, TestRunIsStale, TestWorkAclArgs,
+             TestSid, TestCmdArgSafe, TestTreeDeletable, TestIsLocalSearxUrl]
 {
     try
         test()
@@ -394,7 +395,8 @@ TestSearxngPidIsOurs()
     Assert("SearxngPidIsOurs K5 other python", !!SearxngPidIsOurs(k5, "C:\Python313\python.exe", 133700000000000000, exe), false)
     Assert("SearxngPidIsOurs K5 unrelated exe", !!SearxngPidIsOurs(k5, "C:\Windows\explorer.exe", 133700000000000000, exe), false)
     Assert("SearxngPidIsOurs process gone", !!SearxngPidIsOurs(k5, "", 0, exe), false)
-    Assert("SearxngPidIsOurs legacy, path matches", !!SearxngPidIsOurs(legacy, exe, 133700000000000000, exe), true)
+    Assert("SearxngPidIsOurs legacy, path matches: still never (SEC1)", !!SearxngPidIsOurs(legacy, exe, 133700000000000000, exe), false)
+    Assert("SearxngPidIsOurs legacy, path matches, ctime unknown", !!SearxngPidIsOurs(legacy, exe, 0, exe), false)
     Assert("SearxngPidIsOurs legacy, unrelated python", !!SearxngPidIsOurs(legacy, "C:\Python313\python.exe", 1, exe), false)
     Assert("SearxngPidIsOurs legacy, system pythonw (no path to match)", !!SearxngPidIsOurs(legacy, "C:\Python313\pythonw.exe", 1, "pythonw"), false)
     Assert("SearxngPidIsOurs K5, system pythonw, ctime matches", !!SearxngPidIsOurs(k5, "C:\Python313\pythonw.exe", 133700000000000000, "pythonw"), true)
@@ -595,8 +597,75 @@ TestRunIsStale()
 
 TestWorkAclArgs()
 {
-    a := WorkAclArgs("C:\AI Hotkeys\work", "PC\jack")
+    sid := "S-1-5-21-1004336348-1177238915-682003330-1001"
+    a := WorkAclArgs("C:\AI Hotkeys\work", sid)
     Assert("WorkAclArgs grant", a.grant,
-        '"C:\AI Hotkeys\work" /grant:r "PC\jack:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F"')
+        '"C:\AI Hotkeys\work" /grant:r "*' sid ':(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F"')
     Assert("WorkAclArgs inheritance", a.inherit, '"C:\AI Hotkeys\work" /inheritance:r')
+    Assert("WorkAclArgs refuses a user name", WorkAclArgs("C:\w", "PC\jack"), "")
+    Assert("WorkAclArgs refuses an empty SID", WorkAclArgs("C:\w", ""), "")
+    Assert("WorkAclArgs refuses a quoted SID", WorkAclArgs("C:\w", 'S-1-5-21-1" /grant "Everyone'), "")
+}
+
+TestSid()
+{
+    Assert("IsSid user", IsSid("S-1-5-21-1004336348-1177238915-682003330-1001"), true)
+    Assert("IsSid SYSTEM", IsSid("S-1-5-18"), true)
+    Assert("IsSid name", IsSid("PC\jack"), false)
+    Assert("IsSid trailing dash", IsSid("S-1-5-"), false)
+    Assert("IsSid trailing newline", IsSid("S-1-5-18`n"), false)
+    Assert("IsSid injection", IsSid("S-1-5-18 /grant x"), false)
+    Assert("SidFromWhoamiCsv",
+        SidFromWhoamiCsv('"desktop-abc\jack","S-1-5-21-1004336348-1177238915-682003330-1001"`r`n'),
+        "S-1-5-21-1004336348-1177238915-682003330-1001")
+    Assert("SidFromWhoamiCsv name with spaces and quotes",
+        SidFromWhoamiCsv('"PC\Jack ""J"" R","S-1-5-21-1-2-3-1001"'), "S-1-5-21-1-2-3-1001")
+    Assert("SidFromWhoamiCsv nothing", SidFromWhoamiCsv("ERROR: access denied"), "")
+    Assert("SidFromWhoamiCsv empty", SidFromWhoamiCsv(""), "")
+    ; the real thing, as SecureWorkDir runs it
+    out := TMP "\whoami.txt"
+    RunWait(A_ComSpec ' /d /c ""' A_WinDir '\System32\whoami.exe" /user /fo csv /nh > "' out '""', , "Hide")
+    Assert("SidFromWhoamiCsv real whoami output is a SID", IsSid(SidFromWhoamiCsv(FileRead(out))), true)
+}
+
+TestCmdArgSafe()
+{
+    Assert("CmdArgSafe plain", CmdArgSafe("End"), "End")
+    Assert("CmdArgSafe modifiers", CmdArgSafe("Ctrl+Shift+F1"), "Ctrl+Shift+F1")
+    Assert("CmdArgSafe quote", CmdArgSafe('"'), "")
+    Assert("CmdArgSafe quote inside", CmdArgSafe('Ctrl+" --no-browser "x'), "Ctrl+ --no-browser x")
+    Assert("CmdArgSafe trailing backslash", CmdArgSafe("Ctrl+\"), "Ctrl+")
+    Assert("CmdArgSafe inner backslash kept", CmdArgSafe("a\b"), "a\b")
+    Assert("CmdArgSafe KeyLabel of a quote key", InStr(CmdArgSafe(KeyLabel('^"')), '"'), 0)
+}
+
+TestTreeDeletable()
+{
+    Assert("TreeDeletable directory", TreeDeletable("D"), true)
+    Assert("TreeDeletable hidden archive directory", TreeDeletable("HAD"), true)
+    Assert("TreeDeletable junction", TreeDeletable("DL"), false)
+    Assert("TreeDeletable symlink with other bits", TreeDeletable("RHDL"), false)
+    Assert("TreeDeletable file", TreeDeletable("A"), false)
+    Assert("TreeDeletable missing", TreeDeletable(""), false)
+    ; real junction (no admin rights needed): DirExist reports "L" for it
+    target := TMP "\junction-target"
+    link := TMP "\junction-link"
+    DirCreate(target)
+    FileAppend("keep", target "\keep.txt")
+    RunWait(A_ComSpec ' /d /c mklink /J "' link '" "' target '"', , "Hide")
+    Assert("TreeDeletable real folder", TreeDeletable(DirExist(target)), true)
+    Assert("TreeDeletable real junction", TreeDeletable(DirExist(link)), false)
+    try DirDelete(link)          ; removes the link only
+    Assert("junction target untouched", FileExist(target "\keep.txt") != "", true)
+}
+
+TestIsLocalSearxUrl()
+{
+    for u in ["http://127.0.0.1:8888", "http://127.0.0.1", "https://localhost:8443/", "http://LOCALHOST:8888/search"]
+        Assert("IsLocalSearxUrl " u, IsLocalSearxUrl(u), true)
+    for u in ["", "http://192.168.1.2:8888", "https://evil.example", "file:///C:/Windows/System32/calc.exe",
+              "C:\Windows\System32\calc.exe", "calc.exe", "http://127.0.0.1.evil.example/",
+              "http://127.0.0.1:8888@evil.example", "http://127.0.0.1\@evil.example", "http://localhost/a b",
+              "http://127.0.0.1:8888`n", "ftp://127.0.0.1/", "mailto:x@127.0.0.1"]
+        Assert("IsLocalSearxUrl rejects " Show(u), IsLocalSearxUrl(u), false)
 }

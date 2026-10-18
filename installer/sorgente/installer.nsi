@@ -61,6 +61,7 @@ Var ChkDir       ; .onVerifyInstDir writability cache: last folder tested...
 Var ChkOk        ; ...and its result (1 = writable)
 Var NoOllama     ; 1 = /NOOLLAMA on the command line
 Var Purge        ; uninstaller: 1 = /PURGE on the command line
+Var DirState     ; AihDirState of $INSTDIR before this install created or changed anything
 
 !define MUI_ICON   "payload\app\icon.ico"
 !define MUI_UNICON "payload\app\icon.ico"
@@ -69,7 +70,7 @@ Var Purge        ; uninstaller: 1 = /PURGE on the command line
 !define MUI_WELCOMEPAGE_TITLE "Installing AI-Hotkeys"
 !define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys uses local Qwen with three keys:$\r$\n$\r$\n    PgUp  →  fix the selected text$\r$\n    PgDn  →  summarize$\r$\n    End    →  explain$\r$\n$\r$\nThe program, Python and AutoHotkey will be installed (portable versions, only for AI-Hotkeys). If Ollama is missing, you will be offered to install it.$\r$\n$\r$\nThe ${MODEL} model is NOT downloaded: if you do not have it yet, you will be given the command at the end."
 
-!define MUI_DIRECTORYPAGE_TEXT_TOP "The default folder is private to your Windows account.$\r$\nThe folder must be writable, must not be the root of a drive and must not be inside a git repository. A folder outside your user profile is restricted to your account, SYSTEM and Administrators."
+!define MUI_DIRECTORYPAGE_TEXT_TOP "The default folder is private to your Windows account.$\r$\nThe folder must be new, empty or an existing AI-Hotkeys folder, on a local drive (not a drive root, not your profile folder itself, not inside a git repository). A folder outside your user profile is restricted to your account, SYSTEM and Administrators."
 
 !define MUI_LICENSEPAGE_TEXT_TOP "AI-Hotkeys is free software under the MIT license."
 !define MUI_LICENSEPAGE_TEXT_BOTTOM "The bundled Python, AutoHotkey, SearXNG and libraries keep their own licenses: see THIRD_PARTY_NOTICES.md and the licenses folder in the install folder."
@@ -135,34 +136,232 @@ FunctionEnd
 ; Install-folder rules (C09 / D1)
 ; ---------------------------------------------------------
 
+; In: folder on the stack. Out: its canonical form (absolute "X:\...", no trailing \), or "!" followed
+; by the reason it was rejected (SEC1). Rejected before canonicalisation: UNC and device paths
+; (\\server\share, \\?\, \\.\), drive-relative paths (C: or C:foo), empty, "." and ".." segments,
+; segments ending with a dot or a space (Windows silently drops those), and : * ? " < > | (an NTFS
+; alternate data stream, or a wildcard). Then GetFullPathNameW gives the canonical path that every
+; other check (drive root, profile, git, ACL) works on.
+Function AihCanonDir
+    Exch $0
+    Push $1
+    Push $2
+    Push $3
+    Push $4
+    Push $5
+
+    Push $0
+    Call AihNormDir
+    Pop $0
+
+    StrCpy $1 $0 1
+    StrCpy $2 $0 1 1
+    ${If} $1 == "\"
+    ${OrIf} $1 == "/"
+        ${If} $2 == "\"
+        ${OrIf} $2 == "/"
+            StrCpy $0 "!Network (UNC) and device paths cannot be used: choose a folder on a local drive, such as $LOCALAPPDATA\Programs\${APP}."
+        ${Else}
+            StrCpy $0 "!The folder must be a full path, such as $LOCALAPPDATA\Programs\${APP}."
+        ${EndIf}
+        Goto done
+    ${EndIf}
+    StrLen $3 $0
+    ${If} $2 == ":"
+    ${AndIf} $3 == 2
+        StrCpy $0 "!The root of a drive cannot be used: choose a folder."
+        Goto done
+    ${EndIf}
+    StrCpy $4 $0 1 2
+    StrCpy $1 0
+    ${If} $2 == ":"
+        ${If} $4 == "\"
+        ${OrIf} $4 == "/"
+            StrCpy $1 1
+        ${EndIf}
+    ${EndIf}
+    ${If} $1 != 1
+        StrCpy $0 "!The folder must be a full path, such as $LOCALAPPDATA\Programs\${APP}."
+        Goto done
+    ${EndIf}
+
+    ; segments after "X:\"
+    StrCpy $4 3          ; start of the current segment
+    StrCpy $5 3          ; current position
+    segloop:
+        StrCpy $1 $0 1 $5
+        ${If} $1 == "\"
+        ${OrIf} $1 == "/"
+        ${OrIf} $1 == ""
+            IntOp $3 $5 - $4
+            ${If} $3 == 0
+                StrCpy $0 "!The path contains an empty folder name (two backslashes in a row)."
+                Goto done
+            ${EndIf}
+            StrCpy $2 $0 $3 $4
+            ${If} $2 == "."
+            ${OrIf} $2 == ".."
+                StrCpy $0 '!The path must not contain "." or ".." folders.'
+                Goto done
+            ${EndIf}
+            StrCpy $3 $2 1 -1
+            ${If} $3 == "."
+            ${OrIf} $3 == " "
+                StrCpy $0 "!A folder name cannot end with a dot or a space: $2"
+                Goto done
+            ${EndIf}
+            ${If} $1 == ""
+                Goto segdone
+            ${EndIf}
+            IntOp $4 $5 + 1
+        ${ElseIf} $1 == ":"
+        ${OrIf} $1 == "*"
+        ${OrIf} $1 == "?"
+        ${OrIf} $1 == '"'
+        ${OrIf} $1 == "<"
+        ${OrIf} $1 == ">"
+        ${OrIf} $1 == "|"
+            StrCpy $0 '!The folder name contains a character Windows does not allow there: $1'
+            Goto done
+        ${EndIf}
+        IntOp $5 $5 + 1
+        Goto segloop
+    segdone:
+
+    System::Call 'kernel32::GetFullPathNameW(w r0, i ${NSIS_MAX_STRLEN}, w .r1, p 0) i .r2'
+    ${If} $2 == 0
+    ${OrIf} $2 >= ${NSIS_MAX_STRLEN}
+        StrCpy $0 "!The folder path is not valid or is too long."
+        Goto done
+    ${EndIf}
+    Push $1
+    Call AihNormDir
+    Pop $0
+    StrCpy $2 $0 1 1
+    StrCpy $4 $0 1 2
+    StrLen $3 $0
+    ${If} $2 != ":"
+    ${OrIf} $4 != "\"
+    ${OrIf} $3 < 4
+        StrCpy $0 "!The folder must be a full path, such as $LOCALAPPDATA\Programs\${APP}."
+    ${EndIf}
+
+    done:
+    Pop $5
+    Pop $4
+    Pop $3
+    Pop $2
+    Pop $1
+    Exch $0
+FunctionEnd
+
+; In: folder on the stack. Out: what it holds (SEC1):
+;   0 = does not exist, 1 = empty, 2 = only what an uninstall leaves behind (config.ini, work\,
+;   prompts_user.py, prompts.local.py, prompts.py.bak-*, Uninstall.exe*),
+;   3 = an AI-Hotkeys installation (.manifest, or main.ahk together with qwen_client.py),
+;   4 = anything else: someone else's files.
+Function AihDirState
+    Exch $0
+    Push $1
+    Push $2
+    Push $3
+    Push $4
+
+    ${IfNot} ${FileExists} "$0\*.*"
+        StrCpy $3 0
+        Goto done
+    ${EndIf}
+    ${If} ${FileExists} "$0\.manifest"
+        StrCpy $3 3
+        Goto done
+    ${EndIf}
+    ${If} ${FileExists} "$0\main.ahk"
+    ${AndIf} ${FileExists} "$0\qwen_client.py"
+        StrCpy $3 3
+        Goto done
+    ${EndIf}
+
+    StrCpy $3 1
+    ClearErrors
+    FindFirst $1 $2 "$0\*"
+    scan:
+        ${If} ${Errors}
+        ${OrIf} $2 == ""
+            Goto scandone
+        ${EndIf}
+        ${If} $2 == "."
+        ${OrIf} $2 == ".."
+            Goto next
+        ${EndIf}
+        ${If} $2 == "config.ini"
+        ${OrIf} $2 == "work"
+        ${OrIf} $2 == "prompts_user.py"
+        ${OrIf} $2 == "prompts.local.py"
+            StrCpy $3 2
+            Goto next
+        ${EndIf}
+        StrCpy $4 $2 15
+        ${If} $4 == "prompts.py.bak-"
+            StrCpy $3 2
+            Goto next
+        ${EndIf}
+        StrCpy $4 $2 13
+        ${If} $4 == "Uninstall.exe"
+            StrCpy $3 2
+            Goto next
+        ${EndIf}
+        StrCpy $3 4
+        Goto scandone
+        next:
+        ClearErrors
+        FindNext $1 $2
+        Goto scan
+    scandone:
+    FindClose $1
+
+    done:
+    StrCpy $0 $3
+    Pop $4
+    Pop $3
+    Pop $2
+    Pop $1
+    Exch $0
+FunctionEnd
+
 ; In: folder on the stack. Out: "" if it can be used, otherwise the reason, on the stack.
-; Rejects: relative paths, drive roots, folders inside a git repository (.git in the folder or
-; in any parent: the v1.0.0 default C:\AI-Hotkeys is also the source repository), and folders
-; that cannot be written. Called on every keystroke by .onVerifyInstDir, so the write test is
-; cached per tested folder.
+; Rejects (after AihCanonDir's syntax rules, on the canonical path): drive roots, the user profile
+; folder itself, folders inside a git repository (.git in the folder or in any parent: the v1.0.0
+; default C:\AI-Hotkeys is also the source repository), existing folders that hold someone else's
+; files (SEC1: an install, an uninstall and /PURGE must never mix with them; the Browse button
+; already appends \${APP}), and folders that cannot be written. Called on every keystroke by
+; .onVerifyInstDir, so the write test is cached per tested folder.
 Function AihCheckDir
     Exch $0
     Push $1
     Push $2
     Push $3
 
-    Push $0
-    Call AihNormDir
-    Pop $0
     StrCpy $3 ""
-
-    ; absolute: "X:\..." or "\\server\share\..."
-    StrCpy $1 $0 1 1
-    StrCpy $2 $0 2
-    ${If} $1 != ":"
-    ${AndIf} $2 != "\\"
-        StrCpy $3 "The folder must be a full path, such as $LOCALAPPDATA\Programs\${APP}."
+    Push $0
+    Call AihCanonDir
+    Pop $0
+    StrCpy $1 $0 1
+    ${If} $1 == "!"
+        StrCpy $3 $0 "" 1
         Goto done
     ${EndIf}
 
     ${GetRoot} $0 $1
     ${If} $0 == $1
         StrCpy $3 "The root of a drive cannot be used: choose a folder."
+        Goto done
+    ${EndIf}
+
+    Push $PROFILE
+    Call AihNormDir
+    Pop $1
+    ${If} $0 == $1
+        StrCpy $3 "Your user profile folder itself cannot be used: choose a new folder, such as $LOCALAPPDATA\Programs\${APP}."
         Goto done
     ${EndIf}
 
@@ -194,6 +393,16 @@ Function AihCheckDir
             StrCpy $1 $2
             Goto existloop
         ${EndIf}
+
+    ${If} $1 == $0
+        Push $0
+        Call AihDirState
+        Pop $2
+        ${If} $2 == 4
+            StrCpy $3 "$0 already contains other files. Choose an empty or new folder, such as $0\${APP}."
+            Goto done
+        ${EndIf}
+    ${EndIf}
 
     ${If} $1 != $ChkDir
         StrCpy $ChkDir $1
@@ -313,9 +522,15 @@ Function AihSecureDir
     nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$INSTDIR" /inheritance:r /grant:r "*$2:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /C /Q'
     Pop $0
     ${If} $0 == 0
-        ; explicit grants for Everyone, Authenticated Users and Users, on the folder and anything
-        ; already in it (an existing custom folder)
-        nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$INSTDIR" /remove:g "*S-1-1-0" "*S-1-5-11" "*S-1-5-32-545" /T /C /Q'
+        ; explicit grants for Everyone, Authenticated Users and Users. Recursively (/T) only on a
+        ; folder this installer created, or one that held nothing but what an uninstall leaves
+        ; behind (SEC1); an existing installation gets it on the folder itself only, so no ACL of
+        ; anything that may not be ours is ever rewritten.
+        ${If} $DirState <= 2
+            nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$INSTDIR" /remove:g "*S-1-1-0" "*S-1-5-11" "*S-1-5-32-545" /T /C /Q'
+        ${Else}
+            nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$INSTDIR" /remove:g "*S-1-1-0" "*S-1-5-11" "*S-1-5-32-545" /C /Q'
+        ${EndIf}
         Pop $0
     ${EndIf}
     ${If} $0 != 0
@@ -441,6 +656,13 @@ Section "AI-Hotkeys (required)" SecMain
         SetErrorLevel 2
         Abort
     ${EndIf}
+    ; From here on, the canonical form (SEC1): what the checks above approved
+    Push $INSTDIR
+    Call AihCanonDir
+    Pop $INSTDIR
+    Push $INSTDIR
+    Call AihDirState
+    Pop $DirState
 
     InitPluginsDir
     File "/oname=$PLUGINSDIR\manifest.ps1" "manifest.ps1"
@@ -596,7 +818,7 @@ Section "Check Ollama (install if missing)" SecOllama
 
     run_winget:
     DetailPrint "Installing Ollama with winget (may take a few minutes)…"
-    nsExec::ExecToLog '"$LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" install --id Ollama.Ollama -e --silent --accept-source-agreements --accept-package-agreements'
+    nsExec::ExecToLog '"$LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" install --id Ollama.Ollama -e --source winget --silent --accept-source-agreements --accept-package-agreements'
     Pop $0
     StrCmp $0 0 winget_ok
     DetailPrint "winget failed (exit code $0)."
@@ -757,6 +979,21 @@ Function un.onInit
     ${EndIf}
 FunctionEnd
 
+; Deletes $INSTDIR\work recursively, unless it is a junction or symbolic link (SEC1): then only the
+; link is removed and whatever it points to is left alone.
+!macro AihRemoveWork
+    System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR\work") i .r0'
+    ${If} $0 != -1
+        IntOp $1 $0 & 0x400
+        ${If} $1 != 0
+            DetailPrint "$INSTDIR\work is a link (junction or symbolic link): only the link is removed."
+            RMDir "$INSTDIR\work"
+        ${Else}
+            RMDir /r "$INSTDIR\work"
+        ${EndIf}
+    ${EndIf}
+!macroend
+
 Section "Uninstall"
     stop_again:
     !insertmacro StopRunning "$INSTDIR"
@@ -798,11 +1035,11 @@ Section "Uninstall"
 
     ${If} $Purge == 1
         Delete "$INSTDIR\config.ini"
-        RMDir /r "$INSTDIR\work"
+        !insertmacro AihRemoveWork
     ${Else}
         MessageBox MB_YESNO|MB_ICONQUESTION "Do you also want to delete the configuration (config.ini) and temporary files (work folder)?$\r$\n$\r$\nYour own prompts (prompts_user.py) and saved copies (prompts.py.bak-*) are kept either way." /SD IDNO IDNO keep_data
             Delete "$INSTDIR\config.ini"
-            RMDir /r "$INSTDIR\work"
+            !insertmacro AihRemoveWork
         keep_data:
     ${EndIf}
 
