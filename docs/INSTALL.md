@@ -5,7 +5,7 @@ This guide covers a fresh Windows 10 or 11 (x64) PC. Requirements are listed in 
 
 ## 1. Download and run the installer
 
-1. Download `AI-Hotkeys-Setup-<version>.exe` from the project's GitHub Releases page. Each release also
+1. Download `AI-Hotkeys-Setup-<version>.exe` from the [latest release](https://github.com/Jack8090-sudo/AI-Hotkeys/releases/latest). Each release also
    lists `SHA256SUMS.txt`. To check the file in PowerShell:
    `Get-FileHash .\AI-Hotkeys-Setup-1.1.0.exe -Algorithm SHA256` and compare the hash with that list.
 2. Double-click the installer. It is not code-signed, so **SmartScreen** may show "Windows protected your

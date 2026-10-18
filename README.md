@@ -27,9 +27,8 @@ Current version: see [`VERSION`](VERSION) (1.1.0). Changes: [CHANGELOG.md](CHANG
 
 This is the normal way. Full walkthrough: [docs/INSTALL.md](docs/INSTALL.md).
 
-1. Download `AI-Hotkeys-Setup-<version>.exe` from the project's GitHub Releases page.
-   Releases are drafted by the release workflow and published by hand. Until the first one is
-   published, build the installer yourself ([CONTRIBUTING.md](CONTRIBUTING.md)).
+1. Download `AI-Hotkeys-Setup-<version>.exe` from the
+   [latest release](https://github.com/Jack8090-sudo/AI-Hotkeys/releases/latest).
 2. Run it. The installer is not code-signed, so Windows SmartScreen may say "Windows protected your
    PC": choose **More info**, then **Run anyway**.
 3. It installs into `%LOCALAPPDATA%\Programs\AI-Hotkeys`, a folder private to your Windows account.
