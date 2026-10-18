@@ -129,9 +129,17 @@ jobs:
           $notes = @(
             "AI-Hotkeys $v, built by GitHub Actions from commit $env:GITHUB_SHA.",
             '',
+            '## Requirements',
+            '- Windows 10 or 11, 64-bit. No administrator rights needed.',
+            '- [Ollama](https://ollama.com/download) 0.9.0 or newer, running.',
+            '- The default model: run `ollama pull gemma4:e4b-it-qat` once (about 6 GB download).',
+            '  On a PC with 4 GB of VRAM or less, or without a GPU, use `gemma4:e2b-it-qat` and pick it in Settings > Model.',
+            '',
             '## Install',
             "Download ``$exe`` and run it. The installer is not code-signed yet, so Windows SmartScreen",
             'may warn: choose "More info", then "Run anyway", after checking the SHA-256 below.',
+            'Then select text in any app and press PgUp (fix), PgDn (summarize) or End (explain).',
+            "Full guide: https://github.com/$env:GH_REPO/blob/$env:RELEASE_TAG/docs/INSTALL.md",
             '',
             '## Verify the download',
             "- SHA-256: compare ``Get-FileHash .\$exe`` with ``SHA256SUMS.txt``.",
@@ -146,7 +154,7 @@ jobs:
             '',
             '## Rollback',
             'Uninstall AI-Hotkeys (config.ini and the work folder are kept), then reinstall the previous version.',
-            'Before the first GitHub release there is no earlier asset: reinstall your local v1.0.0 Setup.exe instead.'
+            'Upgrading from v1.0.0: see the migration notes in CHANGELOG.md and docs/INSTALL.md.'
           ) -join "`n"
           [IO.File]::WriteAllText("$env:RUNNER_TEMP\notes.md", $notes + "`n")
           $assets = @(Get-ChildItem dist -File | ForEach-Object { $_.FullName })

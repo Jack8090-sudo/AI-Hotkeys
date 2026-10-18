@@ -34,6 +34,10 @@ Name "${APP}"
 OutFile "AI-Hotkeys-Setup.exe"
 ; D1: per-user folder whose ACL (inherited from the profile) grants only the user, SYSTEM and Administrators.
 InstallDir "$LOCALAPPDATA\Programs\${APP}"
+; Without this, NSIS silently replaces a drive root given with /D= by InstallDir (is_valid_instpath),
+; so "/S /D=C:\" would install to the default folder and exit 0. AihCheckDir rejects drive roots
+; itself, with a message and error level 2 (and on the folder page through .onVerifyInstDir).
+AllowRootDirInstall true
 BrandingText "${APP} ${VERSION}"
 ShowInstDetails show
 
@@ -1034,7 +1038,11 @@ Section "Uninstall"
     Delete "$INSTDIR\Uninstall.exe"
 
     ${If} $Purge == 1
+        ; /PURGE leaves nothing: the user's prompts and their backups go too
         Delete "$INSTDIR\config.ini"
+        Delete "$INSTDIR\prompts_user.py"
+        Delete "$INSTDIR\prompts.local.py"
+        Delete "$INSTDIR\prompts.py.bak-*"
         !insertmacro AihRemoveWork
     ${Else}
         MessageBox MB_YESNO|MB_ICONQUESTION "Do you also want to delete the configuration (config.ini) and temporary files (work folder)?$\r$\n$\r$\nYour own prompts (prompts_user.py) and saved copies (prompts.py.bak-*) are kept either way." /SD IDNO IDNO keep_data

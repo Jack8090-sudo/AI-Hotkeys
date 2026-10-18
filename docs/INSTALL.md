@@ -160,7 +160,7 @@ Windows Settings → Apps → AI-Hotkeys → Uninstall, or Start menu → AI-Hot
 
 - It asks whether to delete your settings (`config.ini`) and `work\`. `prompts_user.py` and
   `prompts.py.bak-*` are kept either way.
-- `Uninstall.exe /S` keeps `config.ini` and `work\`. `Uninstall.exe /S /PURGE` deletes them too.
+- `Uninstall.exe /S` keeps `config.ini` and `work\`. `Uninstall.exe /S /PURGE` deletes them too, together with `prompts_user.py` and `prompts.py.bak-*`: nothing is left.
 - Ollama and the model are separate programs. Remove them from Windows Settings → Apps, and the model with
   `ollama rm gemma4:e4b-it-qat` (or the name of the model you use).
 - Obsidian backups in `.ai-hotkeys-backups` are your data and are never deleted.

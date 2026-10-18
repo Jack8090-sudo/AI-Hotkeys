@@ -2,7 +2,7 @@
 
 All notable changes to AI-Hotkeys. Versions follow [`VERSION`](VERSION).
 
-## [1.1.0] - unreleased
+## [1.1.0] - 2026-10-18
 
 The production-readiness release: first public build, English UI, a private install folder, specific
 error messages, data-safety and privacy fixes, a hardened web search, and a reproducible, tested build.
@@ -185,7 +185,6 @@ Plan: `plans/ai-hotkeys-production-readiness.md`. Step ids (S1–S15) refer to i
 
 - The Start-menu shortcut "Edit prompts" still opens `prompts.py`; use tray → Edit prompts for
   `prompts_user.py`.
-- `/PURGE` keeps `prompts_user.py` and `prompts.py.bak-*`.
 - The 2 s default of `clip_wait_ms` was not lowered, because clipboard latency has not been measured on
   real applications yet.
 - Follow-up questions on the results page have no input-size guard; a very long conversation can exceed the
