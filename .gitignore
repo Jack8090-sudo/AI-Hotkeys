@@ -40,3 +40,5 @@ installer/sorgente/payload/
 # Personal prompts (kept across updates)
 prompts_user.py
 prompts.py.bak-*
+# Benchmark output (S3)
+tools/bench/out/
