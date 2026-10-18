@@ -1,0 +1,371 @@
+# Installer CI (plan step S14): build the installer from the commit, then install, upgrade and
+# uninstall it silently on clean GitHub-hosted Windows images and check the result.
+# These jobs run the real Setup.exe and Uninstall.exe, which register in HKCU: they are meant for
+# disposable runners only. Never run the same steps on a developer machine.
+# Every action is pinned by full commit SHA; every download is checked against a pinned SHA-256
+# (build/pins.json, verified by build/build.ps1).
+name: Installer
+
+on:
+  pull_request:
+    paths:
+      - "installer/**"
+      - "build/**"
+      - "*.py"
+      - "main.ahk"
+      - "lib/**"
+      - "static/**"
+      - "actions/**"
+      - "searxng/*.py"
+      # also part of the payload, or of these tests
+      - "searxng/settings.yml"
+      - "config.example.ini"
+      - "VERSION"
+      - "THIRD_PARTY_NOTICES.md"
+      - "licenses/**"
+      - "tools/licenses/**"
+      - "scripts/ci/**"
+      - ".github/workflows/installer.yml"
+  push:
+    paths:
+      - "installer/**"
+      - "build/**"
+      - "*.py"
+      - "main.ahk"
+      - "lib/**"
+      - "static/**"
+      - "actions/**"
+      - "searxng/*.py"
+      - "searxng/settings.yml"
+      - "config.example.ini"
+      - "VERSION"
+      - "THIRD_PARTY_NOTICES.md"
+      - "licenses/**"
+      - "tools/licenses/**"
+      - "scripts/ci/**"
+      - ".github/workflows/installer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHON_VERSION: "3.13"
+  # A custom folder outside the user profile, with spaces (the installer gives it an explicit ACL).
+  CUSTOM_DIR: 'C:\Temp Dir\AI Hotkeys Test'
+
+defaults:
+  run:
+    # Windows PowerShell 5.1, the shell that build.ps1 and the installer's own scripts target.
+    shell: powershell
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Cache the pinned downloads (build/cache)
+        # build.ps1 re-verifies every cached download and wheel against its pinned SHA-256.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/cache
+          key: build-cache-${{ runner.os }}-${{ hashFiles('build/pins.json', 'build/requirements-searxng.txt') }}
+      - name: Build the payload and the installer (build\build.ps1, includes the H16 smoke test)
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File build\build.ps1 -HostPython python
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check SHA256SUMS.txt
+        run: |
+          Set-Location build\out
+          foreach ($line in Get-Content SHA256SUMS.txt) {
+            $sha, $name = $line -split '  ', 2
+            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $name).Hash.ToLowerInvariant()
+            if ($actual -ne $sha) { throw "SHA-256 mismatch: $name" }
+            Write-Host "ok  $sha  $name"
+          }
+      - name: Upload the installer, SHA256SUMS.txt and the manifest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-${{ matrix.os }}
+          path: |
+            build/out/AI-Hotkeys-Setup-*.exe
+            build/out/SHA256SUMS.txt
+            build/out/manifest.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  # S11 acceptance: the same commit must give the same payload on a second machine.
+  reproducibility:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: installer-*
+          path: dist
+      - name: Compare the windows-2022 and windows-latest builds
+        run: |
+          $a = Get-Content -Raw dist\installer-windows-2022\manifest.txt
+          $b = Get-Content -Raw dist\installer-windows-latest\manifest.txt
+          if ($a -ne $b) {
+            Compare-Object ($a -split "`n") ($b -split "`n") | Select-Object -First 40 | Format-Table -AutoSize | Out-String | Write-Host
+            throw 'manifest.txt differs between the two images: the payload is not reproducible'
+          }
+          Write-Host 'ok  manifest.txt is identical on both images'
+          $ea = (Get-FileHash (Get-ChildItem dist\installer-windows-2022\AI-Hotkeys-Setup-*.exe).FullName).Hash
+          $eb = (Get-FileHash (Get-ChildItem dist\installer-windows-latest\AI-Hotkeys-Setup-*.exe).FullName).Hash
+          if ($ea -ne $eb) { Write-Host "::warning::Setup.exe differs between the images ($ea vs $eb), although the payload is identical" }
+          else { Write-Host "ok  Setup.exe is byte-identical on both images ($ea)" }
+
+  install:
+    name: install / uninstall (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installer-${{ matrix.os }}
+          path: dist
+      - name: Locate the installer
+        run: |
+          $setup = @(Get-ChildItem dist\AI-Hotkeys-Setup-*.exe)
+          if ($setup.Count -ne 1) { throw "Expected one installer in dist, found $($setup.Count)" }
+          $version = (Get-Content -Raw VERSION).Trim()
+          if ($setup[0].Name -ne "AI-Hotkeys-Setup-$version.exe") { throw "Installer name $($setup[0].Name) does not match VERSION $version" }
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "SETUP=$($setup[0].FullName)`nAIH_VERSION=$version`n")
+      - name: Rejected folders exit with error level 2 and install nothing
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Setup -Setup $env:SETUP -Arguments '/S /NOOLLAMA /D=C:\' -ExpectedExitCode 2
+          $inRepo = Join-Path $env:GITHUB_WORKSPACE 'inside-git-checkout'
+          Invoke-Setup -Setup $env:SETUP -Arguments "/S /NOOLLAMA /D=$inRepo" -ExpectedExitCode 2
+          if (Test-Path -LiteralPath "$inRepo\main.ahk") { throw 'Files were installed inside the git checkout' }
+          if (Test-Path HKCU:\Software\AI-Hotkeys) { throw 'A rejected install wrote HKCU\Software\AI-Hotkeys' }
+          Write-Host 'ok  C:\ and a folder inside a git checkout are rejected'
+      - name: Default folder (%LOCALAPPDATA%\Programs\AI-Hotkeys) - install and check
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Setup -Setup $env:SETUP -Arguments '/S /NOOLLAMA'
+          Assert-Installed -Dir (Get-DefaultInstallDir) -Version $env:AIH_VERSION -Manifest dist\manifest.txt
+      - name: Default folder - uninstall /PURGE
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Uninstall -Dir (Get-DefaultInstallDir) -Purge
+          Assert-Uninstalled -Dir (Get-DefaultInstallDir)
+          Assert-NoAppProcesses
+      - name: Custom folder with spaces, outside the profile - install and check (explicit ACL)
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Setup -Setup $env:SETUP -Arguments "/S /NOOLLAMA /D=$env:CUSTOM_DIR"
+          Assert-Installed -Dir $env:CUSTOM_DIR -Version $env:AIH_VERSION -Manifest dist\manifest.txt -ProtectedAcl
+      - name: Smoke tests with the bundled Python (imports, viewer/settings token, SearXNG /healthz)
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-InstalledSmoke -Dir $env:CUSTOM_DIR -SearxTimeoutSec 60
+          Assert-NoAppProcesses
+      - name: Uninstall /S keeps only config.ini and work\
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Uninstall -Dir $env:CUSTOM_DIR
+          Assert-Uninstalled -Dir $env:CUSTOM_DIR -Kept
+          Assert-NoAppProcesses
+      - name: Reinstall, then uninstall /S /PURGE leaves nothing
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Setup -Setup $env:SETUP -Arguments "/S /NOOLLAMA /D=$env:CUSTOM_DIR"
+          Assert-Installed -Dir $env:CUSTOM_DIR -Version $env:AIH_VERSION -Manifest dist\manifest.txt -ProtectedAcl
+          Invoke-Uninstall -Dir $env:CUSTOM_DIR -Purge
+          Assert-Uninstalled -Dir $env:CUSTOM_DIR
+      - name: No AutoHotkey or Python process left over
+        if: always()
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Assert-NoAppProcesses
+
+  upgrade:
+    name: upgrade over itself (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installer-${{ matrix.os }}
+          path: dist
+      - name: Locate the installer
+        run: |
+          $setup = @(Get-ChildItem dist\AI-Hotkeys-Setup-*.exe)
+          if ($setup.Count -ne 1) { throw "Expected one installer in dist, found $($setup.Count)" }
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "SETUP=$($setup[0].FullName)`nAIH_VERSION=$((Get-Content -Raw VERSION).Trim())`n")
+      - name: Install, then customize it like a user would
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Setup -Setup $env:SETUP -Arguments "/S /NOOLLAMA /D=$env:CUSTOM_DIR"
+          Assert-Installed -Dir $env:CUSTOM_DIR -Version $env:AIH_VERSION -Manifest dist\manifest.txt -ProtectedAcl
+          Initialize-UpgradeFixture -Dir $env:CUSTOM_DIR -StateFile "$env:RUNNER_TEMP\upgrade.json"
+      - name: Upgrade in place while main.ahk and settings.py are running
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Start-InstalledApp -Dir $env:CUSTOM_DIR
+          Invoke-Setup -Setup $env:SETUP -Arguments "/S /NOOLLAMA /D=$env:CUSTOM_DIR"
+          Assert-NoAppProcesses
+      - name: Check the upgraded installation
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Assert-Installed -Dir $env:CUSTOM_DIR -Version $env:AIH_VERSION -Manifest dist\manifest.txt -ProtectedAcl -CustomConfig
+          Assert-UpgradeResult -Dir $env:CUSTOM_DIR -StateFile "$env:RUNNER_TEMP\upgrade.json"
+      - name: Uninstall /S /PURGE
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Uninstall -Dir $env:CUSTOM_DIR -Purge
+          Assert-Uninstalled -Dir $env:CUSTOM_DIR
+      - name: No AutoHotkey or Python process left over
+        if: always()
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Assert-NoAppProcesses
+
+  # Upgrade from the Italian v1.0.0 build (D11). That Setup.exe is not on GitHub, so this job runs
+  # only once the user publishes it somewhere (for example as a pre-release asset) and sets the
+  # repository variables V1_SETUP_URL (https URL of the v1.0.0 Setup.exe) and V1_SETUP_SHA256.
+  upgrade-v1:
+    name: upgrade from v1.0.0
+    if: ${{ vars.V1_SETUP_URL != '' }}
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      V1_SETUP_URL: ${{ vars.V1_SETUP_URL }}
+      V1_SETUP_SHA256: ${{ vars.V1_SETUP_SHA256 }}
+      # v1.0.0's own default folder. Safe on a runner: no repository lives there.
+      LEGACY_DIR: 'C:\AI-Hotkeys'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installer-windows-latest
+          path: dist
+      - name: Download the v1.0.0 Setup.exe (SHA-256 verified)
+        run: |
+          if ($env:V1_SETUP_SHA256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'Set the repository variable V1_SETUP_SHA256 (64 hex characters)' }
+          if (-not $env:V1_SETUP_URL.StartsWith('https://')) { throw 'V1_SETUP_URL must be an https URL' }
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\v1" | Out-Null
+          $v1 = "$env:RUNNER_TEMP\v1\AI-Hotkeys-Setup-1.0.0.exe"
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Invoke-WebRequest -Uri $env:V1_SETUP_URL -OutFile $v1 -UseBasicParsing
+          $actual = (Get-FileHash -Algorithm SHA256 $v1).Hash
+          if ($actual -ne $env:V1_SETUP_SHA256.ToUpperInvariant()) { throw "v1.0.0 Setup.exe SHA-256 is $actual" }
+          $setup = (Get-ChildItem dist\AI-Hotkeys-Setup-*.exe).FullName
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "V1_SETUP=$v1`nSETUP=$setup`nAIH_VERSION=$((Get-Content -Raw VERSION).Trim())`n")
+      - name: Install v1.0.0 and customize config.ini
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Setup -Setup $env:V1_SETUP -Arguments "/S /D=$env:LEGACY_DIR"
+          if (-not (Test-Path "$env:LEGACY_DIR\config.esempio.ini")) { throw 'This does not look like v1.0.0 (no config.esempio.ini)' }
+          Add-Content -LiteralPath "$env:LEGACY_DIR\config.ini" -Value '; modified before the upgrade (S14)'
+          (Get-FileHash "$env:LEGACY_DIR\config.ini").Hash | Set-Content "$env:RUNNER_TEMP\v1-config.sha"
+          Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'AutoHotkey*' -or $_.Name -like 'python*' } |
+            ForEach-Object { Write-Host "running after the v1 install: $($_.ProcessId) $($_.CommandLine)" }
+      - name: Upgrade in place to this build
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Setup -Setup $env:SETUP -Arguments "/S /NOOLLAMA /D=$env:LEGACY_DIR"
+          Assert-NoAppProcesses
+      - name: Check the upgraded v1.0.0 installation
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Assert-Installed -Dir $env:LEGACY_DIR -Version $env:AIH_VERSION -Manifest dist\manifest.txt -ProtectedAcl -CustomConfig
+          if ((Get-FileHash "$env:LEGACY_DIR\config.ini").Hash -ne (Get-Content "$env:RUNNER_TEMP\v1-config.sha").Trim()) { throw 'config.ini was not preserved' }
+          foreach ($rel in @('config.esempio.ini', 'python\Lib')) {
+            if (Test-Path -LiteralPath (Join-Path $env:LEGACY_DIR $rel)) { throw "v1.0.0 leftover: $rel" }
+          }
+          $programs = Join-Path ([Environment]::GetFolderPath('Programs')) 'AI-Hotkeys'
+          foreach ($lnk in @('Configurazione.lnk', 'Modifica i prompt.lnk', 'Disinstalla.lnk')) {
+            if (Test-Path -LiteralPath (Join-Path $programs $lnk)) { throw "Italian shortcut left over: $lnk" }
+          }
+          Write-Host 'ok  no config.esempio.ini, no python\Lib, no Italian shortcuts, config.ini kept'
+      - name: Uninstall /S /PURGE
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Uninstall -Dir $env:LEGACY_DIR -Purge
+          Assert-Uninstalled -Dir $env:LEGACY_DIR
+          Assert-NoAppProcesses
+
+  # H14: can a GitHub-hosted runner drive a real hotkey? Non-blocking until it is proven stable.
+  e2e:
+    name: desktop E2E (H14, non-blocking)
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installer-windows-latest
+          path: dist
+      - name: Install (default folder)
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          Invoke-Setup -Setup (Get-ChildItem dist\AI-Hotkeys-Setup-*.exe).FullName -Arguments '/S /NOOLLAMA'
+      - name: Notepad + fake Ollama + PgUp
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci\e2e-notepad.ps1 `
+            -Dir "$env:LOCALAPPDATA\Programs\AI-Hotkeys" -LogDir "$env:RUNNER_TEMP\e2e" -Python python
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload the E2E logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-logs
+          path: ${{ runner.temp }}/e2e
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Uninstall /S /PURGE
+        if: always()
+        run: |
+          Import-Module .\scripts\ci\InstallerTest.psm1 -Force
+          $dir = Get-DefaultInstallDir
+          if (Test-Path "$dir\Uninstall.exe") { Invoke-Uninstall -Dir $dir -Purge; Assert-Uninstalled -Dir $dir }
+          Assert-NoAppProcesses

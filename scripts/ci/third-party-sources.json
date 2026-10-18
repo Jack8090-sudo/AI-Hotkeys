@@ -1,0 +1,14 @@
+{
+  "_comment": "Corresponding-source archives attached to every GitHub Release (THIRD_PARTY_NOTICES.md section 1; plan steps S12/S14). SearXNG comes from build/pins.json (same tarball the build uses). The AutoHotkey source zip is GitHub's tag archive; its SHA-256 was measured on 2026-10-17 (two downloads, identical; top folder AutoHotkey-2.0.19/). GitHub does not promise byte-stable archives: on a mismatch, re-download, check the tree against tag v2.0.19 and re-pin.",
+  "autohotkey": {
+    "version": "2.0.19",
+    "url": "https://github.com/AutoHotkey/AutoHotkey/archive/refs/tags/v2.0.19.zip",
+    "asset": "AutoHotkey-v2.0.19-source.zip",
+    "sha256": "5baa09e9d7d97bdb236fab0ee65a5004d96bb70c70108b5fc2139e4b2180cc4b",
+    "license": "GPL-2.0"
+  },
+  "searxng": {
+    "asset": "searxng-6671d89bede8c9fc108b17bb98916170f5657650-source.tar.gz",
+    "license": "AGPL-3.0-or-later"
+  }
+}
