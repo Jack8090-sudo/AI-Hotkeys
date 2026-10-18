@@ -158,7 +158,12 @@ Function AihCanonDir
     StrCpy $2 $0 1 1
     ${If} $1 == "\"
     ${OrIf} $1 == "/"
-        StrCpy $0 "!Network (UNC) and device paths cannot be used: choose a folder on a local drive, such as $LOCALAPPDATA\Programs\${APP}."
+        ${If} $2 == "\"
+        ${OrIf} $2 == "/"
+            StrCpy $0 "!Network (UNC) and device paths cannot be used: choose a folder on a local drive, such as $LOCALAPPDATA\Programs\${APP}."
+        ${Else}
+            StrCpy $0 "!The folder must be a full path, such as $LOCALAPPDATA\Programs\${APP}."
+        ${EndIf}
         Goto done
     ${EndIf}
     StrLen $3 $0
