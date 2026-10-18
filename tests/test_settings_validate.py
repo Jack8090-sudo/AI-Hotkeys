@@ -28,12 +28,12 @@ class SettingsValidateTest(unittest.TestCase):
 
     def test_validate_accepts_known_fields_and_ignores_unknown(self):
         updates, errors = self.s.validate({
-            "aspetto.tema": "chiaro", "aspetto.testo": "18", "qwen.model": "qwen3.5:9b",
+            "aspetto.tema": "chiaro", "aspetto.testo": "18", "qwen.model": "gemma4:e4b-it-qat",
             "tasti.spiega": "F8", "unknown.field": "x",
         })
         self.assertEqual(errors, {})
         self.assertEqual(updates["aspetto"], {"tema": "chiaro", "testo": "18"})
-        self.assertEqual(updates["qwen"], {"model": "qwen3.5:9b"})
+        self.assertEqual(updates["qwen"], {"model": "gemma4:e4b-it-qat"})
         self.assertEqual(updates["tasti"], {"spiega": "F8"})
         self.assertNotIn("unknown", updates)
 
@@ -110,3 +110,27 @@ class SettingsValidateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DefaultModelParityTest(unittest.TestCase):
+    """The default model is written in five places: they must agree."""
+
+    def test_default_model_is_the_same_everywhere(self):
+        import configparser
+        import re
+
+        from tests.support import REPO
+
+        tree = AppTree()
+        try:
+            expected = tree.load("qwen_client").DEFAULTS["model"]
+            self.assertEqual(tree.load("settings").TEXTS[("qwen", "model")][0], expected)
+        finally:
+            tree.close()
+        example = configparser.ConfigParser(interpolation=None)
+        example.read(REPO / "config.example.ini", encoding="utf-8")
+        self.assertEqual(example.get("qwen", "model"), expected)
+        nsi = (REPO / "installer" / "sorgente" / "installer.nsi").read_text(encoding="utf-8")
+        self.assertEqual(re.search(r'^!define MODEL\s+"([^"]+)"', nsi, re.M).group(1), expected)
+        html = (REPO / "static" / "settings.html").read_text(encoding="utf-8")
+        self.assertIn(f"ollama pull {expected}", html)

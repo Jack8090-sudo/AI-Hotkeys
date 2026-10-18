@@ -78,7 +78,7 @@ def main():
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--searxng", action="store_true", help="also one pass with a real SearXNG on a free port")
     ap.add_argument("--upstream", default="http://localhost:11434")
-    ap.add_argument("--model", default="qwen3.5:9b")
+    ap.add_argument("--model", default="gemma4:e4b-it-qat")
     ap.add_argument("--python", default=default_python())
     args = ap.parse_args()
 

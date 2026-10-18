@@ -54,7 +54,7 @@ NUMBERS = {
 }
 
 TEXTS = {
-    ("qwen", "model"): ("qwen3.5:9b", re.compile(r"^[\w.:\-/]{1,80}$")),
+    ("qwen", "model"): ("gemma4:e4b-it-qat", re.compile(r"^[\w.:\-/]{1,80}$")),
     ("qwen", "ollama_url"): ("http://localhost:11434", re.compile(r"^https?://[\w.\-]+(:\d{1,5})?(/[\w.\-/]*)?$")),
 }
 

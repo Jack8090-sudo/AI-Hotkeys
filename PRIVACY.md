@@ -16,7 +16,7 @@ or any server of its own. The only network traffic it creates is described below
 - **The results and Settings pages.** They are small servers on `127.0.0.1` that only your PC can reach.
   The pages do not load anything from the internet: fonts and scripts are local, and remote images in an
   answer are shown as a link ("Image: <name>") instead of being loaded.
-- **Follow-up questions** ("Ask Qwen") go to the same local Ollama.
+- **Follow-up questions** ("Ask AI") go to the same local Ollama.
 
 If you point `ollama_url` at another computer, your selected text is sent there. The Settings page warns
 you when you save such an address.
@@ -41,15 +41,15 @@ When a search runs:
 
 Where the search words come from (`[searxng] query_mode`, "Search words" on the Settings page):
 
-- `allow_fallback` (default): Qwen reads your text and writes the search words. If a search is forced
-  (the text contains recognized technical terms, or `web_search = always`) and Qwen writes no search words,
+- `allow_fallback` (default): the AI reads your text and writes the search words. If a search is forced
+  (the text contains recognized technical terms, or `web_search = always`) and the AI writes no search words,
   the technical terms found in your text, or the **first 10 words of your text**, are searched as they are.
-- `model`: only search words written by Qwen are sent. Nothing is ever taken verbatim from your text.
-  If Qwen writes none, there is no search.
+- `model`: only search words written by the AI are sent. Nothing is ever taken verbatim from your text.
+  If the AI writes none, there is no search.
 
 When to search (`[searxng] web_search`, "When to search"):
 
-- `auto` (default): Qwen first decides whether the text needs a search. Personal notes, opinions and
+- `auto` (default): the AI first decides whether the text needs a search. Personal notes, opinions and
   messages normally do not.
 - `always`: every End searches.
 - `false`: never. SearXNG is not even started, and nothing leaves your PC.
@@ -71,7 +71,7 @@ AI-Hotkeys needs to hand your selection from AutoHotkey to Python, so it is brie
   before each job. Files left in `work\` by older versions are deleted at startup.
 - **`work\` is private.** At first start AI-Hotkeys restricts it to your account, SYSTEM and
   Administrators.
-- **The Obsidian To-Do route** writes Qwen's version of the note to `work\obsidian_output.txt`. It is
+- **The Obsidian To-Do route** writes the AI's version of the note to `work\obsidian_output.txt`. It is
   deleted after a successful update and kept only when a safety check rejected it, so you can compare.
 - **Logs** (`work\server.log`, `work\searxng.log`) record errors and SearXNG's activity. `searxng.log`
   can contain the search words, as any search log does.

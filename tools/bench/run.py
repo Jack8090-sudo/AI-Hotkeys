@@ -271,7 +271,7 @@ def main():
     ap.add_argument("--warm", type=int, default=10, help="warm repetitions per action/size (real)")
     ap.add_argument("--stream", type=int, default=3, help="streamed-TTFT repetitions per action (real)")
     ap.add_argument("--sizes", default="S,M,L", help="corpus sizes (real)")
-    ap.add_argument("--model", default="qwen3.5:9b")
+    ap.add_argument("--model", default="gemma4:e4b-it-qat")
     ap.add_argument("--keep-alive", default="30m")
     ap.add_argument("--upstream", default="http://localhost:11434")
     ap.add_argument("--python", default=default_python(), help="interpreter that runs the app")

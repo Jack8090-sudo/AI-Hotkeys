@@ -23,6 +23,10 @@ Plan: `plans/ai-hotkeys-production-readiness.md`. Step ids (S1–S15) refer to i
 - **Obsidian backups** move to the hidden folder `.ai-hotkeys-backups` next to the note. Old
   `To-Do List.backup_*.md` files are left untouched.
 - **Requirements.** Ollama 0.9.0 or newer (checked at startup). Source installs need Python 3.13 x64.
+- **Default model is now Gemma 4 E4B (QAT).** New installs use `gemma4:e4b-it-qat` (about 6 GB download,
+  about 3-4 GB VRAM). An upgrade never changes your `config.ini`: it keeps the model it names. To switch,
+  run `ollama pull gemma4:e4b-it-qat` and set Settings → Model to `gemma4:e4b-it-qat`. How to keep Qwen:
+  set `model = qwen3.5:9b` (or change nothing if it is already there).
 
 ### Added
 
@@ -49,6 +53,24 @@ Plan: `plans/ai-hotkeys-production-readiness.md`. Step ids (S1–S15) refer to i
 
 ### Changed
 
+- **Default model is now Gemma 4 E4B (QAT)**, `gemma4:e4b-it-qat`, instead of `qwen3.5:9b`. Measured with
+  `tools/bench/model_eval.py` (22 real app tasks with the app's prompts, 3 repetitions, RTX 3060 12 GB,
+  Ollama 0.40.5): Gemma 4 E4B QAT passed 98.5% of the checks at 75 tok/s with 3.1 GB median VRAM, about
+  2x faster per task; `qwen3.5:9b` passed 79.5% at 55 tok/s with 5.7 GB (it duplicated a task in the
+  Obsidian To-Do check, 0/2); `gemma4:12b-it-qat` passed 100% at 41 tok/s with 7.4 GB (the maximum-quality option);
+  `gemma4:e2b-it-qat` passed 98.5% at 129 tok/s with 1.7 GB but writes shallower explanations (the light
+  option for GPUs with 4 GB or less or CPU-only PCs). 8 GB graphics cards now fit comfortably. With the shipped prompts and options, a final E4B run passed 66/66 (100%).
+  Gemma 4 is Apache-2.0. How to keep Qwen: set `model = qwen3.5:9b`. Details:
+  [docs/audit/model-choice-2026-10.md](docs/audit/model-choice-2026-10.md). (MODEL1)
+- Sampling for every action is now `top_k` 64, `top_p` 0.95 (Gemma 4's recommendation); the low
+  temperatures and `num_predict` limits stay. (MODEL1)
+- User-visible texts no longer name the model: "Ask AI", "The AI is answering.", "AI or from the
+  text" / "Only the AI's", and so on. The `[qwen]` section and `qwen_client.py` keep their names for
+  compatibility. (MODEL1, I11)
+- End on a single word or a few words (6 or fewer, no web sources) now gets a short plain explanation
+  instead of the four-section layout. (MODEL1)
+- Explanations no longer repeat English words from the source in parentheses; only technical terms stay
+  in the original. (MODEL1)
 - **The user interface is in English.** Config keys and values stay Italian. (I11)
 - Holding a key with nothing selected no longer stalls: repeats and the other two keys act natively during
   the copy. (S8b1, C03)

@@ -1,6 +1,7 @@
 # AI-Hotkeys installer helper: is the Ollama model available? (C44)
 #   1. the model's manifest file on disk (%OLLAMA_MODELS% or %USERPROFILE%\.ollama\models), which
-#      works even when the Ollama server is not running
+#      works even when the Ollama server is not running. The path is derived from the name, e.g.
+#      gemma4:e4b-it-qat -> manifests\registry.ollama.ai\library\gemma4\e4b-it-qat
 #   2. otherwise GET http://127.0.0.1:11434/api/tags (no proxy, 3 s timeout)
 # Exit code: 0 = model present, 10 = server running but model missing,
 #            11 = server not reachable and no manifest file found, 2 = bad -Model.

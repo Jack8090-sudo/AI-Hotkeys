@@ -1,5 +1,5 @@
 """
-AI-Hotkeys — HTML viewer with "✦ Ask Qwen" popup.
+AI-Hotkeys — HTML viewer with "✦ Ask AI" popup.
 
 Usage (called from main.ahk):
     python viewer.py --run-dir=<work\\runs\\id> "<Action name>" [rewrite|summarize|explain]
@@ -50,7 +50,7 @@ STATIC_DIR = BASE_DIR / "static"
 #  1 per minute, so this must be well above 60 seconds.)
 IDLE_TIMEOUT = 240
 
-# How many previous question/answer turns to send to Qwen
+# How many previous question/answer turns to send to the AI
 # in summarize and explain modes.
 HISTORY_TURNS = 6
 
@@ -320,7 +320,7 @@ def make_handler(session, token, page_html):
                 answer = websearch.linkify(answer, session.sources)
 
             if not answer:
-                self._safe_emit({"error": "Qwen returned an empty answer."})
+                self._safe_emit({"error": "The AI returned an empty answer."})
                 return
 
             index = session.save(question, answer, base_index)

@@ -15,7 +15,7 @@ The install folder is `%LOCALAPPDATA%\Programs\AI-Hotkeys` unless you chose anot
 | `work\searxng.log` | The SearXNG search engine's log. Rotated to `searxng.log.1` at 5 MB. |
 | `work\config_warning.txt` | Problems found in `config.ini` or `prompts_user.py`. Shown as a toast once, then deleted. |
 | `work\obsidian_status.txt` | Result of the last Obsidian To-Do run. |
-| `work\obsidian_output.txt` | Qwen's version of the To-Do note, kept only when a safety check rejected it, so you can compare. |
+| `work\obsidian_output.txt` | The AI's version of the To-Do note, kept only when a safety check rejected it, so you can compare. |
 
 The `work\` folder is private to your account and may contain parts of the text you selected. Do not
 attach it to a bug report without reading it first. See [PRIVACY.md](../PRIVACY.md).
@@ -26,9 +26,10 @@ attach it to a bug report without reading it first. See [PRIVACY.md](../PRIVACY.
 Start Ollama from the Start menu (it then runs in the notification area), or run `ollama serve`. If
 `ollama_url` in the settings points to another address, check it.
 
-**"Model 'qwen3.5:9b' not found: run  ollama pull qwen3.5:9b"**
+**"Model 'gemma4:e4b-it-qat' not found: run  ollama pull gemma4:e4b-it-qat"**
 The model in `[qwen] model` is not downloaded. Run the command shown. If you changed `model`, check the
-spelling against `ollama list`.
+spelling against `ollama list`. After an upgrade, `config.ini` keeps the model it named before
+(`qwen3.5:9b` before 1.1.0): pull that one, or switch to `gemma4:e4b-it-qat` in Settings → **Model**.
 
 **"Ollama 0.x is too old: update it to 0.9.0 or newer."**
 Install the current version from <https://ollama.com/download>. Your models are kept.
@@ -51,7 +52,7 @@ The model reached its answer limit. Nothing was pasted, so your text is unchange
 **"Nothing selected: select some text first."**
 The copy produced empty text. Some programs copy nothing for an empty selection.
 
-**"Qwen did not respond. Check that Ollama is running and that the model is downloaded."**
+**"The AI did not respond. Check that Ollama is running and that the model is downloaded."**
 The job ended without a result and without a specific reason, for example because Python crashed. Try
 again; if it repeats, check the points above and the [antivirus](#antivirus-or-quarantine) section.
 
@@ -60,7 +61,7 @@ A file in `work\` is locked, usually by an antivirus scan or a backup tool. Try 
 AI-Hotkeys (tray → Reload).
 
 **"The window did not come back to the front" / "The selection changed" / "The window lost focus"**
-PgUp did not paste because the target window or selection changed while Qwen was working. The result is
+PgUp did not paste because the target window or selection changed while the AI was working. The result is
 in the results page; copy it from there. Your clipboard holds what it held before.
 
 **Key warnings at startup**, for example *Fix: "pgup" is not a valid key, using PgUp* or
@@ -96,9 +97,9 @@ its process id).
 
 ### Web search finds nothing
 
-- `web_search` may be `false`, or with `auto` Qwen decided the text needs no search (personal notes,
+- `web_search` may be `false`, or with `auto` the AI decided the text needs no search (personal notes,
   opinions).
-- With `query_mode = model`, there is no search when Qwen writes no search words.
+- With `query_mode = model`, there is no search when the AI writes no search words.
 - Open tray → **Open SearXNG in browser** and search by hand. If that fails, read `work\searxng.log`.
 - Some search engines block or rate-limit for a while; try again later.
 - If your PC reaches the internet only through a proxy, pages cannot be read: page downloads deliberately
@@ -107,7 +108,7 @@ its process id).
 ### Antivirus or quarantine
 
 Unsigned AutoHotkey programs and new installers are sometimes flagged by antivirus heuristics. Symptoms:
-the Setup is blocked, the ✦ icon never appears, or "Qwen did not respond" on every key.
+the Setup is blocked, the ✦ icon never appears, or "The AI did not respond" on every key.
 
 1. Open your antivirus quarantine and check whether it removed `ahk\AutoHotkey64.exe`, a file under
    `python\`, or the Setup itself.

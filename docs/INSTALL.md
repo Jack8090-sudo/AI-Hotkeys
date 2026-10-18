@@ -39,7 +39,7 @@ A silent install never opens a browser and never runs winget.
 
 ## 2. Install Ollama and the model
 
-AI-Hotkeys needs [Ollama](https://ollama.com/download) **0.9.0 or newer** and the `qwen3.5:9b` model.
+AI-Hotkeys needs [Ollama](https://ollama.com/download) **0.9.0 or newer** and an AI model, by default `gemma4:e4b-it-qat` (Gemma 4 E4B, QAT).
 
 - **Through the installer.** If Ollama is missing, the installer asks how to get it:
   - **Yes**: install it with winget. This accepts the Ollama and winget source terms. Offered only when
@@ -52,15 +52,26 @@ AI-Hotkeys needs [Ollama](https://ollama.com/download) **0.9.0 or newer** and th
 Then download the model once, in a Command Prompt or PowerShell window:
 
 ```
-ollama pull qwen3.5:9b
+ollama pull gemma4:e4b-it-qat
 ```
 
-It is about 6.6 GB. The installer tells you at the end if the model is missing, or if Ollama is
+It is about 6 GB. The installer tells you at the end if the model is missing, or if Ollama is
 installed but not running. Check with `ollama list`.
 
-The model needs about 8 GB of free video memory (12 GB card recommended). With less, Ollama moves part of
+The model needs about 3-4 GB of free video memory, so an 8 GB card fits comfortably and a 6 GB card
+will likely work. With less, Ollama moves part of
 it to system RAM and the CPU, and answers become much slower. Tray → **Free VRAM** unloads the model when
 you need the graphics card for something else, for example a game.
+
+Other models work too: `gemma4:e2b-it-qat` is the light option for cards with 4 GB or less or PCs
+without a GPU (about 1.7 GB of video memory, faster, shallower explanations); `gemma4:12b-it-qat` gives
+the best quality (about 7.4 GB of video memory, about
+twice as slow), and `qwen3.5:9b`, the default before 1.1.0, still works. Set the name in Settings →
+**Model** after pulling it. The comparison: [audit/model-choice-2026-10.md](audit/model-choice-2026-10.md).
+
+**Upgrading from an earlier 1.x?** Your `config.ini` is never overwritten, so it keeps the model it
+names (`qwen3.5:9b` before 1.1.0). To switch, run `ollama pull gemma4:e4b-it-qat` and set **Model** to
+`gemma4:e4b-it-qat` in Settings. To keep Qwen, change nothing.
 
 ## 3. First run
 
@@ -72,7 +83,7 @@ you need the graphics card for something else, for example a game.
 3. Right-click the ✦ icon → **Settings** to change keys, theme, answer length, web search and the model.
 
 At startup AI-Hotkeys checks Ollama once. If something is wrong you see a toast such as "Ollama is not
-running" or "Model 'qwen3.5:9b' not found". See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+running" or "Model 'gemma4:e4b-it-qat' not found". See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ### Web search
 
@@ -81,7 +92,7 @@ selection are sent to public search engines. Read [PRIVACY.md](../PRIVACY.md), t
 page:
 
 - **When to search**: when needed (`auto`, the default), always, or never.
-- **Search words**: "Qwen or from the text" (default), or "Only Qwen's", which never sends your text
+- **Search words**: "AI or from the text" (default), or "Only the AI's", which never sends your text
   verbatim.
 
 ### Obsidian To-Do note
@@ -151,5 +162,5 @@ Windows Settings → Apps → AI-Hotkeys → Uninstall, or Start menu → AI-Hot
   `prompts.py.bak-*` are kept either way.
 - `Uninstall.exe /S` keeps `config.ini` and `work\`. `Uninstall.exe /S /PURGE` deletes them too.
 - Ollama and the model are separate programs. Remove them from Windows Settings → Apps, and the model with
-  `ollama rm qwen3.5:9b`.
+  `ollama rm gemma4:e4b-it-qat` (or the name of the model you use).
 - Obsidian backups in `.ai-hotkeys-backups` are your data and are never deleted.

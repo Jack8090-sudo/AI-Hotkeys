@@ -1,6 +1,6 @@
 """obsidian_todo.main end to end (I4): backup, atomic write, newline style, abort paths.
 
-The model call (ask_qwen) is replaced; the To-Do file lives in the temporary tree.
+The model call (ask_model) is replaced; the To-Do file lives in the temporary tree.
 """
 
 import contextlib
@@ -29,7 +29,7 @@ class ObsidianMainTest(unittest.TestCase):
             if error:
                 raise error
             return answer
-        with mock.patch.object(self.ot, "ask_qwen", fake_ask), \
+        with mock.patch.object(self.ot, "ask_model", fake_ask), \
                 mock.patch.object(sys, "argv", ["obsidian_todo.py", str(self.todo)]), \
                 contextlib.redirect_stdout(io.StringIO()):
             return self.ot.main()
@@ -81,22 +81,22 @@ class ObsidianMainTest(unittest.TestCase):
         self.todo.write_text(GOLDEN, encoding="utf-8")
 
         def ask_and_edit(text):
-            self.todo.write_text(GOLDEN + "\n- [ ] aggiunto mentre Qwen lavorava\n", encoding="utf-8")
+            self.todo.write_text(GOLDEN + "\n- [ ] aggiunto mentre il modello lavorava\n", encoding="utf-8")
             return GOLDEN
 
-        with mock.patch.object(self.ot, "ask_qwen", ask_and_edit), \
+        with mock.patch.object(self.ot, "ask_model", ask_and_edit), \
                 mock.patch.object(sys, "argv", ["obsidian_todo.py", str(self.todo)]), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(self.ot.main(), 2)
-        self.assertIn("aggiunto mentre Qwen lavorava", self.todo.read_text(encoding="utf-8"))
+        self.assertIn("aggiunto mentre il modello lavorava", self.todo.read_text(encoding="utf-8"))
 
-    def test_bom_is_preserved_and_qwen_output_removed_on_success(self):
+    def test_bom_is_preserved_and_model_output_removed_on_success(self):
         self.todo.write_bytes(b"\xef\xbb\xbf" + GOLDEN.encode("utf-8"))
         self.assertEqual(self.run_main(answer=GOLDEN.replace("Sistema di clan", "Sistema dei clan")), 0)
         self.assertTrue(self.todo.read_bytes().startswith(b"\xef\xbb\xbf"))
         self.assertFalse(self.ot.OUTPUT_FILE.exists())
 
-    def test_qwen_output_is_kept_when_a_check_fails(self):
+    def test_model_output_is_kept_when_a_check_fails(self):
         self.todo.write_text(GOLDEN, encoding="utf-8")
         self.assertEqual(self.run_main(answer=GOLDEN.replace("- [ ] Sistema di clan\n", "")), 2)
         self.assertTrue(self.ot.OUTPUT_FILE.exists())

@@ -164,7 +164,7 @@ ParseClipWaitMs(value, default := 2000)
     return (n >= 100 && n <= 10000) ? n : default
 }
 
-; True if a re-copy of the selection still matches the text sent to Qwen
+; True if a re-copy of the selection still matches the text sent to the AI
 ; (direct replace, C05). Line endings are ignored; everything else must match.
 SelectionMatches(original, recopied)
 {

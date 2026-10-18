@@ -414,7 +414,7 @@ h1 {
 
             <div class="field">
                 <span class="name" id="l-av">Progress near the mouse</span>
-                <p class="hint">A small box tells you what Qwen is doing: searching, reading pages, writing.</p>
+                <p class="hint">A small box tells you what the AI is doing: searching, reading pages, writing.</p>
                 <button type="button" class="control switch" role="switch" aria-labelledby="l-av" data-name="aspetto.avanzamento"></button>
             </div>
         </section>
@@ -472,7 +472,7 @@ h1 {
 
             <div class="egress" id="egress">
                 <p><strong>What leaves this PC.</strong> SearXNG runs on your PC, but it sends the search words to public search engines (Startpage and Yahoo), and AI-Hotkeys then downloads the pages found from their websites.</p>
-                <p>The search words come from your selected text. Your full text and Qwen's answer stay on this PC. Choose "Never" below to keep everything local.</p>
+                <p>The search words come from your selected text. Your full text and the AI's answer stay on this PC. Choose "Never" below to keep everything local.</p>
             </div>
 
             <div class="field">
@@ -487,16 +487,16 @@ h1 {
 
             <div class="field">
                 <span class="name" id="l-qm">Search words</span>
-                <p class="hint" id="h-qm">"Qwen or from the text": Qwen writes the search; if it writes none, the technical terms or the first 10 words of your selection are searched as they are. "Only Qwen's": only searches written by Qwen are sent, nothing is taken word for word from your selection; without one, the explanation is made without the web.</p>
+                <p class="hint" id="h-qm">"AI or from the text": the AI writes the search; if it writes none, the technical terms or the first 10 words of your selection are searched as they are. "Only the AI's": only searches written by the AI are sent, nothing is taken word for word from your selection; without one, the explanation is made without the web.</p>
                 <div class="control seg" role="radiogroup" aria-labelledby="l-qm" aria-describedby="h-qm" data-name="searxng.query_mode">
-                    <button type="button" role="radio" data-value="allow_fallback">Qwen or from the text</button>
-                    <button type="button" role="radio" data-value="model">Only Qwen's</button>
+                    <button type="button" role="radio" data-value="allow_fallback">AI or from the text</button>
+                    <button type="button" role="radio" data-value="model">Only the AI's</button>
                 </div>
             </div>
 
             <div class="field">
                 <span class="name" id="l-res">Results to use</span>
-                <p class="hint">How many sources to pass to Qwen.</p>
+                <p class="hint">How many sources to pass to the AI.</p>
                 <div class="control stepper" role="group" data-name="searxng.results" data-min="3" data-max="8" aria-labelledby="l-res">
                     <button type="button" data-step="-1" aria-label="Fewer results">−</button><output aria-label="Results to use"></output><button type="button" data-step="1" aria-label="More results">+</button>
                 </div>
@@ -504,7 +504,7 @@ h1 {
 
             <div class="field">
                 <span class="name" id="l-pages">Pages to read in full</span>
-                <p class="hint">Qwen only sees the preview of the other sources. More pages give more context but the answer arrives later.</p>
+                <p class="hint">The AI only sees the preview of the other sources. More pages give more context but the answer arrives later.</p>
                 <div class="control stepper" role="group" data-name="searxng.pages_to_read" data-min="0" data-max="5" aria-labelledby="l-pages">
                     <button type="button" data-step="-1" aria-label="Fewer pages">−</button><output aria-label="Pages to read in full"></output><button type="button" data-step="1" aria-label="More pages">+</button>
                 </div>
@@ -517,7 +517,7 @@ h1 {
 
             <div class="field">
                 <label class="name" for="f-model">Model</label>
-                <p class="hint">The name of a model already downloaded, for example with <code>ollama pull qwen3.5:9b</code>.</p>
+                <p class="hint">The name of a model already downloaded, for example with <code>ollama pull gemma4:e4b-it-qat</code>.</p>
                 <input class="control text" id="f-model" data-name="qwen.model" spellcheck="false">
                 <p class="error"></p>
             </div>
@@ -760,7 +760,7 @@ const KEY_FORMAT = "Use a key like PgUp or F8, or a letter or digit together wit
 const TEXT_RULES = {
     "qwen.model": {
         rx: /^[\p{L}\p{N}_.:\-/]{1,80}$/u,
-        msg: "Write the name of a downloaded Ollama model, for example qwen3.5:9b: letters, digits and . : - / _ only, up to 80 characters."
+        msg: "Write the name of a downloaded Ollama model, for example gemma4:e4b-it-qat: letters, digits and . : - / _ only, up to 80 characters."
     },
     "qwen.ollama_url": {
         rx: /^https?:\/\/[\p{L}\p{N}_.-]+(:\d{1,5})?(\/[\p{L}\p{N}_.\-/]*)?$/u,

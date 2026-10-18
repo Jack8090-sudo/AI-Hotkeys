@@ -16,7 +16,7 @@ SAMPLE = (
     "﻿; top comment\r\n"
     "[qwen]\r\n"
     "; model\r\n"
-    "model = qwen3.5:9b\r\n"
+    "model = gemma4:e4b-it-qat\r\n"
     "\r\n"
     "[aspetto]\r\n"
     "tema = scuro\r\n"
@@ -58,7 +58,7 @@ class ConfigEditTest(unittest.TestCase):
         values = self.ce.read_values(self.path)
         self.assertEqual(values["aspetto"], {"tema": "chiaro", "colore": "menta"})
         self.assertEqual(values["tasti"], {"spiega": "F8"})
-        self.assertEqual(values["qwen"], {"model": "qwen3.5:9b"})
+        self.assertEqual(values["qwen"], {"model": "gemma4:e4b-it-qat"})
         self.assertEqual(values["obsidian"], {"window_title": "To-Do"})
         # the new key stays inside [aspetto], before [obsidian]
         self.assertLess(text.index("colore = menta"), text.index("[obsidian]"))

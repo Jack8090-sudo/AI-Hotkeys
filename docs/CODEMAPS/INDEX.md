@@ -33,7 +33,7 @@
    +--------v-------+   +-------v---------+        +---------------------------------+
    | prompt_loader  |   | Ollama          |        | viewer.py (127.0.0.1, token)    |
    | prompts_user / |   | localhost:11434 |<-------| results page + /api/ask         |
-   | prompts.py     |   | qwen3.5:9b      |        | ("Ask Qwen" follow-ups)         |
+   | prompts.py     |   | Gemma 4 E4B QAT |        | ("Ask AI" follow-ups)           |
    +----------------+   +-----------------+        +---------------------------------+
 
 Config: config.example.ini -> config.ini (personal, never shipped or overwritten)
@@ -52,12 +52,12 @@ State:  work\runs\<run id>\ (per job), work\error.txt, work\config_warning.txt, 
 | `actions/rewrite.py`, `summarize.py`, `explain.py` | Thin entry points for the three selection actions | `qwen_client.run_action(mode, argv)` | `qwen_client.py` |
 | `actions/health.py` | Startup check: Ollama reachable, version ≥ 0.9.0, model present | `qwen_client.health()` | `qwen_client.py` |
 | `actions/unload.py` | Tray "Free VRAM" (`keep_alive: 0`) | `qwen_client.unload()` | `qwen_client.py` |
-| `actions/obsidian_todo.py` | Reorganizes the To-Do note with safety checks, a backup in `.ai-hotkeys-backups` (newest 20) and an atomic write with retries | `main`, `ask_qwen`, `normalize`, `validate`, `check_structure`, `changed_tasks`, `make_backup`, `replace_with_retry`, `write_status`, `SafetyError` | `qwen_client.py` |
+| `actions/obsidian_todo.py` | Reorganizes the To-Do note with safety checks, a backup in `.ai-hotkeys-backups` (newest 20) and an atomic write with retries | `main`, `ask_model`, `normalize`, `validate`, `check_structure`, `changed_tasks`, `make_backup`, `replace_with_retry`, `write_status`, `SafetyError` | `qwen_client.py` |
 | `qwen_client.py` | Shared Ollama client (no proxy), config loading and warnings, error mapping and K1 writer, run folders, input limits, answer cleanup, action orchestration | `load_config`, `chat`, `chat_ex`, `open_stream`, `stream_pieces`, `unload`, `health`, `describe_error`, `write_error`, `clear_error`, `parse_action_args`, `is_run_dir`, `sweep_stale_runs`, `remove_run_dir`, `max_input_chars`, `clean_answer`, `run_action`, `todo_file`, `TruncatedAnswer`, `StreamIncomplete`, `MIN_OLLAMA_VERSION` | `prompt_loader.py`, `websearch.py` (explain only) |
 | `prompt_loader.py` | Uses `prompts_user.py` when present (name by name, falling back to `prompts.py`), else `prompts.py` | `prompts`, `PROMPTS_WARNING` | `prompts.py`, `prompts_user.py` |
 | `prompts.py` | All prompts and Ollama options (user content, edited only through `prompts_user.py`) | `first_messages`, `query_messages`, `followup_rewrite_messages`, `followup_qa_messages`, `OPTIONS`, `NUM_CTX = 16384`, `LENGTH_HINTS` | none |
 | `websearch.py` | End's web search: query decision and `query_mode`, SearXNG, SSRF-guarded page fetch with deadlines, HTML extraction, source selection, citations | `decide_queries`, `make_queries`, `parse_queries`, `technical_terms`, `ollama_ready`, `ensure_running`, `searx_search`, `ip_blocked`, `safe_url`, `fetch_page_text`, `fetch_pages`, `html_to_text`, `select_relevant`, `gather_sources`, `sources_block`, `linkify`, `md_url`, `cited_numbers`, `add_sources`, `save_sources`, `load_sources`, `QUERY_MODE`, `LAST_DECISION` (diagnostic) | `qwen_client.py`, `prompt_loader.py`, `searxng/lib` (`curl_cffi`, optional) |
-| `viewer.py` | Results page and "Ask Qwen" follow-ups; loads a run folder, then deletes it | `load_run`, `Session`, `detect_mode`, `build_page`, `make_handler`, `read_meta`, `main`; `GET /`, `/api/ping`, `/fonts/*`; `POST /api/ask` (NDJSON) | `pages.py`, `prompt_loader.py`, `qwen_client.py`, `websearch.py`, `static/viewer.html` |
+| `viewer.py` | Results page and "Ask AI" follow-ups; loads a run folder, then deletes it | `load_run`, `Session`, `detect_mode`, `build_page`, `make_handler`, `read_meta`, `main`; `GET /`, `/api/ping`, `/fonts/*`; `POST /api/ask` (NDJSON) | `pages.py`, `prompt_loader.py`, `qwen_client.py`, `websearch.py`, `static/viewer.html` |
 | `settings.py` | Settings page; validates and saves `config.ini` | `CHOICES`, `NUMBERS`, `TEXTS`, `KEYS`, `valid_hotkey`, `current_values`, `defaults`, `validate`, `url_warning`, `build_page`, `make_handler`, `main`; `GET /`, `/api/ping`; `POST /api/save` | `config_edit.py`, `pages.py`, `static/settings.html` |
 | `pages.py` | Shared page parts: CSP, token check, `LocalServer` (errors to `work\server.log`, request timeout), look settings, theme CSS, safe JSON, fonts | `CSP`, `token_ok`, `LocalServer`, `log_server_error`, `LOOK`, `TEXT_SIZE`, `look_settings`, `theme_css`, `script_json`, `html_escape`, `try_serve_font` | `static/theme.css`, `static/fonts/` |
 | `config_edit.py` | Atomic `config.ini` writer that keeps comments, order, BOM and line endings; also a small CLI used only by developers | `set_values`, `read_values` | none |
@@ -90,9 +90,9 @@ State:  work\runs\<run id>\ (per job), work\error.txt, work\config_warning.txt, 
    `searx_search` → `fetch_pages` (SSRF guard, 12 s per page, 15 s overall) → `select_relevant` →
    `sources_block` in the prompt → answer with `[n]` → `add_sources` → `save_sources` for follow-ups.
 3. **Obsidian To-Do (PgUp with the note open):** route `Obsidian:To-Do|correggi` → `RunObsidianTodo`
-   (`^s`, then `obsidian_todo.py`) → Qwen reorganizes → `normalize` → `validate` → on success: backup,
+   (`^s`, then `obsidian_todo.py`) → the model reorganizes → `normalize` → `validate` → on success: backup,
    atomic write with retries; on failure: file untouched, reasons in `work\obsidian_status.txt`.
-4. **Follow-up ("Ask Qwen"):** page → `POST /api/ask` → `Session.build_messages` → `open_stream` → NDJSON →
+4. **Follow-up ("Ask AI"):** page → `POST /api/ask` → `Session.build_messages` → `open_stream` → NDJSON →
    `clean_answer` → `linkify` → `{done, index, text}`; a cut-off or interrupted stream gives
    `{error, partial: true}`; other errors go through `describe_error`.
 5. **Settings:** tray → `settings.py` → `GET /?t=token` → `POST /api/save` → `validate` (+ `url_warning`) →
@@ -110,13 +110,14 @@ State:  work\runs\<run id>\ (per job), work\error.txt, work\config_warning.txt, 
 | `test_config_edit.py` | Root shim for the old `python test_config_edit.py` entry point |
 | `scripts/dev/link-runtime.ps1` | Links the untracked runtime into a worktree |
 | `scripts/ci/` | CI helpers: AHK download and runner, hygiene, license presence, coverage remap, installer tests, fake Ollama, source-archive download |
-| `tools/bench/` | Performance harness (not shipped); results in `docs/audit/baseline-2026-10.md` |
+| `tools/bench/` | Performance harness (not shipped); results in `docs/audit/baseline-2026-10.md`. `model_eval.py` compares Ollama models on 22 real app tasks; results in `docs/audit/model-choice-2026-10.md` |
 | `tools/licenses/` | Third-party notice generator and checker (`components.json` registry) |
 | `.github/workflows/` | `ci.yml`, `installer.yml`, `release.yml` |
 
 ## External dependencies
 
-- **Ollama** at `http://localhost:11434` (minimum 0.9.0) with `qwen3.5:9b`. Not bundled.
+- **Ollama** at `http://localhost:11434` (minimum 0.9.0) with `gemma4:e4b-it-qat` by default (any Ollama model can be set in `[qwen] model`;
+  the section and `qwen_client.py` keep their historical names, I11). Not bundled.
 - **SearXNG** `6671d89` (AGPL-3.0), bundled by the build in `searxng\app` and `searxng\lib` (32 hash-locked
   wheels, including `curl_cffi`). Not in git.
 - **CPython 3.13** embeddable (installer) or a system 3.13 x64 (source). App code is stdlib-only, apart from

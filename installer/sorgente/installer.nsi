@@ -22,7 +22,7 @@ RequestExecutionLevel user
 !define APP       "AI-Hotkeys"
 !define PUBLISHER "AI-Hotkeys contributors"
 !define URL       "https://github.com/Jack8090-sudo/AI-Hotkeys"
-!define MODEL     "qwen3.5:9b"
+!define MODEL     "gemma4:e4b-it-qat"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP}"
 !define APPKEY    "Software\${APP}"
 ; v1.0.0 installed here by default (D1/D11: offer to migrate away from it)
@@ -68,7 +68,7 @@ Var DirState     ; AihDirState of $INSTDIR before this install created or change
 !define MUI_ABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "Installing AI-Hotkeys"
-!define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys uses local Qwen with three keys:$\r$\n$\r$\n    PgUp  →  fix the selected text$\r$\n    PgDn  →  summarize$\r$\n    End    →  explain$\r$\n$\r$\nThe program, Python and AutoHotkey will be installed (portable versions, only for AI-Hotkeys). If Ollama is missing, you will be offered to install it.$\r$\n$\r$\nThe ${MODEL} model is NOT downloaded: if you do not have it yet, you will be given the command at the end."
+!define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys uses a local AI model (Gemma 4 by default) with three keys:$\r$\n$\r$\n    PgUp  →  fix the selected text$\r$\n    PgDn  →  summarize$\r$\n    End    →  explain$\r$\n$\r$\nThe program, Python and AutoHotkey will be installed (portable versions, only for AI-Hotkeys). If Ollama is missing, you will be offered to install it.$\r$\n$\r$\nThe ${MODEL} model is NOT downloaded: if you do not have it yet, you will be given the command at the end."
 
 !define MUI_DIRECTORYPAGE_TEXT_TOP "The default folder is private to your Windows account.$\r$\nThe folder must be new, empty or an existing AI-Hotkeys folder, on a local drive (not a drive root, not your profile folder itself, not inside a git repository). A folder outside your user profile is restricted to your account, SYSTEM and Administrators."
 
@@ -79,7 +79,7 @@ Var DirState     ; AihDirState of $INSTDIR before this install created or change
 ; Kept under NSIS's 1024-character string limit.
 !define MUI_FINISHPAGE_TITLE "AI-Hotkeys is installed"
 !define MUI_FINISHPAGE_TEXT_LARGE
-!define MUI_FINISHPAGE_TEXT "Select some text and press PgUp (fix), PgDn (summarize) or End (explain).$\r$\n$\r$\nModel: if you do not have it yet, open the Command Prompt and run$\r$\n    ollama pull ${MODEL}$\r$\nIt is a 6.6 GB download and needs a graphics card with about 8 GB of free VRAM; with less it spills into system RAM and becomes much slower. Tray icon → Free VRAM unloads it.$\r$\n$\r$\nWeb search: End may search the web through the local SearXNG, which sends search terms taken from your selected text to public search engines. Turn it off in Settings.$\r$\n$\r$\nSettings, including the Obsidian To-Do file: right-click the ✦ tray icon → Settings, or edit config.ini in the install folder."
+!define MUI_FINISHPAGE_TEXT "Select some text and press PgUp (fix), PgDn (summarize) or End (explain).$\r$\n$\r$\nModel: if you do not have it yet, open the Command Prompt and run$\r$\n    ollama pull ${MODEL}$\r$\nAbout 6 GB to download, 3-4 GB of VRAM; tray icon → Free VRAM unloads it.$\r$\nUpgrading: your config.ini keeps its model; to switch, set Model to ${MODEL} in Settings and pull it.$\r$\n$\r$\nWeb search: End may search the web through the local SearXNG, which sends search terms taken from your selected text to public search engines. Turn it off in Settings.$\r$\n$\r$\nSettings, including the Obsidian To-Do file: right-click the ✦ tray icon → Settings, or edit config.ini in the install folder."
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "Launch AI-Hotkeys now"
 !define MUI_FINISHPAGE_RUN_FUNCTION StartApp

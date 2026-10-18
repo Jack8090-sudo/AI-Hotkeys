@@ -2,7 +2,7 @@
 AI-Hotkeys — web search with local SearXNG for the End key.
 
 Flow:
-  1. Qwen writes 1-2 search queries from the selected text.
+  1. The AI writes 1-2 search queries from the selected text.
   2. SearXNG (http://127.0.0.1:8888) returns results as JSON.
   3. The text of the top pages is read too, not just the snippet.
   4. Sources go into the prompt numbered [1], [2]...; in the answer
@@ -1041,7 +1041,7 @@ def technical_terms(testo):
 def decide_queries(testo):
     """Decide whether to search and with which queries. Returns a dict with
     'query' (empty = no search), 'via' (how it was decided), 'termini'
-    and 'risposta' (Qwen's raw answer)."""
+    and 'risposta' (the AI's raw answer)."""
     terms = technical_terms(testo)
     force = bool(terms) or ALWAYS
     try:
@@ -1059,7 +1059,7 @@ def decide_queries(testo):
         else:
             queries = [" ".join(" ".join(testo.split()).split(" ")[:10])]
 
-    via = "termini tecnici" if terms else ("sempre" if ALWAYS else "decide Qwen")
+    via = "termini tecnici" if terms else ("sempre" if ALWAYS else "decide il modello")
     return {"query": queries, "via": via, "termini": terms, "risposta": answer}
 
 
@@ -1080,7 +1080,7 @@ LABEL_RE = re.compile(r"^\s*(?:risposta|query(?:\s+di\s+ricerca)?|answer)\s*:\s*
 
 
 def parse_queries(answer):
-    """Reads Qwen's answer. Returns (said_no, queries)."""
+    """Reads the AI's answer. Returns (said_no, queries)."""
     queries = []
     for line in answer.replace("\r", "").split("\n"):
         line = LABEL_RE.sub("", line)
@@ -1389,7 +1389,7 @@ def _domain(url):
 
 def add_sources(text, sources):
     """Links in citations + list at the end: first the cited sources, then the
-    other pages read (even if Qwen did not cite them, the links are useful)."""
+    other pages read (even if the AI did not cite them, the links are useful)."""
     if not sources:
         return text
 

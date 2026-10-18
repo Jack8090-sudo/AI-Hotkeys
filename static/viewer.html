@@ -267,7 +267,7 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
 .md ul.sources.other a { color: var(--text-2); }
 .md ul.sources.other .src-n { color: var(--muted); }
 
-/* cursor while Qwen is writing */
+/* cursor while the AI is writing */
 .md .tail { display: contents; }
 .md.streaming > .tail > :last-child::after {
     content: "";
@@ -491,7 +491,7 @@ body.narrow .wrap { width: min(100% - 48px, var(--measure)); }
             <div class="progress" aria-hidden="true"></div>
             <div class="suggest" id="suggest" role="group" aria-label="Suggested questions"></div>
             <div class="row">
-                <label class="sr-only" for="askInput">Ask Qwen</label>
+                <label class="sr-only" for="askInput">Ask AI</label>
                 <textarea id="askInput" rows="1" spellcheck="true" aria-describedby="askStatus askError"></textarea>
                 <button type="submit" class="send" id="askSend">Send</button>
             </div>
@@ -535,7 +535,7 @@ const MODE_UI = {
         title: "Fix",
         key: "PgUp",
         placeholder: "Ask for a change, for example: make it more formal",
-        busy: "Qwen is writing a new version.",
+        busy: "The AI is writing a new version.",
         suggest: [
             ["More formal", "Use a more formal and professional tone."],
             ["Shorter", "Make the text shorter and more concise, without losing important information."],
@@ -547,7 +547,7 @@ const MODE_UI = {
         title: "Summary",
         key: "PgDn",
         placeholder: "Ask something about the text",
-        busy: "Qwen is answering.",
+        busy: "The AI is answering.",
         suggest: [
             ["The most important point", "What is the most important point?"],
             ["Even shorter", "Give me an even shorter summary, in 2-3 sentences."],
@@ -559,7 +559,7 @@ const MODE_UI = {
         title: "Explanation",
         key: "End",
         placeholder: "Ask for more detail",
-        busy: "Qwen is answering.",
+        busy: "The AI is answering.",
         suggest: [
             ["A practical example", "Give me a practical example."],
             ["Simpler", "Explain it to me even more simply."],
@@ -635,7 +635,7 @@ function renderMarkdown(el, text) {
     shapeSections(el);
 }
 
-/* The sections Qwen always writes get their own styling:
+/* The sections the AI always writes get their own styling:
    glossary for terms, colored indent for warnings,
    ordered list for sources. */
 function shapeSections(el) {
@@ -1026,7 +1026,7 @@ function addTurn(question) {
     turn.setAttribute("aria-label", "Question " + n);
     turn.innerHTML = `
         <div class="ask-line"><p></p><button type="button" class="btn" data-copy>Copy</button></div>
-        <div class="md"><p class="waiting">Qwen is reading the question.</p></div>`;
+        <div class="md"><p class="waiting">The AI is reading the question.</p></div>`;
     turn.querySelector(".ask-line p").textContent = question;
     turn.querySelector("[data-copy]").setAttribute("aria-label", "Copy answer " + n);
     const content = turn.querySelector(".md");
@@ -1145,7 +1145,7 @@ async function submit() {
         setStatus(isRewrite ? "Stopped. The current version has not changed." : "Stopped.");
         setTimeout(() => { if (!state.busy) setStatus(""); }, 2500);
     } else {
-        let msg = errorMsg || "Qwen did not answer. Check that Ollama is running.";
+        let msg = errorMsg || "The AI did not answer. Check that Ollama is running.";
         if (isRewrite && text) msg += " The incomplete draft was not kept: the current version has not changed.";
         else if (text) msg += " The answer above is incomplete.";
         setStatus(msg, true);

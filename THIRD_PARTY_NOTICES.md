@@ -20,7 +20,7 @@ installation next to this file.
 6. [curl_cffi and libcurl-impersonate](#6-curl_cffi-and-libcurl-impersonate)
 7. [Python packages in `searxng/lib`](#7-python-packages-in-searxnglib)
 8. [Web assets: marked and fonts](#8-web-assets-marked-and-fonts)
-9. [Not redistributed: Ollama and the Qwen model](#9-not-redistributed-ollama-and-the-qwen-model)
+9. [Not redistributed: Ollama and the AI model](#9-not-redistributed-ollama-and-the-ai-model)
 10. [Keeping this file current](#10-keeping-this-file-current)
 
 ## 1. Source code for copyleft components
@@ -53,7 +53,7 @@ AI-Hotkeys launches SearXNG and AutoHotkey as separate programs. SearXNG listens
 | Other Python packages | see §7 | see §7 | `searxng/lib/` | `python-packages/`, `bundled-in-wheels/` |
 | marked | 12.0.2 | MIT | `static/marked.min.js` | `marked/` |
 | Barlow Semi Condensed, IBM Plex Sans and Mono | — | OFL-1.1 | `static/fonts/` | `fonts/` |
-| Ollama, Qwen model | — | not redistributed (§9) | — | — |
+| Ollama, AI model (Gemma 4 by default) | — | not redistributed (§9) | — | — |
 
 ## 3. AutoHotkey
 
@@ -215,14 +215,20 @@ Do not edit it by hand.
   Text: [`licenses/fonts/OFL-IBM-Plex.txt`](licenses/fonts/OFL-IBM-Plex.txt).
 - The fonts are unmodified Latin subsets in WOFF2 format. The same OFL texts also ship next to them in `static/fonts/`.
 
-## 9. Not redistributed: Ollama and the Qwen model
+## 9. Not redistributed: Ollama and the AI model
 
 AI-Hotkeys does not include Ollama or any language model. You install them yourself, and their own terms apply.
 
 - **Ollama:** MIT License, <https://github.com/ollama/ollama/blob/main/LICENSE>. Download: <https://ollama.com/download>.
-- **Qwen model:** the default model is `qwen3.5:9b`, which you download with `ollama pull qwen3.5:9b`.
-  Qwen3.5-9B is released by the Qwen team under the Apache License 2.0; see the official model card at
-  <https://huggingface.co/Qwen/Qwen3.5-9B>. If you configure a different model, that model's license applies.
+- **Gemma 4 model:** the default model is `gemma4:e4b-it-qat` (Gemma 4 E4B, quantization-aware trained),
+  which you download with `ollama pull gemma4:e4b-it-qat`. Google releases the Gemma 4 models under the
+  Apache License 2.0: <https://ai.google.dev/gemma/apache_2> (announcement:
+  <https://opensource.googleblog.com/2026/03/gemma-4-expanding-the-gemmaverse-with-apache-20.html>).
+  The older Gemma Terms of Use (<https://ai.google.dev/gemma/terms>) cover Gemma 1-3, not Gemma 4.
+  Model page: <https://ollama.com/library/gemma4>.
+- **Other models:** if you configure a different model, that model's license applies. For example
+  `qwen3.5:9b`, the default before 1.1.0, is released by the Qwen team under the Apache License 2.0
+  (<https://huggingface.co/Qwen/Qwen3.5-9B>).
 - **Search engines:** with web search on, your local SearXNG sends queries to the public search engines
   set in `searxng/settings.yml`. Their terms of service apply to that use.
 

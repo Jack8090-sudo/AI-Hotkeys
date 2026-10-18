@@ -1,4 +1,4 @@
-"""Results page server (I7, I8): token, Host allowlist, "Ask Qwen" streaming, escaping."""
+"""Results page server (I7, I8): token, Host allowlist, "Ask AI" streaming, escaping."""
 
 import http.client
 import json
@@ -78,7 +78,7 @@ class ViewerHttpTest(unittest.TestCase):
         self.assertEqual(self.request("GET", "/api/ping")[0], 403)
         self.assertEqual(self.request("GET", "/api/ping", headers={"X-Token": TOKEN})[0], 200)
 
-    # ---- Ask Qwen ----
+    # ---- Ask AI ----
 
     def test_ask_streams_pieces_and_done(self):
         status, headers, body = self.ask("più formale")

@@ -1,5 +1,7 @@
 """
 AI-Hotkeys — shared Ollama connection used by all actions.
+
+The module name (and the [qwen] config section) are historical: kept for compatibility (I11).
 """
 
 import configparser
@@ -42,7 +44,7 @@ MIN_OLLAMA_VERSION = (0, 9, 0)
 # =========================================================
 
 DEFAULTS = {
-    "model": "qwen3.5:9b",
+    "model": "gemma4:e4b-it-qat",
     "ollama_url": "http://localhost:11434",
     "keep_alive": "30m",
     "todo_file": r"%USERPROFILE%\Documents\To-Do List.md",
@@ -599,7 +601,7 @@ def _run_action(mode, input_file, output_file):
             fonti = []
         websearch.save_sources(fonti, query, path=run_dir / "sources.json" if run_dir else None)
         meta.update({"web": bool(fonti), "query": query if fonti else [], "fonti": len(fonti)})
-        websearch.status("Qwen is writing the explanation…" + (f" ({len(fonti)} sources)" if fonti else " (no web)"))
+        websearch.status("The AI is writing the explanation…" + (f" ({len(fonti)} sources)" if fonti else " (no web)"))
 
     try:
         fonti_txt = websearch.sources_block(fonti) if fonti else None
@@ -617,7 +619,7 @@ def _run_action(mode, input_file, output_file):
 
     risposta = clean_answer(risposta, mode, original=testo)
     if not risposta:
-        write_error("Qwen returned an empty answer: try again.", "empty answer")
+        write_error("The AI returned an empty answer: try again.", "empty answer")
         return 1
 
     if fonti:

@@ -10,7 +10,7 @@
 #Include %A_ScriptDir%\lib\Proc.ahk
 
 ; =========================================================
-;  AI-Hotkeys — AutoHotkey → Python → Ollama → Qwen 3.5 9B
+;  AI-Hotkeys — AutoHotkey → Python → Ollama → local AI model (Gemma 4 by default)
 ; =========================================================
 ;  Settings: tray icon → Settings
 ;  (or config.ini). When config.ini changes, the script reloads itself.
@@ -80,9 +80,9 @@ global jobSerial := 0
 ; doing   = what the progress popup shows
 
 global ACTIONS := CIMap(
-    "rewrite",   {script: BASE "\actions\rewrite.py",   name: "Fix",         mode: "rewrite",   replace: true, doing: "Qwen is fixing the text"},
-    "summarize", {script: BASE "\actions\summarize.py", name: "Summary",     mode: "summarize", doing: "Qwen is writing the summary"},
-    "explain",   {script: BASE "\actions\explain.py",   name: "Explanation", mode: "explain",   doing: "Qwen is preparing the explanation"},
+    "rewrite",   {script: BASE "\actions\rewrite.py",   name: "Fix",         mode: "rewrite",   replace: true, doing: "The AI is fixing the text"},
+    "summarize", {script: BASE "\actions\summarize.py", name: "Summary",     mode: "summarize", doing: "The AI is writing the summary"},
+    "explain",   {script: BASE "\actions\explain.py",   name: "Explanation", mode: "explain",   doing: "The AI is preparing the explanation"},
 
     ; Special action: reorganizes the whole To-Do List.md file
     "obsidian_todo", {special: "obsidian_todo", name: "Reorganize To-Do List"}
@@ -278,7 +278,7 @@ Dispatch(slot, *)
     if busy
     {
         Critical "Off"
-        Flash("Qwen is still working", SlotKeyLabel(slot))
+        Flash("The AI is still working", SlotKeyLabel(slot))
         return
     }
 
@@ -395,7 +395,7 @@ RunSelectionAction(action, hk)
 
     keyLbl := KeyLabel(hk)
 
-    ; Remember the starting window: Qwen may take a while
+    ; Remember the starting window: the AI may take a while
     ; and you might switch windows in the meantime.
     try
     {
@@ -549,7 +549,7 @@ RunCapturedJob(action, keyLbl, testo, hwnd, proc, runDir)
         }
         msg := ReadErrorLine(runDir "\error.txt")
         if (msg = "")
-            msg := "Qwen did not respond. Check that Ollama is running and that the model is downloaded."
+            msg := "The AI did not respond. Check that Ollama is running and that the model is downloaded."
         ShowError(msg, keyLbl)
         return false
     }
@@ -564,7 +564,7 @@ RunCapturedJob(action, keyLbl, testo, hwnd, proc, runDir)
 
     if Trim(risposta) = ""
     {
-        ShowError("Qwen returned an empty response.", keyLbl)
+        ShowError("The AI returned an empty response.", keyLbl)
         return false
     }
 
@@ -591,7 +591,7 @@ RunCapturedJob(action, keyLbl, testo, hwnd, proc, runDir)
 
 ; Direct replace (C05). Pastes risposta over the selection only if the
 ; starting window is active again and its selection is still the text that
-; was sent to Qwen. Returns "" when pasted, otherwise the reason it did not.
+; was sent to the AI. Returns "" when pasted, otherwise the reason it did not.
 ReplaceSelection(hwnd, original, risposta)
 {
     global CLIP_WAIT_S
@@ -601,7 +601,7 @@ ReplaceSelection(hwnd, original, risposta)
     if !WinWaitActive(win, , 2)
         return "The window did not come back to the front"
 
-    ; Re-copy the selection: the user may have changed it while Qwen worked
+    ; Re-copy the selection: the user may have changed it while the AI worked
     savedClipboard := ClipboardAll()
     A_Clipboard := ""
     Send "^c"
@@ -674,7 +674,7 @@ RunObsidianTodo(keyLbl)
         return
     }
 
-    ProgressShow("Qwen is reorganizing the To-Do List, it may take a few minutes  ·  Esc 2 s = cancel", keyLbl)
+    ProgressShow("The AI is reorganizing the To-Do List, it may take a few minutes  ·  Esc 2 s = cancel", keyLbl)
 
     comando := PYTHON ' "' BASE '\actions\obsidian_todo.py"'
 
@@ -1152,7 +1152,7 @@ ConfirmIfBusy(what)
     global busy
     if !busy
         return true
-    return MsgBox("Qwen is still working. " what " anyway? The running job will be cancelled.",
+    return MsgBox("The AI is still working. " what " anyway? The running job will be cancelled.",
         "AI-Hotkeys", "YesNo Icon? Default2") = "Yes"
 }
 

@@ -19,9 +19,12 @@ overwrites your `config.ini`.
 
 ## `[qwen]`: the model
 
+The section keeps the name `[qwen]` for historical reasons (the first default model); it works with any
+Ollama model.
+
 | Key | Default | Allowed values | Meaning |
 |---|---|---|---|
-| `model` | `qwen3.5:9b` | an Ollama model name (letters, digits, `.` `:` `-` `/` `_`) | The Ollama model used for every action. Download it with `ollama pull <name>`. |
+| `model` | `gemma4:e4b-it-qat` | an Ollama model name (letters, digits, `.` `:` `-` `/` `_`) | The Ollama model used for every action. Download it with `ollama pull <name>`. Alternatives: `gemma4:e2b-it-qat` (light: about 1.7 GB VRAM, about twice as fast, shallower explanations; for GPUs with 4 GB or less or CPU-only PCs), `gemma4:12b-it-qat` (best quality, about 7.4 GB VRAM, slower) or `qwen3.5:9b` (the default before 1.1.0). An upgrade never changes this value. |
 | `ollama_url` | `http://localhost:11434` | `http://` or `https://` URL | Where Ollama listens. Pointing it at another computer sends your selected text there; the Settings page warns about it. |
 | `keep_alive` | `30m` | Settings page: `5m`, `10m`, `30m`, `1h`, `-1` (never unload), `0` (unload at once) | How long Ollama keeps the model in video memory after the last request. Tray → Free VRAM unloads it at once. |
 
@@ -30,9 +33,9 @@ overwrites your `config.ini`.
 | Key | Default | Allowed values | Meaning |
 |---|---|---|---|
 | `web_search` | `auto` | `auto` (when needed), `always`, `false` (never) | Whether End searches the web before explaining. With `false`, SearXNG is never started. |
-| `query_mode` | `allow_fallback` | `allow_fallback`, `model` | What may be sent to the search engines. `allow_fallback`: Qwen's search words; if a search is forced but Qwen writes none, the technical terms found in the text, or its first 10 words. `model`: only Qwen's search words; nothing is ever taken verbatim from your text, and with no words there is no search. On the Settings page: "Search words". |
+| `query_mode` | `allow_fallback` | `allow_fallback`, `model` | What may be sent to the search engines. `allow_fallback`: the AI's search words; if a search is forced but the AI writes none, the technical terms found in the text, or its first 10 words. `model`: only the AI's search words; nothing is ever taken verbatim from your text, and with no words there is no search. On the Settings page: "Search words". |
 | `searxng_url` | `http://127.0.0.1:8888` | URL | Address of the local SearXNG. Change the port here if 8888 is taken. |
-| `results` | `5` | Settings page: 3–8 (the code accepts 1–10) | How many search results are passed to Qwen. |
+| `results` | `5` | Settings page: 3–8 (the code accepts 1–10) | How many search results are passed to the AI. |
 | `pages_to_read` | `3` | 0–5 | For how many results the full page is downloaded and read (the others are used as short previews). |
 
 ## `[aspetto]`: look of the results and Settings pages
@@ -44,7 +47,7 @@ overwrites your `config.ini`.
 | `testo` | `16` | 14–20 | Text size in pixels. |
 | `larghezza` | `normale` | `stretta` (narrow), `normale` (normal), `ampia` (wide) | Width of the reading column. |
 | `mostra_originale` | `si` | `si`, `no` | Show the selected text next to the result. |
-| `avanzamento` | `si` | `si`, `no` | Show the progress bubble near the mouse while Qwen works. |
+| `avanzamento` | `si` | `si`, `no` | Show the progress bubble near the mouse while the AI works. |
 
 ## `[tasti]`: hotkeys
 

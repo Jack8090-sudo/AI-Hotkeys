@@ -1,6 +1,6 @@
 # AI-Hotkeys: guida per l'utente
 
-AI-Hotkeys usa un modello di intelligenza artificiale locale (Qwen, tramite Ollama) sul testo che
+AI-Hotkeys usa un modello di intelligenza artificiale locale (Gemma 4 come predefinito, tramite Ollama) sul testo che
 selezioni in qualsiasi programma di Windows. L'interfaccia del programma è in inglese; questa guida
 spiega tutto in italiano.
 
@@ -8,8 +8,9 @@ spiega tutto in italiano.
 
 - Windows 10 o 11 a 64 bit.
 - [Ollama](https://ollama.com/download), versione **0.9.0 o successiva** (meglio la più recente).
-- Il modello `qwen3.5:9b`: circa 6,6 GB da scaricare.
-- Una scheda video con circa **8 GB di memoria (VRAM)** libera; consigliata una scheda da **12 GB**.
+- Il modello `gemma4:e4b-it-qat` (Gemma 4 E4B, QAT): circa 6 GB da scaricare.
+- Una scheda video con circa **3-4 GB di memoria (VRAM)** libera: una scheda da **8 GB** basta con
+  margine, una da 6 GB probabilmente funziona.
   Con meno memoria Ollama sposta una parte del modello nella RAM e sul processore: funziona, ma le
   risposte diventano molto più lente.
 - Circa 7 GB liberi su disco (quasi tutti per il modello; AI-Hotkeys occupa circa 110 MB).
@@ -28,7 +29,7 @@ spiega tutto in italiano.
 4. Alla fine apri il Prompt dei comandi e scarica il modello (una volta sola):
 
    ```
-   ollama pull qwen3.5:9b
+   ollama pull gemma4:e4b-it-qat
    ```
 
 5. AI-Hotkeys parte insieme a Windows (si può disattivare durante l'installazione). La sua icona ✦ è vicino
@@ -51,6 +52,14 @@ chiede se spostarla. Rispondendo **Sì**:
 
 La vecchia cartella resta dov'è: quando la nuova versione funziona, puoi cancellare `C:\AI-Hotkeys` a mano.
 
+### Cambiare modello dopo un aggiornamento
+
+L'aggiornamento non modifica mai il tuo `config.ini`, quindi resta il modello che c'era (prima della 1.1.0
+`qwen3.5:9b`). Per passare a Gemma 4, più veloce e più preciso sui compiti di AI-Hotkeys, esegui
+`ollama pull gemma4:e4b-it-qat`, poi icona ✦ → **Settings** → **Model** = `gemma4:e4b-it-qat`.
+Per tenere Qwen non serve fare niente. Per la massima qualità c'è anche `gemma4:12b-it-qat`
+(circa 7,4 GB di VRAM, circa due volte più lento).
+
 ## Uso
 
 Seleziona del testo in qualsiasi programma e premi:
@@ -70,9 +79,9 @@ Seleziona del testo in qualsiasi programma e premi:
 - **Se non hai selezionato niente**, il tasto fa il suo lavoro normale (pagina su, pagina giù, fine riga)
   e i tuoi appunti restano intatti. Nelle console (Prompt dei comandi, PowerShell, Windows Terminal,
   Git Bash) e nelle pagine di AI-Hotkeys i tasti funzionano sempre normalmente.
-- **Annullare**: tieni premuto **Esc** per 2 secondi mentre Qwen lavora. Una pressione breve di Esc arriva
+- **Annullare**: tieni premuto **Esc** per 2 secondi mentre l'IA lavora. Una pressione breve di Esc arriva
   al programma come sempre.
-- **Domande successive**: nella pagina dei risultati c'è un riquadro "Ask Qwen". Dopo una correzione ogni
+- **Domande successive**: nella pagina dei risultati c'è un riquadro "Ask AI". Dopo una correzione ogni
   risposta è una nuova versione del testo; negli altri casi è una conversazione che ricorda le ultime
   6 domande e risposte e riusa le fonti trovate sul web.
 - La pagina dei risultati non si può ricaricare con F5: per rivederla, premi di nuovo il tasto. Si chiude
@@ -92,7 +101,7 @@ Tasto destro sull'icona ✦:
 | Edit prompts | apre i tuoi prompt personali (`prompts_user.py`) |
 | Open config.ini | apre il file delle impostazioni |
 | Open folder | apre la cartella di installazione |
-| Reload / Exit | riavvia / chiude AI-Hotkeys (se Qwen sta lavorando chiede conferma) |
+| Reload / Exit | riavvia / chiude AI-Hotkeys (se l'IA sta lavorando chiede conferma) |
 
 ### Messaggi di errore
 
@@ -102,7 +111,7 @@ I più comuni:
 | Messaggio | Cosa fare |
 |---|---|
 | Ollama is not running | avvia Ollama dal menu Start |
-| Model 'qwen3.5:9b' not found: run  ollama pull qwen3.5:9b | scarica il modello con il comando indicato |
+| Model 'gemma4:e4b-it-qat' not found: run  ollama pull gemma4:e4b-it-qat | scarica il modello con il comando indicato (dopo un aggiornamento il nome è quello scritto nel tuo `config.ini`) |
 | Ollama … is too old: update it to 0.9.0 or newer | aggiorna Ollama |
 | The selected text is too long | seleziona una parte più corta |
 | The answer was cut off | la risposta era troppo lunga: non è stato incollato nulla; seleziona meno testo |
@@ -127,6 +136,8 @@ Le più utili:
   soli non sono ammessi, perché servono per scrivere.
 - `[comportamento] sostituisci_testo = si | no`: PgUp sostituisce il testo o apre la pagina.
 - `[comportamento] lunghezza = breve | normale | dettagliata`: lunghezza di riassunti e spiegazioni.
+- `[qwen] model`: il modello di Ollama (predefinito `gemma4:e4b-it-qat`). La sezione si chiama
+  `[qwen]` per motivi storici e vale per qualsiasi modello.
 - `[qwen] keep_alive`: per quanto tempo il modello resta pronto in memoria (predefinito `30m`).
 - `[comportamento] clip_wait_ms` (facoltativa): quanti millisecondi un tasto aspetta la copia della
   selezione (predefinito 2000). Abbassala, per esempio a `500`, se senza selezione i tasti ti sembrano
@@ -163,7 +174,7 @@ Per tornare ai prompt standard basta cancellarlo.
 
 ## Ricerca sul web e privacy
 
-Il testo selezionato e le risposte restano sul tuo PC: Qwen gira in locale, tramite Ollama.
+Il testo selezionato e le risposte restano sul tuo PC: il modello gira in locale, tramite Ollama.
 
 L'unica eccezione è la ricerca sul web del tasto **End**. Passa da SearXNG, un motore di ricerca che gira
 sul tuo PC, ma che inoltra le **parole di ricerca** a motori pubblici (Startpage, Yahoo); poi le pagine
@@ -173,8 +184,8 @@ Nella pagina Settings puoi scegliere:
 
 - **When to search**: quando serve (predefinito), sempre, oppure mai (`web_search = false`: niente esce dal
   PC).
-- **Search words**: "Qwen or from the text" (predefinito: se Qwen non scrive parole di ricerca, possono
-  essere usate le prime 10 parole del testo o i termini tecnici trovati) oppure "Only Qwen's" (il testo
+- **Search words**: "AI or from the text" (predefinito: se l'IA non scrive parole di ricerca, possono
+  essere usate le prime 10 parole del testo o i termini tecnici trovati) oppure "Only the AI's" (il testo
   non viene mai inviato così com'è).
 
 I file temporanei con il testo selezionato vengono cancellati appena possibile (cartella `work\runs`).
@@ -185,4 +196,4 @@ Dettagli (in inglese): [PRIVACY.md](../PRIVACY.md).
 Impostazioni di Windows → App → AI-Hotkeys → Disinstalla (oppure menu Start → AI-Hotkeys → Uninstall).
 Ti viene chiesto se cancellare anche le impostazioni (`config.ini`) e la cartella `work`. I tuoi prompt
 (`prompts_user.py`) e le copie della nota To-Do restano comunque. Ollama e il modello si tolgono a parte
-(App di Windows, e `ollama rm qwen3.5:9b`).
+(App di Windows, e `ollama rm gemma4:e4b-it-qat`, o il nome del modello che usi).

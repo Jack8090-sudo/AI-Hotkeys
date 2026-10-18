@@ -1,16 +1,19 @@
 """
-AI-Hotkeys — TUTTI i prompt per Qwen in un unico file.
+AI-Hotkeys — TUTTI i prompt per il modello di IA in un unico file.
 
 Puoi modificare liberamente i testi qui sotto: le azioni (PgUp, PgDn, End)
-e il popup "Chiedi a Qwen" li leggono da qui.
+e il popup "Chiedi all'IA" li leggono da qui.
 
-Note su Qwen 3.5 9B (dalla scheda ufficiale del modello):
-- Usiamo la modalità "senza ragionamento" (think = False): è molto più veloce.
-- Parametri consigliati per questa modalità: temperature 0.7, top_p 0.8,
-  top_k 20. Per compiti di fedeltà al testo (correggere, riassumere)
-  abbassiamo la temperature: il modello inventa meno.
-- presence_penalty alto riduce le ripetizioni ma "può causare
-  mescolamento di lingue": per questo lo teniamo basso.
+Note sul modello (predefinito: Gemma 4 E4B QAT, gemma4:e4b-it-qat):
+- Usiamo la modalità "senza ragionamento" (think = False): Gemma 4 sa
+  ragionare prima di rispondere, ma così è molto più veloce.
+- Campionamento consigliato per Gemma 4: top_k 64, top_p 0.95.
+- Per i compiti di fedeltà al testo (correggere, riassumere, spiegare)
+  teniamo la temperature bassa: il modello inventa meno. Misurato con
+  tools/bench/model_eval.py: le temperature basse + top_k 64 / top_p 0.95
+  danno il risultato migliore.
+- presence_penalty alto riduce le ripetizioni ma può far mescolare le
+  lingue: per questo lo teniamo basso.
 - Un modello piccolo segue meglio un FORMATO DI USCITA preciso che una
   lunga lista di regole (con la lista tende a creare una sezione per regola).
 """
@@ -115,7 +118,7 @@ EXPLAIN_REST = """
 
 Rispetta ciò che il testo afferma E ciò che nega. Se il testo dice che una cosa NON include, NON fa o NON riguarda qualcosa, la tua spiegazione deve dire la stessa cosa. Prima di scrivere una frase con "include", "contiene" o "comprende", controlla nel testo se lì c'era una negazione. Non capovolgere mai il senso di un'affermazione.
 
-Il testo può essere in italiano o in inglese: in entrambi i casi scrivi direttamente la spiegazione in italiano. Non riportare il testo originale, non tradurlo riga per riga e non aggiungere una sezione di traduzione.
+Il testo può essere in italiano o in inglese: in entrambi i casi scrivi direttamente la spiegazione in italiano. Non riportare il testo originale, non tradurlo riga per riga e non aggiungere una sezione di traduzione. Non ripetere tra parentesi parole o frasi inglesi del testo: scrivi direttamente in italiano. Lascia in originale solo i termini tecnici (nomi di funzioni, servizi, oggetti come RemoteEvent).
 
 Usa questo formato (ometti una sezione se non c'è nulla da dire):
 
@@ -229,7 +232,7 @@ Scrivi le query."""
 
 
 # =========================================================
-# POPUP "CHIEDI A QWEN" (domande successive)
+# POPUP "CHIEDI ALL'IA" (domande successive)
 # =========================================================
 
 FOLLOWUP_REWRITE_SYSTEM = BASE_RULES + """
@@ -293,33 +296,33 @@ FOLLOWUP_WHAT = {
 # =========================================================
 
 # Stessa dimensione di contesto per tutte le chiamate: se cambia,
-# Ollama deve ricaricare il modello (più lento). Qwen 3.5 usa
-# un'attenzione "ibrida", quindi 16K costano poca memoria in più.
+# Ollama deve ricaricare il modello (più lento). Con Gemma 4 E4B QAT
+# 16K restano leggeri (circa 3 GB di VRAM misurati, vedi docs/audit).
 NUM_CTX = 16384
 
 OPTIONS = {
     "rewrite": {
-        "temperature": 0.3, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.3, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 4096,
     },
     "summarize": {
-        "temperature": 0.5, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.5, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.2, "num_predict": 2048,
     },
     # explain deve ripetere gli stessi quattro titoli ogni volta: la penalità
     # sulle ripetizioni lavorerebbe contro il formato. Temperature bassa
     # perché qui conta la fedeltà al testo, non la varietà.
     "explain": {
-        "temperature": 0.4, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.4, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 4096,
     },
     # Query per SearXNG: brevi e prevedibili
     "query": {
-        "temperature": 0.2, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.2, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 60,
     },
     "obsidian_todo": {
-        "temperature": 0.2, "top_p": 0.8, "top_k": 20,
+        "temperature": 0.2, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 8192,
     },
 }
@@ -346,6 +349,14 @@ LENGTH_HINTS = {
 }
 
 
+SHORT_TEXT_WORDS = 6
+EXPLAIN_SHORT_SYSTEM = BASE_RULES + EXPLAIN_FAITH_TEXT_ONLY + """
+
+Il tuo compito: il testo è solo una parola o poche parole. Spiega in 2-5 righe di testo semplice che cosa significa e a cosa serve, in modo comprensibile a chi non conosce il termine. Scrivi il termine esattamente come nel testo.
+
+Formato della risposta: un solo breve paragrafo. Niente titoli, niente sezioni, niente elenchi."""
+
+
 def first_messages(mode, testo, fonti=None, lunghezza="normale"):
     """Messaggi per la prima elaborazione (PgUp / PgDn / End).
 
@@ -353,6 +364,13 @@ def first_messages(mode, testo, fonti=None, lunghezza="normale"):
     lunghezza = breve / normale / dettagliata (riassunto e spiegazione)."""
     testo = _clean_input(testo)
     hint = LENGTH_HINTS.get(mode, {}).get(str(lunghezza).strip().lower(), "")
+    # Una parola o una riga: con lo schema delle sezioni nel prompt i modelli piccoli
+    # lo compilano comunque. Qui serve una risposta breve senza schema.
+    if mode == "explain" and not fonti and len(testo.split()) <= SHORT_TEXT_WORDS:
+        return [
+            {"role": "system", "content": EXPLAIN_SHORT_SYSTEM},
+            {"role": "user", "content": EXPLAIN_USER.replace("{testo}", testo)},
+        ]
 
     if mode == "explain" and fonti:
         return [

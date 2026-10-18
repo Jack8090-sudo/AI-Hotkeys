@@ -46,7 +46,7 @@ BACKUP_DIR_NAME = ".ai-hotkeys-backups"
 BACKUP_KEEP = 20
 
 # Minimum similarity between a task's old and new text. Low on purpose: the
-# prompt asks Qwen to fix spelling and translate English to Italian, which
+# prompt asks the AI to fix spelling and translate English to Italian, which
 # keeps about 0.35; an unrelated replacement scores about 0.2.
 TASK_SIMILARITY = 0.3
 
@@ -177,10 +177,10 @@ def write_status(ok, lines):
 
 
 # =========================================================
-# QWEN
+# MODEL CALL
 # =========================================================
 
-def ask_qwen(testo):
+def ask_model(testo):
     messages = [{"role": "user", "content": PROMPT.replace("{testo}", testo)}]
     if hasattr(qwen_client, "chat_ex"):
         text, done_reason = qwen_client.chat_ex(messages, "obsidian_todo")
@@ -452,7 +452,7 @@ def replace_with_retry(src, dst, attempts=5):
 def main(argv=None, ask=None):
     """Exit code 0/1/2 (see the module docstring); never raises."""
     try:
-        return _main(sys.argv if argv is None else argv, ask or ask_qwen)
+        return _main(sys.argv if argv is None else argv, ask or ask_model)
     except Exception as e:
         write_status(False, [f"Unexpected error: {type(e).__name__}: {e}",
                              "The original file was NOT modified."])
@@ -484,7 +484,7 @@ def _main(argv, ask):
         return 1
 
     if not risposta.strip():
-        write_status(False, ["Qwen returned an empty answer.", "The original file was NOT modified."])
+        write_status(False, ["The AI returned an empty answer.", "The original file was NOT modified."])
         return 1
 
     risposta = normalize(risposta)
@@ -496,14 +496,14 @@ def _main(argv, ask):
             ["Safety check failed:"]
             + ["• " + e for e in errors[:8]]
             + ["", "The original file was NOT modified.",
-               f"Qwen's output is in {OUTPUT_FILE}"]
+               f"The AI's output is in {OUTPUT_FILE}"]
         ))
         return 2
 
-    # Was the file modified while Qwen was working? Then touch nothing.
+    # Was the file modified while the AI was working? Then touch nothing.
     if todo_file.read_bytes() != raw:
         write_status(False, [
-            "The file was modified while Qwen was working.",
+            "The file was modified while the AI was working.",
             "The original file was NOT modified: press PgUp again.",
         ])
         return 2
@@ -529,7 +529,7 @@ def _main(argv, ask):
         return 1
 
     try:
-        OUTPUT_FILE.unlink()          # Qwen's copy is only kept when a check fails
+        OUTPUT_FILE.unlink()          # the model's copy is only kept when a check fails
     except OSError:
         pass
 
