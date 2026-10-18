@@ -1,7 +1,10 @@
 # Draft release (plan step S14). Builds the installer from the tagged commit and creates a DRAFT
 # GitHub Release with the Setup.exe, SHA256SUMS.txt, the payload manifest, the third-party
-# source archives (AutoHotkey GPL-2.0, SearXNG AGPL-3.0) and a build-provenance attestation.
+# source archives listed in scripts/ci/third-party-sources.json (AutoHotkey GPL-2.0, SearXNG
+# AGPL-3.0, lxml and GNU libiconv LGPL-2.1; step LIC1) and a build-provenance attestation.
 # Publishing the draft is manual and done by the maintainer.
+# The job runs in the GitHub Environment "release": configure required reviewers on it
+# (Settings > Environments) so that every release run waits for an approval.
 # Triggers: a pushed tag v* that equals "v" + the VERSION file, or a manual run (which drafts
 # v<VERSION> on the selected commit). No cache: a release always downloads and re-verifies the pins.
 name: Release (draft)
@@ -28,6 +31,7 @@ jobs:
   draft:
     runs-on: windows-latest
     timeout-minutes: 60
+    environment: release   # gate: required reviewers are configured on this environment
     permissions:
       contents: write      # create the draft release and upload its assets
       id-token: write      # OIDC token for the provenance attestation
@@ -95,8 +99,13 @@ jobs:
             Copy-Item "$out\$name" $dist
           }
           # GitHub release assets are flat: the third-party-sources/ folder becomes a name prefix.
-          $sources = @(Get-ChildItem "$out\third-party-sources" -File)
-          if ($sources.Count -ne 2) { throw "Expected 2 source archives, found $($sources.Count)" }
+          # The folder must hold exactly the archives listed in third-party-sources.json.
+          $expected = @((Get-Content -Raw scripts\ci\third-party-sources.json | ConvertFrom-Json).archives | ForEach-Object { $_.asset } | Sort-Object)
+          $sources = @(Get-ChildItem "$out\third-party-sources" -File | Sort-Object Name)
+          $found = @($sources | ForEach-Object { $_.Name })
+          if ($expected.Count -eq 0 -or (Compare-Object $expected $found)) {
+            throw "Source archives do not match third-party-sources.json. Expected: $($expected -join ', '). Found: $($found -join ', ')"
+          }
           foreach ($f in $sources) { Copy-Item $f.FullName (Join-Path $dist ('third-party-sources.' + $f.Name)) }
           $sums = foreach ($f in Get-ChildItem $dist -File | Sort-Object Name) {
             (Get-FileHash -Algorithm SHA256 $f.FullName).Hash.ToLowerInvariant() + '  ' + $f.Name
@@ -114,6 +123,9 @@ jobs:
         run: |
           $v = $env:AIH_VERSION
           $exe = "AI-Hotkeys-Setup-$v.exe"
+          $sourceLines = foreach ($a in (Get-Content -Raw scripts\ci\third-party-sources.json | ConvertFrom-Json).archives) {
+            "- ``third-party-sources.$($a.asset)``: $($a.name) $($a.version), $($a.license)."
+          }
           $notes = @(
             "AI-Hotkeys $v, built by GitHub Actions from commit $env:GITHUB_SHA.",
             '',
@@ -127,8 +139,10 @@ jobs:
             '- `manifest.txt` lists every installed file with its SHA-256.',
             '',
             '## Third-party sources',
-            'The `third-party-sources.*` assets are the corresponding sources of the bundled AutoHotkey',
-            '(GPL-2.0) and SearXNG (AGPL-3.0-or-later, unmodified), as promised in THIRD_PARTY_NOTICES.md.',
+            'Corresponding sources of the bundled copyleft components, as promised in THIRD_PARTY_NOTICES.md',
+            'section 1 (SearXNG is unmodified). If one is missing, open an issue and it will be provided.',
+            ''
+          ) + @($sourceLines) + @(
             '',
             '## Rollback',
             'Uninstall AI-Hotkeys (config.ini and the work folder are kept), then reinstall the previous version.',

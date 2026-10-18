@@ -146,6 +146,12 @@ Plan: `plans/ai-hotkeys-production-readiness.md`. Step ids (S1–S15) refer to i
 - `THIRD_PARTY_NOTICES.md` and `licenses\` cover every bundled component; the MIT `LICENSE` is installed;
   the AutoHotkey and SearXNG source archives are attached to every release as `third-party-sources.*`
   assets. (S12, S13b, S14, C29)
+- Every release also attaches the lxml 6.1.3 sdist and the GNU libiconv 1.17 sources that lxml's Windows
+  wheel links statically (LGPL-2.1): the GNU tarball, the exact MSVC build tree and lxml's build scripts.
+  All archives are SHA-256 pinned and listed with their licenses in the release notes. The source offer
+  in `THIRD_PARTY_NOTICES.md` §1 is final. The lxml notices now name the versions in the Windows wheel
+  (libxml2 2.11.9, libxslt 1.1.45, libiconv 1.17), not the ones in the Linux build scripts. The release job
+  runs in a `release` GitHub Environment, so required reviewers can gate it. (LIC1)
 
 ### Development
 

@@ -1,14 +1,78 @@
 {
-  "_comment": "Corresponding-source archives attached to every GitHub Release (THIRD_PARTY_NOTICES.md section 1; plan steps S12/S14). SearXNG comes from build/pins.json (same tarball the build uses). The AutoHotkey source zip is GitHub's tag archive; its SHA-256 was measured on 2026-10-17 (two downloads, identical; top folder AutoHotkey-2.0.19/). GitHub does not promise byte-stable archives: on a mismatch, re-download, check the tree against tag v2.0.19 and re-pin.",
-  "autohotkey": {
-    "version": "2.0.19",
-    "url": "https://github.com/AutoHotkey/AutoHotkey/archive/refs/tags/v2.0.19.zip",
-    "asset": "AutoHotkey-v2.0.19-source.zip",
-    "sha256": "5baa09e9d7d97bdb236fab0ee65a5004d96bb70c70108b5fc2139e4b2180cc4b",
-    "license": "GPL-2.0"
-  },
-  "searxng": {
-    "asset": "searxng-6671d89bede8c9fc108b17bb98916170f5657650-source.tar.gz",
-    "license": "AGPL-3.0-or-later"
-  }
+  "_comment": [
+    "Corresponding-source archives attached to every GitHub Release as third-party-sources.<asset>",
+    "(THIRD_PARTY_NOTICES.md section 1; plan steps S12, S14, LIC1). scripts/ci/get-sources.ps1 downloads",
+    "each entry, verifies its SHA-256 and checks it against the shipped versions; release.yml attaches",
+    "exactly these assets and lists them in the release notes. An entry with 'from_pins' takes url and",
+    "sha256 from build/pins.json (the same file the build uses).",
+    "Every hash was measured on the date in 'measured' by downloading the file twice (identical both times).",
+    "GitHub archive URLs (codeload) are not promised byte-stable: on a mismatch, re-download, check the",
+    "tree against the named tag or commit, and re-pin."
+  ],
+  "archives": [
+    {
+      "id": "autohotkey",
+      "name": "AutoHotkey",
+      "version": "2.0.19",
+      "license": "GPL-2.0-only",
+      "ships": "ahk/AutoHotkey64.exe",
+      "url": "https://github.com/AutoHotkey/AutoHotkey/archive/refs/tags/v2.0.19.zip",
+      "asset": "AutoHotkey-v2.0.19-source.zip",
+      "sha256": "5baa09e9d7d97bdb236fab0ee65a5004d96bb70c70108b5fc2139e4b2180cc4b",
+      "measured": "2026-10-17 (top folder AutoHotkey-2.0.19/)"
+    },
+    {
+      "id": "searxng",
+      "name": "SearXNG, commit",
+      "version": "6671d89bede8c9fc108b17bb98916170f5657650",
+      "license": "AGPL-3.0-or-later",
+      "ships": "searxng/app/ (unmodified, verified by H17)",
+      "from_pins": "searxng",
+      "asset": "searxng-6671d89bede8c9fc108b17bb98916170f5657650-source.tar.gz"
+    },
+    {
+      "id": "lxml",
+      "name": "lxml source distribution",
+      "version": "6.1.3",
+      "license": "BSD-3-Clause (its Windows wheel statically links GNU libiconv, LGPL-2.1-or-later)",
+      "ships": "searxng/lib/lxml/*.pyd",
+      "url": "https://files.pythonhosted.org/packages/23/ad/28ecd7cb894d172f3c9c80a075eeeb2017ac62e3632cee05a5f9493547eb/lxml-6.1.3.tar.gz",
+      "asset": "lxml-6.1.3.tar.gz",
+      "sha256": "45222d94ddd511536f3b2f7d9deae3b2339b4ce0f075f1ca25703b07cad9dd21",
+      "measured": "2026-10-18 (equals the sha256 digest published by PyPI)"
+    },
+    {
+      "id": "libiconv",
+      "name": "GNU libiconv",
+      "version": "1.17",
+      "license": "LGPL-2.1-or-later",
+      "ships": "statically linked into searxng/lib/lxml/*.pyd (etree.ICONV_COMPILED_VERSION == (1, 17))",
+      "url": "https://ftp.gnu.org/gnu/libiconv/libiconv-1.17.tar.gz",
+      "asset": "libiconv-1.17.tar.gz",
+      "sha256": "8f74213b56238c85a50a5329f77e06198771e70dd9a739779f4c02f65d971313",
+      "measured": "2026-10-18"
+    },
+    {
+      "id": "libiconv-winlibs",
+      "name": "winlibs/libiconv (GNU libiconv 1.17 with the MSVC build files of lxml's Windows wheel), commit",
+      "version": "880a1fa8b5581e37e136a7b051947d3ea39097b6",
+      "license": "LGPL-2.1-or-later",
+      "ships": "statically linked into searxng/lib/lxml/*.pyd",
+      "url": "https://github.com/winlibs/libiconv/archive/880a1fa8b5581e37e136a7b051947d3ea39097b6.tar.gz",
+      "asset": "libiconv-winlibs-880a1fa8b5581e37e136a7b051947d3ea39097b6-source.tar.gz",
+      "sha256": "89dd45d7f074ddae04dcd25cc4ceace3432c04b72dc36a6508854aac713f3eb6",
+      "measured": "2026-10-18 (submodule commit of lxml/libxml2-win-binaries tag 2026.05.17)"
+    },
+    {
+      "id": "libxml2-win-binaries",
+      "name": "lxml/libxml2-win-binaries build scripts (build.ps1, libiconv.patch), tag",
+      "version": "2026.05.17",
+      "license": "no license file upstream; the build recipe of the LGPL-2.1-or-later libiconv above",
+      "ships": "build recipe of the libiconv, libxml2 2.11.9, libxslt 1.1.45 and zlib 1.3.2 in searxng/lib/lxml/*.pyd",
+      "url": "https://github.com/lxml/libxml2-win-binaries/archive/refs/tags/2026.05.17.tar.gz",
+      "asset": "libxml2-win-binaries-2026.05.17-source.tar.gz",
+      "sha256": "ed1e59196361c8753e2c2d5ce4d2ad5f2c721a1876479f08e918e93c00750813",
+      "measured": "2026-10-18 (latest release before the lxml 6.1.3 Windows wheels were uploaded on 2026-09-02)"
+    }
+  ]
 }
