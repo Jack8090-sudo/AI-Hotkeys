@@ -1102,6 +1102,14 @@ Every step header lists: **Wave**, **Depends on**, **Model**, **Branch**, **Agen
   - Worktree, merge-gate and runtime-isolation rules added (§0.5, §1); Windows command conventions added (§0.6).
   - C21 moved to S9; the C01 test is now non-hanging; S15 dependencies widened.
 - 2026-10-16: D1–D12 accepted with the recommended defaults. Wave A started: S1 in the planning session; S11 and S12 proposed as separate sessions.
+- 2026-10-18: hypothesis results (S3, S6c, S8a, S11; evidence in docs/audit/baseline-2026-10.md and docs/changes/pending/):
+  - **Confirmed:** H04 (fixed in S9), H08, H09 and H10 (fixed in S6c), H13.
+  - **Refuted:** H01, H05, H16, H17 (SearXNG unmodified), H22, and H11 for first requests.
+  - **H11, follow-ups:** follow-up questions in the viewer have no size guard (open). Ollama silently truncates past num_ctx.
+  - **H23:** keep the query-decision call.
+  - **Still open, manual:** H02, H03, H06, H07, H21.
+  - **E1/D7:** streaming the first answer is recommended. TTFT is 0.12–1.1 s against 4–26 s for the full answer.
+  - **Steps done:** S1–S8b3, S10–S13b.
 
 ---
 
