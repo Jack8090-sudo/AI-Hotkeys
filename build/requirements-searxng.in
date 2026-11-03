@@ -2,7 +2,7 @@
 # Copied verbatim from upstream requirements.txt @ 6671d89bede8c9fc108b17bb98916170f5657650.
 # curl_cffi is already listed upstream (AI-Hotkeys websearch.py reuses it, I14).
 # Regenerate the lock with build/lock-searxng.ps1.
-certifi==2026.7.22
+certifi==2026.10.18
 babel==2.18.0
 flask-babel==4.0.0
 flask==3.1.3
