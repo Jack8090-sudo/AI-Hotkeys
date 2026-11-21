@@ -1,6 +1,6 @@
 # AI-Hotkeys code map
 
-**Last updated:** 2026-10-18 (version 1.1.0)
+**Last updated:** 2026-11-21 (version 2.0.0)
 **Entry points:** `main.ahk`; `actions/*.py`; `viewer.py`; `settings.py`; `searxng/avvia_searxng.py`
 **Source of truth:** generated from the sources. If a path or name below no longer exists, regenerate this map.
 

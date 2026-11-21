@@ -42,7 +42,9 @@ The base model mostly repeated the instructions or copied the text instead of su
 ## Where Gemma is still better
 
 - Explanations built on long web pages: LFM sometimes repeats a line or forgets the `[n]` citations.
-- Small factual slips in summaries (a wrong day) and, in fixes, an occasional change of a verb's person.
+- Small factual slips in summaries (a wrong day) and, in fixes, an occasional change of a verb's person
+  ("rispondevi" → "rispondevamo"). Rarely a fix drops a word that carries the meaning: in one of two runs
+  "domani nn vengo" became "Domani vengo".
 - Follow-up edits such as "make it a bulleted list".
 
 Who wants the richest explanations and has the VRAM can switch the engine to Ollama in Settings.

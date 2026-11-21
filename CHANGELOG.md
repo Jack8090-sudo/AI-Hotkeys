@@ -2,7 +2,10 @@
 
 All notable changes to AI-Hotkeys. Versions follow [`VERSION`](VERSION).
 
-## [Unreleased]
+## [2.0.0] - 2026-11-21
+
+The built-in AI release: AI-Hotkeys now brings its own small AI model, so Ollama and the 6 GB Gemma
+download are no longer needed. Comparison with Gemma: [docs/audit/model-choice-2026-11.md](docs/audit/model-choice-2026-11.md).
 
 ### Changed
 
