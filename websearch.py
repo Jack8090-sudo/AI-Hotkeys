@@ -507,8 +507,7 @@ def _charset(ctype, default="utf-8"):
 
 def _decode(raw, ctype):
     """Page bytes -> text. Header charset first, then <meta charset>, then UTF-8."""
-    m = _CHARSET_RE.search(ctype or "")
-    name = _valid_charset(m.group(1)) if m else None
+    name = _charset(ctype, None)
     if name is None:
         meta = _META_CHARSET_RE.search(raw[:4096])
         if meta:
@@ -1059,7 +1058,7 @@ def decide_queries(testo):
         answer = qwen_client.chat(prompts.query_messages(testo, force=force), "query", timeout=60)
     except Exception:
         answer = ""
-    said_no, queries = parse_queries(answer)
+    _, queries = parse_queries(answer)
 
     if force and not queries and QUERY_MODE == "allow_fallback":
         # The model said NO anyway: search with the found terms,
@@ -1297,7 +1296,6 @@ def sources_block(sources):
 # CITATIONS
 # =========================================================
 
-CITE_RE = re.compile(r"\[(\d{1,2}(?:\s*[,;]\s*\d{1,2})*)\](?!\()")
 CITE_WS_RE = re.compile(r"([ \t]*)\[(\d{1,2}(?:\s*[,;]\s*\d{1,2})*)\](?!\()")
 
 # Markdown code: fenced blocks (``` or ~~~, up to the closing fence or the end)

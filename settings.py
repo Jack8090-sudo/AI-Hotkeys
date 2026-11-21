@@ -15,7 +15,6 @@ import sys
 import threading
 import time
 import webbrowser
-from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -319,35 +318,8 @@ def build_page(token):
 
 def make_handler(state, token):
 
-    class Handler(BaseHTTPRequestHandler):
-        protocol_version = "HTTP/1.0"
-        timeout = pages.REQUEST_TIMEOUT
-
-        def log_message(self, *args):
-            pass
-
-        def _authorized(self):
-            return pages.token_ok(self.headers.get("X-Token", ""), token)
-
-        def _send(self, status, body, ctype):
-            self.send_response(status)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("X-Frame-Options", "DENY")
-            if ctype.startswith("text/html"):
-                self.send_header("Content-Security-Policy", pages.CSP)
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _json(self, status, data):
-            self._send(status, json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
-
-        def _bad_host(self):
-            host = (self.headers.get("Host") or "").split(":")[0].lower()
-            return host not in ("127.0.0.1", "localhost")
+    class Handler(pages.PageHandler):
+        page_token = token
 
         def do_GET(self):
             url = urlparse(self.path)

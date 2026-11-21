@@ -70,7 +70,6 @@ chooses the target; the default is the checkout that contains the script.
 ```
 python -m unittest discover -s tests -t .
 python -m unittest tests.test_websearch_ssrf        # one module
-python test_config_edit.py                           # old entry point, still works
 ```
 
 The suite imports the app from a temporary copy (`tests/support.py: AppTree`) with its own `config.ini`

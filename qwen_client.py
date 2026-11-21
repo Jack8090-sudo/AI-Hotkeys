@@ -232,15 +232,7 @@ def describe_error(exc):
     if BACKEND == "llama":
         return _describe_llama_error(exc, detail)
     if isinstance(exc, urllib.error.HTTPError):
-        err = ""
-        try:
-            body = exc.read().decode("utf-8", "replace")
-            try:
-                err = str(json.loads(body).get("error", ""))
-            except Exception:
-                err = body.strip()
-        except Exception:
-            pass
+        err = _http_error_text(exc)
         detail = f"HTTP {exc.code}: {err or exc.reason}"
         if exc.code == 404 and ("model" in err.lower() or "not found" in err.lower()):
             return f"Model '{MODEL}' not found: run  ollama pull {MODEL}", detail
@@ -261,18 +253,22 @@ def describe_error(exc):
     return f"Something went wrong: {str(exc)[:150]}", detail
 
 
+def _http_error_text(exc):
+    """The "error" of an HTTP error body (Ollama: a string, llama-server: {"message": ...}), else the raw body."""
+    try:
+        body = exc.read().decode("utf-8", "replace")
+    except Exception:
+        return ""
+    try:
+        e = json.loads(body).get("error", "")
+        return str(e.get("message", e) if isinstance(e, dict) else e)
+    except Exception:
+        return body.strip()
+
+
 def _describe_llama_error(exc, detail):
     if isinstance(exc, urllib.error.HTTPError):
-        err = ""
-        try:
-            body = exc.read().decode("utf-8", "replace")
-            try:
-                e = json.loads(body).get("error", "")
-                err = str(e.get("message", e) if isinstance(e, dict) else e)
-            except Exception:
-                err = body.strip()
-        except Exception:
-            pass
+        err = _http_error_text(exc)
         detail = f"HTTP {exc.code}: {err or exc.reason}"
         if "context" in err.lower() and ("exceed" in err.lower() or "size" in err.lower()):
             return "The selected text is too long for the AI: select a shorter part.", detail
@@ -335,7 +331,6 @@ def sweep_stale_runs(max_age=STALE_RUN_SECONDS, keep=None, now=None):
     Returns the names deleted. Best effort: a locked file leaves its folder for next time.
     """
     import shutil
-    import time
 
     now = time.time() if now is None else now
     keep = Path(keep).resolve() if keep else None
@@ -397,6 +392,11 @@ def _options(mode):
 # ---------------------------------------------------------
 # Built-in engine: llama-server.exe (llama.cpp) on 127.0.0.1
 # ---------------------------------------------------------
+
+def _post_json(url, payload):
+    return urllib.request.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                                  headers={"Content-Type": "application/json; charset=utf-8"}, method="POST")
+
 
 def _get_json(url, timeout):
     with _OPENER.open(url, timeout=timeout) as r:
@@ -523,12 +523,7 @@ def _llama_request(messages, mode, stream):
         "repeat_penalty": opts.get("repeat_penalty", LLAMA_REPEAT_PENALTY),
         "cache_prompt": True,
     }
-    return urllib.request.Request(
-        LLAMA_URL + "/v1/chat/completions",
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json; charset=utf-8"},
-        method="POST",
-    )
+    return _post_json(LLAMA_URL + "/v1/chat/completions", payload)
 
 
 def _request(messages, mode, stream):
@@ -545,12 +540,7 @@ def _request(messages, mode, stream):
         "keep_alive": KEEP_ALIVE,
         "options": _options(mode),
     }
-    return urllib.request.Request(
-        CHAT_URL,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json; charset=utf-8"},
-        method="POST",
-    )
+    return _post_json(CHAT_URL, payload)
 
 
 def chat_ex(messages, mode, timeout=600):
@@ -585,13 +575,7 @@ def unload(timeout=30):
     if BACKEND == "llama":
         stop_llama()
         return
-    req = urllib.request.Request(
-        OLLAMA_URL + "/api/generate",
-        data=json.dumps({"model": MODEL, "keep_alive": 0}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with _OPENER.open(req, timeout=timeout) as r:
+    with _OPENER.open(_post_json(OLLAMA_URL + "/api/generate", {"model": MODEL, "keep_alive": 0}), timeout=timeout) as r:
         r.read()
 
 
@@ -938,7 +922,6 @@ def run_action(mode, argv):
 
 def _run_action(mode, input_file, output_file):
     import sys
-    import time
 
     t0 = time.time()
     run_dir = _RUN_DIR

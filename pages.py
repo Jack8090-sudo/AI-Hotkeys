@@ -7,7 +7,7 @@ import json
 import re
 import secrets
 import traceback
-from http.server import ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -55,6 +55,41 @@ class LocalServer(ThreadingHTTPServer):
 
     def handle_error(self, request, client_address):
         log_server_error(traceback.format_exc())
+
+
+class PageHandler(BaseHTTPRequestHandler):
+    """Base of the results and settings page handlers: Host check, token check, hardened replies."""
+
+    protocol_version = "HTTP/1.0"
+    timeout = REQUEST_TIMEOUT
+    page_token = ""
+
+    def log_message(self, *args):
+        pass
+
+    def _authorized(self):
+        return token_ok(self.headers.get("X-Token", ""), self.page_token)
+
+    def _bad_host(self):
+        host = (self.headers.get("Host") or "").split(":")[0].lower()
+        return host not in ("127.0.0.1", "localhost")
+
+    def _send(self, status, body, ctype):
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        if ctype.startswith("text/html"):
+            self.send_header("Content-Security-Policy", CSP)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _json(self, status, data):
+        self._send(status, json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+
 
 FONT_RE = re.compile(r"^/fonts/([a-z0-9-]+\.woff2)$")
 

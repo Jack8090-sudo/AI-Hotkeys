@@ -1,6 +1,6 @@
 """config_edit: edit config.ini without breaking comments, order, BOM or line endings (I12).
 
-Run alone: python -m unittest tests.test_config_edit   (or: python test_config_edit.py)
+Run alone: python -m unittest tests.test_config_edit
 """
 
 import configparser
