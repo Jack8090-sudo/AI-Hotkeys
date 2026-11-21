@@ -180,14 +180,14 @@ TestReadConfig()
         . "correggi = ^!r `; my key`r`n"
         . "riassumi = PgDn`t;tab comment`r`n"
         . "spiega = `; only a comment`r`n"
-        . "[obsidian]`r`n"
-        . "window_title = To-Do;List -`r`n"
-        . "todo_file = C:\Notes\To-Do List.md `; path`r`n")
+        . "[extra]`r`n"
+        . "title = To-Do;List -`r`n"
+        . "file = C:\Notes\To-Do List.md `; path`r`n")
     Assert("ReadConfig inline comment after space stripped", ReadConfig("correggi", "X", "tasti", p), "^!r")
     Assert("ReadConfig inline comment after tab stripped", ReadConfig("riassumi", "X", "tasti", p), "PgDn")
     Assert("ReadConfig value that is only a comment -> default", ReadConfig("spiega", "End", "tasti", p), "End")
-    Assert("ReadConfig ';' without whitespace before it is kept", ReadConfig("window_title", "X", "obsidian", p), "To-Do;List -")
-    Assert("ReadConfig path value with inline comment", ReadConfig("todo_file", "X", "obsidian", p), "C:\Notes\To-Do List.md")
+    Assert("ReadConfig ';' without whitespace before it is kept", ReadConfig("title", "X", "extra", p), "To-Do;List -")
+    Assert("ReadConfig path value with inline comment", ReadConfig("file", "X", "extra", p), "C:\Notes\To-Do List.md")
 
     ; Same key in two sections
     p := Fixture("dup.ini", "; header comment`n"

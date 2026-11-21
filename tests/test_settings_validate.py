@@ -113,11 +113,10 @@ if __name__ == "__main__":
 
 
 class DefaultModelParityTest(unittest.TestCase):
-    """The default model is written in five places: they must agree."""
+    """The default Ollama model is written in four places, the built-in engine defaults in four: they must agree."""
 
     def test_default_model_is_the_same_everywhere(self):
         import configparser
-        import re
 
         from tests.support import REPO
 
@@ -130,7 +129,32 @@ class DefaultModelParityTest(unittest.TestCase):
         example = configparser.ConfigParser(interpolation=None)
         example.read(REPO / "config.example.ini", encoding="utf-8")
         self.assertEqual(example.get("qwen", "model"), expected)
-        nsi = (REPO / "installer" / "sorgente" / "installer.nsi").read_text(encoding="utf-8")
-        self.assertEqual(re.search(r'^!define MODEL\s+"([^"]+)"', nsi, re.M).group(1), expected)
         html = (REPO / "static" / "settings.html").read_text(encoding="utf-8")
         self.assertIn(f"ollama pull {expected}", html)
+
+    def test_built_in_engine_defaults_agree(self):
+        """backend, gpu and the model file: qwen_client, settings, config.example.ini and build/pins.json."""
+        import configparser
+        import json
+        from pathlib import PureWindowsPath
+
+        from tests.support import REPO
+
+        tree = AppTree()
+        try:
+            qc, st = tree.load("qwen_client"), tree.load("settings")
+            for key in ("backend", "gpu"):
+                self.assertEqual(st.CHOICES[("qwen", key)][0], qc.DEFAULTS[key])
+            defaults = dict(qc.DEFAULTS)
+            model_file = PureWindowsPath(defaults["llama_model"]).name
+        finally:
+            tree.close()
+        example = configparser.ConfigParser(interpolation=None)
+        example.read(REPO / "config.example.ini", encoding="utf-8")
+        for key in ("backend", "gpu", "llama_port", "llama_model"):
+            self.assertEqual(example.get("qwen", key), defaults[key], key)
+        self.assertEqual(defaults["backend"], "llama")
+        pins = json.loads((REPO / "build" / "pins.json").read_text(encoding="utf-8"))
+        self.assertEqual(pins["model"]["file"], model_file)
+        nsi = (REPO / "installer" / "sorgente" / "installer.nsi").read_text(encoding="utf-8")
+        self.assertNotIn("!define MODEL", nsi)

@@ -292,7 +292,7 @@ class FirstStreamTest(unittest.TestCase):
 
 def search_config(ollama_url, searxng_url, web_search):
     return DEFAULT_CONFIG.format(ollama_url=ollama_url, keep_alive="30m", web_search=web_search,
-                                 searxng_url=searxng_url, todo_file="x.md")
+                                 searxng_url=searxng_url)
 
 
 class FirstStreamExplainTest(unittest.TestCase):

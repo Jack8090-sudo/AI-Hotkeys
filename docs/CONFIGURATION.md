@@ -19,20 +19,24 @@ overwrites your `config.ini`.
 
 ## `[qwen]`: the model
 
-The section keeps the name `[qwen]` for historical reasons (the first default model); it works with any
-Ollama model.
+The section keeps the name `[qwen]` for historical reasons (the first default model); it works with the
+built-in model and with any Ollama model.
 
 | Key | Default | Allowed values | Meaning |
 |---|---|---|---|
-| `model` | `gemma4:e4b-it-qat` | an Ollama model name (letters, digits, `.` `:` `-` `/` `_`) that runs locally; never a cloud model | The Ollama model used for every action. Download it with `ollama pull <name>`. Alternatives: `gemma4:e2b-it-qat` (light: about 1.7 GB VRAM, about twice as fast, shallower explanations; for GPUs with 4 GB or less or CPU-only PCs), `gemma4:12b-it-qat` (best quality, about 7.4 GB VRAM, slower) or any other model installed in Ollama, such as `qwen3.5:9b` (the default before 1.1.0). An upgrade never changes this value. See "Choosing the model" below. |
-| `ollama_url` | `http://localhost:11434` | `http://` or `https://` URL | Where Ollama listens. Pointing it at another computer sends your selected text there; the Settings page warns about it. |
-| `keep_alive` | `30m` | Settings page: `5m`, `10m`, `30m`, `1h`, `-1` (never unload), `0` (unload at once) | How long Ollama keeps the model in video memory after the last request. Tray → Free VRAM unloads it at once. |
+| `backend` | `llama` | `llama`, `ollama` | Which AI does the work. `llama`: the built-in model (`llama_model`) run by `llama\llama-server.exe`, nothing to install. `ollama`: the Ollama model in `model`. Anything else falls back to `llama` with a warning. A 1.1.0 `config.ini` has no `backend`, so an upgrade switches to the built-in model. On the Settings page: "Engine". |
+| `gpu` | `auto` | `auto`, `off` | Built-in engine only. `auto`: the graphics card when there is one (any brand, through Vulkan), otherwise the processor. `off`: always the processor (leaves the graphics card free). On the Settings page: "Graphics card". |
+| `llama_port` | `8095` | a port from 1024 to 65535 | Built-in engine only. `llama-server` listens on `127.0.0.1` at this port. Change it if another program uses it ("Port … is used by another program"). Not on the Settings page. |
+| `llama_model` | `models\lfm-hotkeys-Q6_K.gguf` | a GGUF file, relative to the install folder or a full path | Built-in engine only. The model file. The prompts in `prompts_lfm.py` are the ones the shipped model was trained on; another GGUF works, but its answers may follow them less well. Not on the Settings page. |
+| `model` | `gemma4:e4b-it-qat` | an Ollama model name (letters, digits, `.` `:` `-` `/` `_`) that runs locally; never a cloud model | Ollama engine only: the Ollama model used for every action. Download it with `ollama pull <name>`. Alternatives: `gemma4:e2b-it-qat` (light: about 1.7 GB VRAM, about twice as fast, shallower explanations; for GPUs with 4 GB or less or CPU-only PCs), `gemma4:12b-it-qat` (best quality, about 7.4 GB VRAM, slower) or any other model installed in Ollama, such as `qwen3.5:9b` (the default before 1.1.0). An upgrade never changes this value. See "Choosing the model" below. |
+| `ollama_url` | `http://localhost:11434` | `http://` or `https://` URL | Ollama engine only: where Ollama listens. Pointing it at another computer sends your selected text there; the Settings page warns about it. |
+| `keep_alive` | `30m` | Settings page: `5m`, `10m`, `30m`, `1h`, `-1` (never unload), `0` (unload at once) | How long the model stays in memory after the last request. Built-in engine: `llama-server --sleep-idle-seconds`, reloading takes about a second. Ollama: its `keep_alive`. Tray → Free VRAM unloads it at once (built-in engine: stops `llama-server`). |
 
-### Choosing the model
+### Choosing an Ollama model (engine = Ollama)
 
-Gemma 4 is the default and the recommended choice; other models are optional and must be installed locally.
+With the Ollama engine, Gemma 4 is the recommended choice; other models must be installed locally.
 
-- **Settings → Model** is a list, not a text box. The settings server asks Ollama (`GET /api/tags` at
+- **Settings → Model** shows the Ollama fields only when the engine is Ollama. The model is a list, not a text box. The settings server asks Ollama (`GET /api/tags` at
   `ollama_url`, never through a proxy, 2 s timeout) which models are installed.
 - At the top, **Recommended: Gemma 4**: `gemma4:e4b-it-qat` (default, recommended), `gemma4:e2b-it-qat`
   (light: GPUs with 4 GB or less) and `gemma4:12b-it-qat` (maximum quality, slower). Each says "Installed" or
@@ -97,15 +101,6 @@ The same rules apply in the file and on the Settings page, where you record a ke
 | `sostituisci_testo` | `si` | `si`, `no` | PgUp replaces the selected text directly in Notepad, Notepad++, Obsidian, Word and VS Code. With `no` the result opens in the results page. PgDn and End always open the page. |
 | `lunghezza` | `normale` | `breve` (short), `normale` (normal), `dettagliata` (detailed) | Length of summaries and explanations. |
 | `clip_wait_ms` | `2000` | whole milliseconds, 100–10000 | Optional, not on the Settings page. How long a key waits for the copied selection. With nothing selected, the key acts normally after this time. Lower it (for example `500`) for a snappier key; raise it if Excel or a remote desktop copies slowly. |
-
-## `[obsidian]`: the To-Do note
-
-| Key | Default | Meaning |
-|---|---|---|
-| `todo_file` | `%USERPROFILE%\Documents\To-Do List.md` | The note that PgUp reorganizes when it is open in Obsidian. Environment variables are expanded, and surrounding quotes are allowed. If your Documents folder is redirected to OneDrive, use the real path, for example `%USERPROFILE%\OneDrive\Documents\To-Do List.md`. |
-| `window_title` | `To-Do List -` | How the Obsidian window title starts while that note is open. Obsidian titles look like `<note name> - <vault name> - Obsidian`. |
-
-Backups of the note go to the hidden folder `.ai-hotkeys-backups` next to it; the newest 20 are kept.
 
 ## Files that are not settings
 

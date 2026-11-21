@@ -28,10 +28,11 @@ REPO = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 # Application modules that live in the repository root
-APP_MODULES = ("qwen_client", "prompts", "prompt_loader", "prompts_user", "websearch", "viewer", "settings", "pages", "config_edit")
+APP_MODULES = ("qwen_client", "prompts", "prompts_lfm", "prompt_loader", "prompts_user", "websearch", "viewer", "settings", "pages", "config_edit")
 
 DEFAULT_CONFIG = """\
 [qwen]
+backend = ollama
 model = test-model:1b
 ollama_url = {ollama_url}
 keep_alive = {keep_alive}
@@ -55,10 +56,6 @@ spiega = End
 [comportamento]
 sostituisci_testo = si
 lunghezza = normale
-
-[obsidian]
-todo_file = {todo_file}
-window_title = To-Do List -
 """
 
 
@@ -103,7 +100,6 @@ class AppTree:
                 "keep_alive": "30m",
                 "web_search": "false",
                 "searxng_url": dead_url(),
-                "todo_file": str(self.root / "To-Do List.md"),
             }
             values.update(config)
             config_text = DEFAULT_CONFIG.format(**values)
@@ -297,6 +293,50 @@ class FakeOllama(_FakeServer):
         if self.scenario != "no_done":
             lines.append(json.dumps({"message": {"content": ""}, "done": True, "done_reason": reason}))
         self.send(h, 200, "\n".join(lines) + "\n", ctype="application/x-ndjson")
+
+
+class FakeLlama(_FakeServer):
+    """Fake llama-server (built-in engine): /health, /props, /v1/chat/completions.
+
+    scenario: "ok", "length" (finish_reason length), "loading" (/health 503),
+              "no_done" (stream ends without finish_reason / [DONE]), "http500"
+    model_path: what /props reports (the client checks the file name)
+    """
+
+    def __init__(self, text="Risposta di prova.", scenario="ok", model_path=r"C:\x\models\lfm-hotkeys-Q6_K.gguf"):
+        self.text = text
+        self.scenario = scenario
+        self.model_path = model_path
+        super().__init__()
+
+    def chat_bodies(self):
+        return [json.loads(b) for m, p, h, b in self.requests if p == "/v1/chat/completions"]
+
+    def handle(self, h, body):
+        path = h.path.split("?")[0]
+        if path == "/health":
+            if self.scenario == "loading":
+                return self.send(h, 503, {"error": {"code": 503, "message": "Loading model"}})
+            return self.send(h, 200, {"status": "ok"})
+        if path == "/props":
+            return self.send(h, 200, {"model_path": self.model_path})
+        if path != "/v1/chat/completions":
+            return self.send(h, 404, {"error": {"message": "not found"}})
+        if self.scenario == "http500":
+            return self.send(h, 500, {"error": {"code": 500, "message": "something broke"}})
+        payload = json.loads(body or b"{}")
+        reason = "length" if self.scenario == "length" else "stop"
+        if not payload.get("stream"):
+            return self.send(h, 200, {"choices": [{"index": 0, "finish_reason": reason,
+                                                   "message": {"role": "assistant", "content": self.text}}]})
+        words = self.text.split(" ")
+        events = [json.dumps({"choices": [{"index": 0, "finish_reason": None,
+                                           "delta": {"content": w + (" " if i < len(words) - 1 else "")}}]})
+                  for i, w in enumerate(words)]
+        if self.scenario != "no_done":
+            events.append(json.dumps({"choices": [{"index": 0, "finish_reason": reason, "delta": {}}]}))
+        text = "".join(f"data: {e}\n\n" for e in events) + ("data: [DONE]\n\n" if self.scenario != "no_done" else "")
+        self.send(h, 200, text, ctype="text/event-stream")
 
 
 class FakeSearx(_FakeServer):

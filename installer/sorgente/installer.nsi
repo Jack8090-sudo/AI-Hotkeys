@@ -1,7 +1,7 @@
 ; =========================================================
 ;  AI-Hotkeys — installer
-;  Installs: script, portable Python, AutoHotkey v2.
-;  Checks Ollama (installs it if missing), does NOT download the model.
+;  Installs: script, portable Python, AutoHotkey v2, the built-in AI engine (llama.cpp
+;  llama-server) and the AI model. Nothing else to install: Ollama is optional, never required.
 ;
 ;  Built by build\build.ps1, which stages this file next to payload\, manifest.txt and the
 ;  generated uninstall.nsh, and runs:  makensis /INPUTCHARSET UTF8 /DVERSION=<VERSION> installer.nsi
@@ -22,7 +22,6 @@ RequestExecutionLevel user
 !define APP       "AI-Hotkeys"
 !define PUBLISHER "AI-Hotkeys contributors"
 !define URL       "https://github.com/Jack8090-sudo/AI-Hotkeys"
-!define MODEL     "gemma4:e4b-it-qat"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP}"
 !define APPKEY    "Software\${APP}"
 ; v1.0.0 installed here by default (D1/D11: offer to migrate away from it)
@@ -63,7 +62,6 @@ Var OldDir       ; InstallDir of the previous installation (registry), normalize
 Var OldVer       ; its DisplayVersion
 Var ChkDir       ; .onVerifyInstDir writability cache: last folder tested...
 Var ChkOk        ; ...and its result (1 = writable)
-Var NoOllama     ; 1 = /NOOLLAMA on the command line
 Var Purge        ; uninstaller: 1 = /PURGE on the command line
 Var DirState     ; AihDirState of $INSTDIR before this install created or changed anything
 
@@ -72,18 +70,18 @@ Var DirState     ; AihDirState of $INSTDIR before this install created or change
 !define MUI_ABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "Installing AI-Hotkeys"
-!define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys uses a local AI model (Gemma 4 by default) with three keys:$\r$\n$\r$\n    PgUp  →  fix the selected text$\r$\n    PgDn  →  summarize$\r$\n    End    →  explain$\r$\n$\r$\nThe program, Python and AutoHotkey will be installed (portable versions, only for AI-Hotkeys). If Ollama is missing, you will be offered to install it.$\r$\n$\r$\nThe ${MODEL} model is NOT downloaded: if you do not have it yet, you will be given the command at the end."
+!define MUI_WELCOMEPAGE_TEXT "AI-Hotkeys uses a small AI model that runs on this PC with three keys:$\r$\n$\r$\n    PgUp  →  fix the selected text$\r$\n    PgDn  →  summarize$\r$\n    End    →  explain$\r$\n$\r$\nEverything it needs is installed: the program, the AI model (about 190 MB), its engine, Python and AutoHotkey (portable versions, only for AI-Hotkeys). Nothing is downloaded and nothing else needs to be installed.$\r$\n$\r$\nIt works on any PC: with a graphics card it uses it, otherwise the processor."
 
 !define MUI_DIRECTORYPAGE_TEXT_TOP "The default folder is private to your Windows account.$\r$\nThe folder must be new, empty or an existing AI-Hotkeys folder, on a local drive (not a drive root, not your profile folder itself, not inside a git repository). A folder outside your user profile is restricted to your account, SYSTEM and Administrators."
 
 !define MUI_LICENSEPAGE_TEXT_TOP "AI-Hotkeys is free software under the MIT license."
-!define MUI_LICENSEPAGE_TEXT_BOTTOM "The bundled Python, AutoHotkey, SearXNG and libraries keep their own licenses: see THIRD_PARTY_NOTICES.md and the licenses folder in the install folder."
+!define MUI_LICENSEPAGE_TEXT_BOTTOM "The bundled AI model (LFM Open License), llama.cpp, Python, AutoHotkey, SearXNG and libraries keep their own licenses: see THIRD_PARTY_NOTICES.md and the licenses folder in the install folder."
 !define MUI_LICENSEPAGE_BUTTON "$(^NextBtn)"
 
 ; Kept under NSIS's 1024-character string limit.
 !define MUI_FINISHPAGE_TITLE "AI-Hotkeys is installed"
 !define MUI_FINISHPAGE_TEXT_LARGE
-!define MUI_FINISHPAGE_TEXT "Select some text and press PgUp (fix), PgDn (summarize) or End (explain).$\r$\n$\r$\nModel: if you do not have it yet, open the Command Prompt and run$\r$\n    ollama pull ${MODEL}$\r$\nAbout 6 GB to download, 3-4 GB of VRAM; tray icon → Free VRAM unloads it.$\r$\nUpgrading: your config.ini keeps its model; to switch, set Model to ${MODEL} in Settings and pull it.$\r$\n$\r$\nWeb search: End may search the web through the local SearXNG, which sends search terms taken from your selected text to public search engines. Turn it off in Settings.$\r$\n$\r$\nSettings, including the Obsidian To-Do file: right-click the ✦ tray icon → Settings, or edit config.ini in the install folder."
+!define MUI_FINISHPAGE_TEXT "Select some text and press PgUp (fix), PgDn (summarize) or End (explain).$\r$\n$\r$\nThe AI model is ready: it loads in about a second at the first key, and tray icon → Free VRAM unloads it. If you used Ollama before, Settings → Model → Engine switches back to it.$\r$\n$\r$\nWeb search: End may search the web through the local SearXNG, which sends search terms taken from your selected text to public search engines. Turn it off in Settings.$\r$\n$\r$\nSettings: right-click the ✦ tray icon → Settings, or edit config.ini in the install folder."
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "Launch AI-Hotkeys now"
 !define MUI_FINISHPAGE_RUN_FUNCTION StartApp
@@ -793,94 +791,14 @@ Section /o "Desktop shortcut" SecDesktop
 SectionEnd
 
 
-; C31/C44. Silent installs never open a browser and never run winget (the question defaults to
-; "skip"). /NOOLLAMA unselects this section.
-Section "Check Ollama (install if missing)" SecOllama
-    StrCmp $NoOllama 1 0 find_ollama
-    DetailPrint "/NOOLLAMA: Ollama check skipped."
-    Goto done
-
-    find_ollama:
-    Call FindOllama
-    Pop $1
-    StrCmp $1 "" 0 check_model
-
-    ${If} ${Silent}
-        DetailPrint "Ollama was not found. Install it from https://ollama.com/download, then run: ollama pull ${MODEL}"
-        Goto done
-    ${EndIf}
-
-    IfFileExists "$LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" 0 no_winget
-    MessageBox MB_YESNOCANCEL|MB_ICONQUESTION "Ollama is not installed.$\r$\n$\r$\nInstall it now with winget? It is about a 1 GB download.$\r$\nInstalling this way accepts the Ollama/winget source and package terms (winget runs with --accept-source-agreements --accept-package-agreements).$\r$\n$\r$\nYes: install with winget$\r$\nNo: open the Ollama download page instead$\r$\nCancel: skip, install Ollama later" /SD IDCANCEL IDYES run_winget IDNO ollama_page
-    DetailPrint "Ollama installation skipped."
-    Goto done
-
-    no_winget:
-    MessageBox MB_YESNO|MB_ICONQUESTION "Ollama is not installed, and winget is not available on this PC to install it automatically.$\r$\n$\r$\nOpen the Ollama download page?" /SD IDNO IDYES ollama_page
-    DetailPrint "Ollama is not installed: get it from https://ollama.com/download"
-    Goto done
-
-    run_winget:
-    DetailPrint "Installing Ollama with winget (may take a few minutes)…"
-    nsExec::ExecToLog '"$LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" install --id Ollama.Ollama -e --source winget --silent --accept-source-agreements --accept-package-agreements'
-    Pop $0
-    StrCmp $0 0 winget_ok
-    DetailPrint "winget failed (exit code $0)."
-    MessageBox MB_OK|MB_ICONEXCLAMATION "winget could not install Ollama (exit code $0).$\r$\nThe download page will open: install Ollama from there, then run  ollama pull ${MODEL}" /SD IDOK
-    Goto ollama_page
-
-    winget_ok:
-    Call FindOllama
-    Pop $1
-    StrCmp $1 "" 0 installed
-    MessageBox MB_OK|MB_ICONEXCLAMATION "winget finished, but ollama.exe was not found.$\r$\nThe download page will open: install Ollama from there, then run  ollama pull ${MODEL}" /SD IDOK
-    Goto ollama_page
-
-    installed:
-    DetailPrint "Ollama installed."
-    Goto check_model
-
-    ollama_page:
-    ; reached only from interactive questions (silent mode exits above)
-    ExecShell "open" "https://ollama.com/download"
-    Goto done
-
-    check_model:
-    DetailPrint "Ollama found: $1"
-    ; the model configured in config.ini (the default unless the user changed it)
-    ReadINIStr $2 "$INSTDIR\config.ini" "qwen" "model"
-    ${StrStr} $3 $2 '"'
-    ${If} $2 == ""
-    ${OrIf} $3 != ""
-        StrCpy $2 "${MODEL}"
-    ${EndIf}
-    File "/oname=$PLUGINSDIR\ollama-check.ps1" "ollama-check.ps1"
-    nsExec::ExecToLog '${POWERSHELL} "$PLUGINSDIR\ollama-check.ps1" -Model "$2"'
-    Pop $0
-    ${If} $0 == 0
-        DetailPrint "Model $2 found."
-    ${ElseIf} $0 == 10
-        MessageBox MB_OK|MB_ICONINFORMATION "Ollama is running, but the $2 model is not downloaded yet.$\r$\n$\r$\nTo download it, open the Command Prompt and run:$\r$\n$\r$\n    ollama pull $2" /SD IDOK
-    ${ElseIf} $0 == 11
-        MessageBox MB_OK|MB_ICONINFORMATION "Ollama is installed, but its server is not running, so the model could not be checked, and no downloaded copy of $2 was found on disk.$\r$\n$\r$\nStart Ollama from the Start menu. If the model is missing, open the Command Prompt and run:$\r$\n$\r$\n    ollama pull $2" /SD IDOK
-    ${Else}
-        DetailPrint "Could not check the model (ollama-check.ps1: $0). If it is missing, run: ollama pull $2"
-    ${EndIf}
-
-    done:
-SectionEnd
-
-
-LangString DESC_Main    ${LANG_ENGLISH} "Script, prompts, results page, portable Python and AutoHotkey."
+LangString DESC_Main    ${LANG_ENGLISH} "Script, prompts, results page, the AI model and its engine, portable Python and AutoHotkey."
 LangString DESC_Startup ${LANG_ENGLISH} "Enables the PgUp / PgDn / End keys automatically when the PC starts."
 LangString DESC_Desktop ${LANG_ENGLISH} "Desktop icon to launch AI-Hotkeys."
-LangString DESC_Ollama  ${LANG_ENGLISH} "Checks that Ollama is installed and that the ${MODEL} model is present (the model is not downloaded)."
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
     !insertmacro MUI_DESCRIPTION_TEXT ${SecMain}    $(DESC_Main)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecStartup} $(DESC_Startup)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} $(DESC_Desktop)
-    !insertmacro MUI_DESCRIPTION_TEXT ${SecOllama}  $(DESC_Ollama)
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 
@@ -888,7 +806,6 @@ LangString DESC_Ollama  ${LANG_ENGLISH} "Checks that Ollama is installed and tha
 ; FUNCTIONS
 ; =========================================================
 
-; .onInit runs after the sections are declared, so ${SecOllama} exists here.
 Function .onInit
     ReadRegStr $OldDir HKCU "${APPKEY}" "InstallDir"
     ReadRegStr $OldVer HKCU "${UNINSTKEY}" "DisplayVersion"
@@ -909,59 +826,9 @@ Function .onInit
             StrCpy $INSTDIR $OldDir
         ${EndIf}
     ${EndIf}
-
-    ; /NOOLLAMA: no Ollama check, no winget, no browser (CI and unattended installs)
-    StrCpy $NoOllama 0
-    ${GetParameters} $R0
-    ClearErrors
-    ${GetOptions} $R0 "/NOOLLAMA" $R1
-    ${IfNot} ${Errors}
-        StrCpy $NoOllama 1
-        !insertmacro UnselectSection ${SecOllama}
-    ${EndIf}
+    ; /NOOLLAMA (1.1.0) is still accepted and ignored: the installer no longer checks or installs Ollama
 FunctionEnd
 
-; Returns the ollama.exe path on the stack, or "" (C44: known locations first; `where` runs with
-; $SYSDIR as the working directory, so an ollama.exe next to the installer is never picked up).
-Function FindOllama
-    ${If} ${FileExists} "$LOCALAPPDATA\Programs\Ollama\ollama.exe"
-        Push "$LOCALAPPDATA\Programs\Ollama\ollama.exe"
-        Return
-    ${EndIf}
-    ${If} ${FileExists} "$PROGRAMFILES64\Ollama\ollama.exe"
-        Push "$PROGRAMFILES64\Ollama\ollama.exe"
-        Return
-    ${EndIf}
-    ${If} ${FileExists} "$PROGRAMFILES\Ollama\ollama.exe"
-        Push "$PROGRAMFILES\Ollama\ollama.exe"
-        Return
-    ${EndIf}
-    Push $OUTDIR
-    SetOutPath "$SYSDIR"
-    nsExec::ExecToStack '"$SYSDIR\where.exe" ollama.exe'
-    Pop $0
-    Pop $R0
-    Pop $R3
-    ${If} $R3 != ""
-        SetOutPath $R3
-    ${EndIf}
-    ${If} $0 == 0
-        ; first line of the output
-        StrCpy $R1 0
-        loop:
-            StrCpy $R2 $R0 1 $R1
-            ${If} $R2 == "$\r"
-            ${OrIf} $R2 == "$\n"
-            ${OrIf} $R2 == ""
-                StrCpy $R0 $R0 $R1
-                Push $R0
-                Return
-            ${EndIf}
-            IntOp $R1 $R1 + 1
-            Goto loop
-    ${EndIf}
-    Push ""
-FunctionEnd
 
 Function StartApp
     Exec '"$INSTDIR\ahk\AutoHotkey64.exe" "$INSTDIR\main.ahk"'

@@ -91,7 +91,7 @@ PAGES_TO_READ = _clamp(_int(CFG.get("pages_to_read"), 3), 0, 5)
 # included, and the whole parallel fetch phase.
 PAGE_DEADLINE = 12.0
 FETCH_DEADLINE = 15.0
-# Ollama preflight before any web search (C22)
+# AI preflight before any web search (C22)
 PREFLIGHT_TIMEOUT = 2.0
 
 # Sources budget in the prompt, in characters (4 chars ≈ 1 token):
@@ -1113,7 +1113,16 @@ def parse_queries(answer):
 # =========================================================
 
 def ollama_ready(timeout=None):
-    """Fast check that Ollama answers (C22): without it the search is wasted work."""
+    """Fast check that the AI answers (C22): without it the search is wasted work.
+
+    Built-in engine: starts llama-server if needed (it loads in about a second, so the
+    model is warm when the search ends). Ollama: /api/tags answers."""
+    if getattr(qwen_client, "BACKEND", "ollama") == "llama":
+        try:
+            qwen_client.ensure_llama()
+            return True
+        except Exception:
+            return False
     opener = getattr(qwen_client, "_OPENER", None) or urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(qwen_client.OLLAMA_URL + "/api/tags",
@@ -1167,7 +1176,7 @@ def gather_sources(testo):
     # First decide whether searching is needed: for a text that explains itself
     # nothing is searched (and SearXNG is not started at all).
     status("Checking whether a search is needed…")
-    # Ollama down: no search at all, the final call reports the error (C22)
+    # AI down: no search at all, the final call reports the error (C22)
     if not ollama_ready():
         return [], []
     queries = make_queries(testo)

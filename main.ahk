@@ -10,7 +10,7 @@
 #Include %A_ScriptDir%\lib\Proc.ahk
 
 ; =========================================================
-;  AI-Hotkeys — AutoHotkey → Python → Ollama → local AI model (Gemma 4 by default)
+;  AI-Hotkeys — AutoHotkey → Python → local AI model (built-in LFM via llama-server, or Ollama)
 ; =========================================================
 ;  Settings: tray icon → Settings
 ;  (or config.ini). When config.ini changes, the script reloads itself.
@@ -86,10 +86,7 @@ global jobSerial := 0
 global ACTIONS := CIMap(
     "rewrite",   {script: BASE "\actions\rewrite.py",   name: "Fix",         mode: "rewrite",   replace: true, doing: "The AI is fixing the text"},
     "summarize", {script: BASE "\actions\summarize.py", name: "Summary",     mode: "summarize", doing: "The AI is writing the summary"},
-    "explain",   {script: BASE "\actions\explain.py",   name: "Explanation", mode: "explain",   doing: "The AI is preparing the explanation"},
-
-    ; Special action: reorganizes the whole To-Do List.md file
-    "obsidian_todo", {special: "obsidian_todo", name: "Reorganize To-Do List"}
+    "explain",   {script: BASE "\actions\explain.py",   name: "Explanation", mode: "explain",   doing: "The AI is preparing the explanation"}
 )
 
 
@@ -110,7 +107,6 @@ global KEY_WARNINGS := []
 ; CENTRAL DISPATCHER:  "context|slot"  →  action
 ; =========================================================
 ; Contexts, from most specific to most general:
-;   "Obsidian:To-Do"  = Obsidian with To-Do List.md open
 ;   "Chrome.exe"      = process name (case insensitive)
 ;   "*"               = any program
 ;
@@ -122,8 +118,6 @@ global ROUTES := CIMap(
     "Console|correggi", "native",
     "Console|riassumi", "native",
     "Console|spiega",   "native",
-
-    "Obsidian:To-Do|correggi", "obsidian_todo",
 
     "*|correggi", "rewrite",
     "*|riassumi", "summarize",
@@ -154,15 +148,6 @@ global SHOW_PROGRESS   := !IsNo(ReadConfig("avanzamento", "si"))
 ; How long "^c" may take before "nothing selected" (decision D12).
 ; Optional [comportamento] clip_wait_ms; 2000 until S3 measures a safe floor.
 global CLIP_WAIT_S     := ParseClipWaitMs(ReadConfig("clip_wait_ms", "", "comportamento")) / 1000
-
-
-; =========================================================
-; OBSIDIAN: recognizing To-Do List.md
-; =========================================================
-; The Obsidian window title is "<note> - <vault> - Obsidian v1.x.x".
-; It can be changed in config.ini (window_title = ...)
-
-global TODO_TITLE_PREFIX := ReadConfig("window_title", "To-Do List -")
 
 
 ; =========================================================
@@ -197,7 +182,8 @@ SetTimer WatchConfig, 1500
 ; keys that could not be used (C26) and config warnings (K6)
 StartupNotices()
 
-; Is Ollama running, recent enough, with the model? (H24, in the background)
+; Is the AI ready? Built-in engine: started now, so the first key is fast.
+; Ollama: running, recent enough, with the model? (H24, in the background)
 StartHealthCheck()
 
 
@@ -313,19 +299,10 @@ Dispatch(slot, *)
 
     try
     {
-        if action.HasOwnProp("special") && action.special = "obsidian_todo"
-        {
-            busy := true
-            Critical "Off"
-            RunObsidianTodo(KeyLabel(KEYS[slot]))
-        }
-        else
-        {
-            ; busy becomes true only once the text is captured
-            capturing := true
-            Critical "Off"
-            RunSelectionAction(action, KEYS[slot])
-        }
+        ; busy becomes true only once the text is captured
+        capturing := true
+        Critical "Off"
+        RunSelectionAction(action, KEYS[slot])
     }
     finally
     {
@@ -354,28 +331,21 @@ IsOwnPageActive()
 
 GetContexts()
 {
-    global TODO_TITLE_PREFIX
-
     contexts := []
 
     try
     {
         proc  := WinGetProcessName("A")
-        title := WinGetTitle("A")
         cls   := WinGetClass("A")
     }
     catch
     {
         proc  := ""
-        title := ""
         cls   := ""
     }
 
     if IsConsoleClass(cls)
         contexts.Push("Console")
-
-    if (proc = "Obsidian.exe" && InStr(title, TODO_TITLE_PREFIX) = 1)
-        contexts.Push("Obsidian:To-Do")
 
     if (proc != "")
         contexts.Push(proc)
@@ -559,7 +529,7 @@ RunCapturedJob(action, keyLbl, testo, hwnd, proc, runDir)
         }
         msg := ReadErrorLine(runDir "\error.txt")
         if (msg = "")
-            msg := "The AI did not respond. Check that Ollama is running and that the model is downloaded."
+            msg := "The AI did not respond: try again. If it keeps failing, see Troubleshooting in the docs."
         ShowError(msg, keyLbl)
         return false
     }
@@ -723,91 +693,6 @@ CancelStreams()
     for dir in live
         try FileAppend("", dir "\cancel", "UTF-8-RAW")
     return live.Length > 0
-}
-
-
-; =========================================================
-; OBSIDIAN: REORGANIZING To-Do List.md
-; =========================================================
-
-RunObsidianTodo(keyLbl)
-{
-    global PYTHON, BASE, cancelRequested, currentPid, busy, jobSerial
-
-    cancelRequested := false
-    currentPid := 0
-    jobSerial++
-
-    statusFile := BASE "\work\obsidian_status.txt"
-
-    ; Save the note before reading it from disk
-    ; (C41: fixed sleep kept until S3 measures the save time)
-    Send "^s"
-    Sleep 500
-
-    ; A leftover status file would be read as this run's result
-    try
-    {
-        if FileExist(statusFile)
-            FileDelete(statusFile)
-    }
-    catch as e
-    {
-        ShowError("Could not delete " statusFile " (is another program using it?): " e.Message, keyLbl)
-        return
-    }
-
-    ProgressShow("The AI is reorganizing the To-Do List, it may take a few minutes  ·  Esc 2 s = cancel", keyLbl)
-
-    comando := PYTHON ' "' BASE '\actions\obsidian_todo.py"'
-
-    try
-    {
-        Run(comando, BASE, "Hide", &currentPid)
-    }
-    catch as e
-    {
-        ProgressEnd()
-        currentPid := 0
-        ShowError("Could not start Python: " e.Message, keyLbl)
-        return
-    }
-
-    cancelled := WaitPid(currentPid)
-    currentPid := 0
-
-    ProgressEnd()
-
-    if cancelled
-    {
-        ; The original file was not touched (writing is atomic
-        ; at the end): just remove the partial results.
-        try FileDelete(statusFile)
-        try FileDelete(BASE "\work\obsidian_output.txt")
-        ToastShow("Cancelled", keyLbl, 2000)
-        return
-    }
-
-    rawEsito := ""
-    try
-    {
-        if FileExist(statusFile)
-            rawEsito := FileRead(statusFile, "UTF-8")
-    }
-
-    esito := RegExReplace(rawEsito, "^(OK|ERRORE)\R", "")
-
-    if rawEsito = ""
-        ShowError("To-Do List: no result.", keyLbl)
-    else if RegExMatch(rawEsito, "^OK\R")
-        ToastShow(Trim(esito), keyLbl, 4000)
-    else
-    {
-        ; The checks can list several problems: a dialog, but with the
-        ; hotkeys free while it is open (C27)
-        busy := false
-        MsgBox esito, "AI-Hotkeys - To-Do List", "Icon!"
-    }
 }
 
 
@@ -1244,7 +1129,7 @@ ConfirmIfBusy(what)
         "AI-Hotkeys", "YesNo Icon? Default2") = "Yes"
 }
 
-; OnExit: cancel the running job, then stop SearXNG (C18).
+; OnExit: cancel the running job, then stop SearXNG (C18) and the built-in AI engine.
 ; Not on "Single" (#SingleInstance Force replaced this instance): the new
 ; instance owns the cleanup, as the plan decided for S8b2.
 OnExitCleanup(reason, *)
@@ -1265,6 +1150,26 @@ OnExitCleanup(reason, *)
         DeleteRunDir(dir)
     }
     StopSearxng(reason)
+    StopLlama(reason)
+}
+
+; The built-in engine (llama-server) started by qwen_client.py: stopped on exit and on
+; Reload (a reload follows a settings change: the next key starts it with the new
+; settings). Only our own llama\llama-server.exe is closed, never a reused pid.
+StopLlama(reason, *)
+{
+    if (reason = "Single")
+        return
+    pidFile := A_ScriptDir "\work\llama-server.pid"
+    if !FileExist(pidFile)
+        return
+    try
+        pid := Integer(Trim(FileRead(pidFile), " `t`r`n"))
+    catch
+        pid := 0
+    if (pid && StrLower(ProcessPathOf(pid)) = StrLower(A_ScriptDir "\llama\llama-server.exe"))
+        try ProcessClose(pid)
+    try FileDelete(pidFile)
 }
 
 SetupTrayMenu()
@@ -1289,8 +1194,8 @@ SetupTrayMenu()
     tray.Add("Exit", (*) => ConfirmIfBusy("Exit") && ExitApp())
 }
 
-; Unloads the model from Ollama: frees the VRAM without closing AI-Hotkeys.
-; On the next key press the model reloads by itself.
+; Frees the memory the model uses without closing AI-Hotkeys: stops the built-in
+; engine, or unloads the model from Ollama. The next key press reloads it by itself.
 UnloadModel()
 {
     global PYTHON, BASE
@@ -1309,7 +1214,7 @@ UnloadModel()
     if exitCode = 0
         ToastShow("VRAM freed: the model reloads on the next key", "", 2600)
     else
-        ToastShow("Ollama is not responding: it may not be running", "", 2600)
+        ToastShow("The AI engine is not responding: nothing to free", "", 2600)
 }
 
 
@@ -1457,7 +1362,7 @@ HealthPoll(h, started, serial)
     if (code != 0)
     {
         msg := ReadErrorLine()
-        lines.Push(msg != "" ? msg : "Ollama check failed: AI-Hotkeys may not work until Ollama runs.")
+        lines.Push(msg != "" ? msg : "AI check failed: AI-Hotkeys may not work until the AI engine runs.")
     }
     cw := TakeConfigWarnings()
     if (cw != "")

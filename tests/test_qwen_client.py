@@ -4,7 +4,6 @@ config loading and run_action (I6, I7, I10, I11)."""
 import contextlib
 import io
 import json
-import os
 import unittest
 
 from tests.support import AppTree, FakeOllama, run_with_timeout
@@ -85,17 +84,12 @@ class QwenClientTest(unittest.TestCase):
 
     # ---- config ----
 
-    def test_config_with_bom_defaults_and_todo_file_expansion(self):
-        cfg = "\ufeff[qwen]\nmodel = bom-model\n[obsidian]\ntodo_file = %AIHK_TEST_DIR%\\To-Do.md\n"
+    def test_config_with_bom_and_defaults(self):
+        cfg = "\ufeff[qwen]\nbackend = ollama\nmodel = bom-model\n"
         with AppTree(config_text=cfg.encode("utf-8")) as tree:
             qc = tree.load("qwen_client")
             self.assertEqual(qc.MODEL, "bom-model")
             self.assertEqual(qc.CONFIG["ollama_url"], "http://localhost:11434")   # default (I11)
-            os.environ["AIHK_TEST_DIR"] = "C:\\x"
-            try:
-                self.assertEqual(str(qc.todo_file()), "C:\\x\\To-Do.md")
-            finally:
-                del os.environ["AIHK_TEST_DIR"]
 
     # ---- run_action ----
 
@@ -245,10 +239,6 @@ class QwenClientTest(unittest.TestCase):
     def test_K6_no_warning_file_for_a_good_config(self):
         self.assertFalse((self.tree.work / "config_warning.txt").exists())
 
-    def test_quoted_paths_in_config_are_unquoted(self):
-        with AppTree(todo_file=r'"C:\Notes\To-Do List.md"') as tree:
-            self.assertEqual(str(tree.load("qwen_client").todo_file()), r"C:\Notes\To-Do List.md")
-
     def test_D4_prompts_user_overrides_and_broken_copy_falls_back(self):
         with AppTree() as tree:
             (tree.root / "prompts_user.py").write_text(
@@ -278,7 +268,7 @@ class QwenClientTest(unittest.TestCase):
             self.assertIn("too old", message)
         finally:
             self.ollama.version = "0.12.0"
-        cfg = (f"[qwen]\nmodel = other-model:7b\nollama_url = {self.ollama.url}\n")
+        cfg = (f"[qwen]\nbackend = ollama\nmodel = other-model:7b\nollama_url = {self.ollama.url}\n")
         with AppTree(config_text=cfg) as tree:
             ok, message = tree.load("qwen_client").health()
             self.assertFalse(ok)

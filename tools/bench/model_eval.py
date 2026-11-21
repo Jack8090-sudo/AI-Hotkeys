@@ -13,7 +13,6 @@ and a summary table on stdout. Synthetic texts only; nothing personal.
 
 import argparse
 import difflib
-import importlib.util
 import json
 import re
 import sys
@@ -27,10 +26,6 @@ sys.dont_write_bytecode = True
 
 import prompts  # noqa: E402
 import qwen_client  # noqa: E402
-
-_spec = importlib.util.spec_from_file_location("obsidian_todo_eval", REPO / "actions" / "obsidian_todo.py")
-ot = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(ot)
 
 OLLAMA = "http://localhost:11434"
 OUT = REPO / "tools" / "bench" / "out"
@@ -166,10 +161,6 @@ def queries(must=(), must_not=()):
     return check
 
 
-def obsidian_valid(out, src):
-    return ot.validate(src, ot.normalize(out)) == []
-
-
 # =========================================================
 # Cases
 # =========================================================
@@ -210,11 +201,6 @@ SOURCES = ("[1] (documentazione) RemoteEvent | Roblox Creator Hub — https://cr
            "across the client-server boundary. FireClient fires the event for a specific client.\n\n"
            "[2] (forum) How to replicate animations? — https://devforum.roblox.com/t/1\nAnimations played on "
            "the client by a Humanoid's Animator owned by that client replicate automatically to the server.")
-
-TODO_SCRAMBLED = (ot.Path(REPO / "tests" / "fixtures" / "todo" / "golden_ok.md").read_text(encoding="utf-8")
-                  .replace("- [ ] Sistema di clan\n", "")
-                  .replace("### 🐛 Bug\n\n- [ ] Perdita di dati", "### 🐛 Bug\n\n- [ ] Sistema di clan\n- [ ] Perdita di dati"))
-
 
 def rewrite(text):
     return lambda: prompts.first_messages("rewrite", text)
@@ -281,9 +267,6 @@ CASES = [
      [queries(must=["DataStore"])]),
     ("query", "error forced", query("Workspace.Map.DoorScript:23: attempt to index nil with 'Parent'", force=True), "",
      [queries(must=["attempt to index nil"], must_not=["DoorScript"])]),
-    # --- PgUp in Obsidian: To-Do reorganisation ---
-    ("obsidian_todo", "reorganise", lambda: [{"role": "user", "content": ot.PROMPT.replace("{testo}", TODO_SCRAMBLED)}],
-     TODO_SCRAMBLED, [obsidian_valid]),
     # --- Ask follow-up (rewrite) ---
     ("rewrite", "follow-up formal",
      lambda: prompts.followup_rewrite_messages(R_ACCENTS, R_ACCENTS.replace(" e ", " è "), "rendilo più formale"),
@@ -312,8 +295,6 @@ def run_model(model, rep, override, unload_first=True):
                 cleaned = qwen_client.clean_answer(res["text"], "rewrite" if mode == "rewrite" else
                                                    "explain" if mode == "explain" else None,
                                                    original=src)
-                if mode == "obsidian_todo":
-                    cleaned = res["text"]
                 results = [bool(c(cleaned, src)) for c in checks]
             except Exception as e:
                 res, cleaned, results = {"error": str(e), "wall_s": 0, "tok_s": 0, "done_reason": None}, "", [False]

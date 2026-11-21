@@ -18,10 +18,10 @@ This guide covers a fresh Windows 10 or 11 (x64) PC. Requirements are listed in 
    - it must be writable, must not be the root of a drive, and must not be inside a git repository;
    - a folder outside your user profile is restricted to your account, SYSTEM and Administrators.
 5. **Components.**
-   - *AI-Hotkeys* (required): the app, a private Python and AutoHotkey, and the local SearXNG.
+   - *AI-Hotkeys* (required): the app, the AI model (`models\`, about 190 MB) and its engine (`llama\`),
+     a private Python and AutoHotkey, and the local SearXNG.
    - *Start with Windows* (on by default): a shortcut in your Startup folder.
    - *Desktop shortcut* (off by default).
-   - *Check Ollama* (on by default): see the next section.
 6. On the last page, leave "Launch AI-Hotkeys now" ticked. The ✦ icon appears in the notification area
    (you may need to open the hidden-icons arrow).
 
@@ -33,57 +33,44 @@ The Start menu gets an **AI-Hotkeys** folder with *AI-Hotkeys*, *Configuration* 
 `AI-Hotkeys-Setup-<version>.exe /S` installs with the defaults. Useful switches:
 
 - `/D=<folder>`: install folder. It must be the last argument and must not be quoted, even with spaces.
-- `/NOOLLAMA`: skip the Ollama check.
+- `/NOOLLAMA`: accepted for compatibility with 1.1.0 scripts; it does nothing, because the installer no
+  longer checks for Ollama.
 
-A silent install never opens a browser and never runs winget.
+A silent install never opens a browser and never downloads anything.
 
-## 2. Install Ollama and the model
+## 2. The AI model
 
-AI-Hotkeys needs [Ollama](https://ollama.com/download) **0.9.0 or newer** and an AI model, by default `gemma4:e4b-it-qat` (Gemma 4 E4B, QAT).
+The installer includes everything: the model (LFM2.5-230M fine-tuned for AI-Hotkeys, `models\`) and the
+engine that runs it (llama.cpp's `llama-server.exe`, `llama\`). There is nothing to download.
 
-- **Through the installer.** If Ollama is missing, the installer asks how to get it:
-  - **Yes**: install it with winget. This accepts the Ollama and winget source terms. Offered only when
-    winget is present.
-  - **No**: open the Ollama download page.
-  - **Cancel**: skip.
-- **By hand.** Download it from <https://ollama.com/download> and install it. Ollama starts in the
-  background and listens on `http://localhost:11434`.
+- **Graphics card.** Not needed. With one (NVIDIA, AMD or Intel, through Vulkan) answers are about twice as
+  fast and the model takes about 0.5 GB of video memory. Settings → **Model → Graphics card → Processor
+  only** keeps it off the graphics card, for example while gaming.
+- **Memory.** The model loads in about a second at the first key and unloads after 30 minutes without use
+  (Settings → **Keep in memory**). Tray → **Free VRAM** unloads it at once.
+- **Privacy.** `llama-server` listens only on `127.0.0.1:8095` (this PC) and has no web page.
 
-Then download the model once, in a Command Prompt or PowerShell window:
+### Using Ollama instead (optional)
 
-```
-ollama pull gemma4:e4b-it-qat
-```
+If you prefer a bigger model, for example Gemma 4, install [Ollama](https://ollama.com/download) **0.9.0 or
+newer**, download a model once (`ollama pull gemma4:e4b-it-qat`, about 6 GB, 3-4 GB of video memory), then
+set Settings → **Model → Engine → Ollama** and choose the model. `gemma4:e2b-it-qat` is lighter,
+`gemma4:12b-it-qat` gives the richest explanations. Comparison with the built-in model:
+[audit/model-choice-2026-11.md](audit/model-choice-2026-11.md).
 
-It is about 6 GB. The installer tells you at the end if the model is missing, or if Ollama is
-installed but not running. Check with `ollama list`.
-
-The model needs about 3-4 GB of free video memory, so an 8 GB card fits comfortably and a 6 GB card
-will likely work. With less, Ollama moves part of
-it to system RAM and the CPU, and answers become much slower. Tray → **Free VRAM** unloads the model when
-you need the graphics card for something else, for example a game.
-
-Other models work too: `gemma4:e2b-it-qat` is the light option for cards with 4 GB or less or PCs
-without a GPU (about 1.7 GB of video memory, faster, shallower explanations); `gemma4:12b-it-qat` gives
-the best quality (about 7.4 GB of video memory, about
-twice as slow), and `qwen3.5:9b`, the default before 1.1.0, still works. Set the name in Settings →
-**Model** after pulling it. The comparison: [audit/model-choice-2026-10.md](audit/model-choice-2026-10.md).
-
-**Upgrading from an earlier 1.x?** Your `config.ini` is never overwritten, so it keeps the model it
-names (`qwen3.5:9b` before 1.1.0). To switch, run `ollama pull gemma4:e4b-it-qat` and set **Model** to
-`gemma4:e4b-it-qat` in Settings. To keep Qwen, change nothing.
+**Upgrading from 1.1.0?** Your `config.ini` is never overwritten, but it does not name an engine, so the
+built-in model is used. To stay with Gemma, set the engine to Ollama (or `backend = ollama` under `[qwen]`).
 
 ## 3. First run
 
 1. Open Notepad, type a sentence with a typo, select it and press **PgUp**. The sentence is corrected in
-   place. The first press of the day can take much longer (up to about a minute), because Ollama loads the
-   model into video memory. After that, short texts take a few seconds.
+   place, usually in less than a second.
 2. Select a paragraph and press **PgDn** (summary) or **End** (explanation). A results page opens in
    your default browser.
 3. Right-click the ✦ icon → **Settings** to change keys, theme, answer length, web search and the model.
 
-At startup AI-Hotkeys checks Ollama once. If something is wrong you see a toast such as "Ollama is not
-running" or "Model 'gemma4:e4b-it-qat' not found". See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+At startup AI-Hotkeys starts the AI engine once, so the first key is fast. If something is wrong you see a
+toast, for example "The AI engine is not responding". See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ### Web search
 
@@ -94,29 +81,6 @@ page:
 - **When to search**: when needed (`auto`, the default), always, or never.
 - **Search words**: "AI or from the text" (default), or "Only the AI's", which never sends your text
   verbatim.
-
-### Obsidian To-Do note
-
-PgUp in Obsidian reorganizes your To-Do note when that note is open. These settings are not on the
-Settings page: open tray → **Open config.ini** and edit the `[obsidian]` section.
-
-```
-[obsidian]
-todo_file = %USERPROFILE%\Documents\To-Do List.md
-window_title = To-Do List -
-```
-
-- `todo_file` is the full path of the note. Quotes around the path are allowed.
-- `window_title` is how the Obsidian window title starts while the note is open. Obsidian titles look
-  like `To-Do List - MyVault - Obsidian`.
-- **Documents on OneDrive.** If OneDrive backs up your Documents folder, your notes are probably in
-  `%USERPROFILE%\OneDrive\Documents` and the default path is wrong. Open the note's folder in Explorer,
-  copy the path from the address bar, and use it in `todo_file`, for example
-  `todo_file = %USERPROFILE%\OneDrive\Documents\To-Do List.md`.
-- Save the file. AI-Hotkeys reloads by itself.
-
-Each run saves a backup in the hidden folder `.ai-hotkeys-backups` next to the note (the newest 20 are
-kept). If a safety check fails, the note is not changed and a dialog lists the problems.
 
 ## 4. Updating
 
@@ -161,6 +125,6 @@ Windows Settings → Apps → AI-Hotkeys → Uninstall, or Start menu → AI-Hot
 - It asks whether to delete your settings (`config.ini`) and `work\`. `prompts_user.py` and
   `prompts.py.bak-*` are kept either way.
 - `Uninstall.exe /S` keeps `config.ini` and `work\`. `Uninstall.exe /S /PURGE` deletes them too, together with `prompts_user.py` and `prompts.py.bak-*`: nothing is left.
-- Ollama and the model are separate programs. Remove them from Windows Settings → Apps, and the model with
-  `ollama rm gemma4:e4b-it-qat` (or the name of the model you use).
+- The built-in model and engine are removed with the app. Ollama, if you installed it, is a separate program:
+  remove it from Windows Settings → Apps, and its models with `ollama rm <model>`.
 - Obsidian backups in `.ai-hotkeys-backups` are your data and are never deleted.

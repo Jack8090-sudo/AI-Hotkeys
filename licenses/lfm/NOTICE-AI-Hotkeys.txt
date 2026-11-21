@@ -1,0 +1,15 @@
+models/lfm-hotkeys-Q6_K.gguf is a modified version of LFM2.5-230M by Liquid AI
+(https://huggingface.co/LiquidAI/LFM2.5-230M), licensed under the LFM Open License v1.0
+(full text: LICENSE in this folder).
+
+Changes made for AI-Hotkeys:
+- Added task-specific weights: a LoRA adapter (rank 32) on the attention (q, k, v, out),
+  short-convolution (in_proj) and feed-forward (w1, w2, w3) layers, trained for 3 epochs on
+  4,533 examples of the AI-Hotkeys tasks (proofreading, summaries, explanations with and
+  without web sources, web-search queries and follow-up questions, in Italian), then merged
+  into the weights.
+- The training answers were written by Gemma 4 12B and Gemma 4 E4B (Apache License 2.0) and
+  by scripts that inject spelling mistakes into correct Italian text.
+- Converted to GGUF and quantized to Q6_K with llama.cpp b12591.
+
+Liquid AI did not take part in these changes and does not endorse AI-Hotkeys.

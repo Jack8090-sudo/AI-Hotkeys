@@ -10,15 +10,17 @@ or any server of its own. The only network traffic it creates is described below
 
 ## What stays on your PC
 
-- **Your selected text and the answers.** PgUp, PgDn and End send the selection to Ollama at `ollama_url`,
-  by default `http://localhost:11434`, which is Ollama running on your own PC. The model runs locally.
-  Ollama requests deliberately bypass any system proxy, so they cannot be routed through a corporate proxy.
+- **Your selected text and the answers.** PgUp, PgDn and End send the selection to the AI on your own PC:
+  by default the built-in model, run by `llama\llama-server.exe`, which listens only on `127.0.0.1` (port
+  `llama_port`, 8095) and has no web page; with `backend = ollama`, Ollama at `ollama_url` (by default
+  `http://localhost:11434`). Requests to the AI deliberately bypass any system proxy, so they cannot be
+  routed through a corporate proxy. `work\llama-server.log` is the engine's log; it does not contain your text.
 - **The results and Settings pages.** They are small servers on `127.0.0.1` that only your PC can reach.
   The pages do not load anything from the internet: fonts and scripts are local, and remote images in an
   answer are shown as a link ("Image: <name>") instead of being loaded.
-- **Follow-up questions** ("Ask AI") go to the same local Ollama.
+- **Follow-up questions** ("Ask AI") go to the same local AI.
 
-If you point `ollama_url` at another computer, your selected text is sent there. The Settings page warns
+With the Ollama engine, if you point `ollama_url` at another computer, your selected text is sent there. The Settings page warns
 you when you save such an address.
 
 ## What the web search sends (End only)

@@ -20,8 +20,10 @@ installation next to this file.
 6. [curl_cffi and libcurl-impersonate](#6-curl_cffi-and-libcurl-impersonate)
 7. [Python packages in `searxng/lib`](#7-python-packages-in-searxnglib)
 8. [Web assets: marked and fonts](#8-web-assets-marked-and-fonts)
-9. [Not redistributed: Ollama and the AI model](#9-not-redistributed-ollama-and-the-ai-model)
-10. [Keeping this file current](#10-keeping-this-file-current)
+9. [Not redistributed: Ollama and its models (optional)](#9-not-redistributed-ollama-and-its-models-optional)
+10. [llama.cpp (the built-in AI engine)](#10-llamacpp-the-built-in-ai-engine)
+11. [The AI model: LFM2.5-230M, fine-tuned for AI-Hotkeys](#11-the-ai-model-lfm25-230m-fine-tuned-for-ai-hotkeys)
+12. [Keeping this file current](#12-keeping-this-file-current)
 
 ## 1. Source code for copyleft components
 
@@ -83,7 +85,9 @@ AI-Hotkeys launches SearXNG and AutoHotkey as separate programs. SearXNG listens
 | Other Python packages | see §7 | see §7 | `searxng/lib/` | `python-packages/`, `bundled-in-wheels/` |
 | marked | 12.0.2 | MIT | `static/marked.min.js` | `marked/` |
 | Barlow Semi Condensed, IBM Plex Sans and Mono | — | OFL-1.1 | `static/fonts/` | `fonts/` |
-| Ollama, AI model (Gemma 4 by default) | — | not redistributed (§9) | — | — |
+| llama.cpp (`llama-server`, Vulkan build) | b12591 | MIT; bundled LLVM OpenMP runtime: Apache-2.0 WITH LLVM-exception | `llama/` | `llama.cpp/` |
+| LFM2.5-230M fine-tuned for AI-Hotkeys (GGUF, Q6_K) | — | LFM Open License v1.0, modified (§11) | `models/` | `lfm/` |
+| Ollama and its models (optional engine) | — | not redistributed (§9) | — | — |
 
 ## 3. AutoHotkey
 
@@ -248,9 +252,10 @@ Do not edit it by hand.
   Text: [`licenses/fonts/OFL-IBM-Plex.txt`](licenses/fonts/OFL-IBM-Plex.txt).
 - The fonts are unmodified Latin subsets in WOFF2 format. The same OFL texts also ship next to them in `static/fonts/`.
 
-## 9. Not redistributed: Ollama and the AI model
+## 9. Not redistributed: Ollama and its models (optional)
 
-AI-Hotkeys does not include Ollama or any language model. You install them yourself, and their own terms apply.
+The built-in engine and model (§10, §11) need nothing else. If you switch the engine to Ollama in the
+settings, AI-Hotkeys uses an Ollama and a model that you install yourself, and their own terms apply.
 
 - **Ollama:** MIT License, <https://github.com/ollama/ollama/blob/main/LICENSE>. Download: <https://ollama.com/download>.
 - **Gemma 4 model:** the default model is `gemma4:e4b-it-qat` (Gemma 4 E4B, quantization-aware trained),
@@ -265,7 +270,32 @@ AI-Hotkeys does not include Ollama or any language model. You install them yours
 - **Search engines:** with web search on, your local SearXNG sends queries to the public search engines
   set in `searxng/settings.yml`. Their terms of service apply to that use.
 
-## 10. Keeping this file current
+## 10. llama.cpp (the built-in AI engine)
+
+- **What:** `llama/llama-server.exe` and its libraries from the official llama.cpp release
+  [`b12591`](https://github.com/ggml-org/llama.cpp/releases/tag/b12591), Windows x64 Vulkan build
+  (`llama-b12591-bin-win-vulkan-x64.zip`). Unmodified; the tools AI-Hotkeys does not use are left out.
+  It runs the model on the graphics card through Vulkan when there is one, otherwise on the processor.
+  It only listens on 127.0.0.1.
+- **License:** MIT, copyright the ggml authors. Text: [`licenses/llama.cpp/LICENSE`](licenses/llama.cpp/LICENSE).
+- **Bundled:** `libomp.dll`, the LLVM OpenMP runtime, under the Apache License 2.0 with LLVM exceptions:
+  [`licenses/llama.cpp/LICENSE-LLVM-OpenMP`](licenses/llama.cpp/LICENSE-LLVM-OpenMP) (shipped in the
+  same release archive).
+
+## 11. The AI model: LFM2.5-230M, fine-tuned for AI-Hotkeys
+
+- **What:** `models/lfm-hotkeys-Q6_K.gguf`, a modified version of
+  [LiquidAI/LFM2.5-230M](https://huggingface.co/LiquidAI/LFM2.5-230M) by Liquid AI.
+- **License:** LFM Open License v1.0, text in [`licenses/lfm/LICENSE`](licenses/lfm/LICENSE). It allows
+  use, modification and redistribution; commercial use by organizations with annual revenue of 10 million
+  US dollars or more needs a separate license from Liquid AI (see the "Threshold" definition in the text).
+- **Changes:** AI-Hotkeys added task-specific weights (a LoRA adapter merged into the model) and converted
+  it to GGUF Q6_K. The notice required by the license, with the list of changes, is in
+  [`licenses/lfm/NOTICE-AI-Hotkeys.txt`](licenses/lfm/NOTICE-AI-Hotkeys.txt).
+- **Training data:** answers written by Gemma 4 12B (Apache License 2.0, run locally with Ollama) and
+  synthetic proofreading examples. No personal data was used.
+
+## 12. Keeping this file current
 
 - `python tools/licenses/gen_notices.py --lib <path to searxng/lib>` regenerates §7 and
   `licenses/python-packages/`. With `--check`, it fails if they are stale.

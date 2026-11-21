@@ -68,6 +68,7 @@ h1 {
 .field .warn { grid-column: 1 / -1; margin: 0; color: var(--text); font-size: calc(var(--fs) * .86); }
 .field .warn strong { color: var(--danger); }
 .field .warn[hidden] { display: none; }
+.field[hidden] { display: none; }
 
 /* what leaves this PC when searching the web (D5) */
 .egress {
@@ -544,9 +545,27 @@ h1 {
 
         <section class="section" aria-labelledby="s-model">
             <h2 id="s-model">Model</h2>
-            <p>The Ollama model that does the work.</p>
+            <p>The AI that does the work. Everything runs on this PC.</p>
 
-            <div class="field wide" id="modelField">
+            <div class="field">
+                <span class="name" id="l-backend">Engine</span>
+                <p class="hint">"Built-in": the LFM model that comes with AI-Hotkeys, nothing else to install. "Ollama": a model you run in Ollama (for example Gemma 4); Ollama must be installed separately.</p>
+                <div class="control seg" role="radiogroup" aria-labelledby="l-backend" data-name="qwen.backend">
+                    <button type="button" role="radio" data-value="llama">Built-in (LFM)</button>
+                    <button type="button" role="radio" data-value="ollama">Ollama</button>
+                </div>
+            </div>
+
+            <div class="field llama-only">
+                <span class="name" id="l-gpu">Graphics card</span>
+                <p class="hint">The built-in model is small: it is fast on the processor too. "Processor only" leaves the graphics card free for games.</p>
+                <div class="control seg" role="radiogroup" aria-labelledby="l-gpu" data-name="qwen.gpu">
+                    <button type="button" role="radio" data-value="auto">Use it if there is one</button>
+                    <button type="button" role="radio" data-value="off">Processor only</button>
+                </div>
+            </div>
+
+            <div class="field wide ollama-only" id="modelField">
                 <span class="name" id="l-model">Model</span>
                 <p class="hint">Gemma 4 is the default and the recommended choice. You can pick another model only if it is installed in Ollama on this PC. Cloud models are never offered: they would send your text off this PC. To download the default: <code>ollama pull gemma4:e4b-it-qat</code></p>
                 <fieldset class="control models" id="modelPicker" data-name="qwen.model" aria-labelledby="l-model">
@@ -567,7 +586,7 @@ h1 {
 
             <div class="field">
                 <label class="name" for="f-keep">Keep in memory</label>
-                <p class="hint">While it stays in memory it answers immediately but takes up VRAM. It does not use the GPU when idle.</p>
+                <p class="hint">While it stays in memory it answers immediately but takes up memory. It does not use the processor or the GPU when idle.</p>
                 <select class="control select" id="f-keep" data-name="qwen.keep_alive">
                     <option value="5m">5 minutes</option>
                     <option value="10m">10 minutes</option>
@@ -578,7 +597,7 @@ h1 {
                 </select>
             </div>
 
-            <div class="field">
+            <div class="field ollama-only">
                 <label class="name" for="f-url">Ollama address</label>
                 <p class="hint">Change it only if Ollama runs on another computer or port. Format: http://localhost:11434</p>
                 <input class="control text" id="f-url" data-name="qwen.ollama_url" spellcheck="false" inputmode="url">
@@ -754,6 +773,9 @@ function render() {
         reset.hidden = values[f.dataset.key] === DATA.defaults[f.dataset.key];
         reset.setAttribute("aria-label", "Restore the default " + action + " key (" + readable(DATA.defaults[f.dataset.key]) + ")");
     });
+    const ollama = values["qwen.backend"] === "ollama";
+    document.querySelectorAll(".ollama-only").forEach((f) => { f.hidden = !ollama; });
+    document.querySelectorAll(".llama-only").forEach((f) => { f.hidden = ollama; });
     showUrlWarning();
     renderModels();
     applyLook();
