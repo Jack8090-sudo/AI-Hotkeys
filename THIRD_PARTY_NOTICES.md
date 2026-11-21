@@ -209,7 +209,7 @@ Do not edit it by hand.
 | [annotated-doc](https://github.com/fastapi/annotated-doc) | 0.0.5 | MIT | `annotated-doc-0.0.5/` |
 | [babel](https://github.com/python-babel/babel) | 2.18.0 | BSD-3-Clause | `babel-2.18.0/` |
 | [blinker](https://github.com/pallets-eco/blinker/) | 1.9.0 | MIT | `blinker-1.9.0/` |
-| [certifi](https://github.com/certifi/python-certifi) | 2026.7.22 | MPL-2.0 | `certifi-2026.7.22/` |
+| [certifi](https://github.com/certifi/python-certifi) | 2026.10.18 | MPL-2.0 | `certifi-2026.10.18/` |
 | [cffi](https://github.com/python-cffi/cffi) | 2.1.1 | MIT-0 | `cffi-2.1.1/`; statically bundles libffi (MIT), from cffi's src/c/libffi_x86_x64 |
 | [click](https://github.com/pallets/click/) | 8.5.0 | BSD-3-Clause | `click-8.5.0/` |
 | [colorama](https://github.com/tartley/colorama) | 0.4.6 | BSD-3-Clause | `colorama-0.4.6/` |

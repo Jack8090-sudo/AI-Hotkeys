@@ -3,7 +3,8 @@
   Desktop E2E smoke test of an installed AI-Hotkeys (plan step S14, hypothesis H14). CI only.
 
 .DESCRIPTION
-  1. Points the installed config.ini at 127.0.0.1:11434 and turns web search off (no SearXNG).
+  1. Sets the installed config.ini to the Ollama engine at 127.0.0.1:11434 and turns web search off
+     (no SearXNG). The built-in model is not used here: the fake checks the app's flow, not the AI.
   2. Starts scripts\ci\fake_ollama.py on 127.0.0.1:11434 with the host Python (tests\support.py
      FakeOllama, never a real model).
   3. Starts the installed main.ahk with the bundled AutoHotkey, then Notepad.
@@ -49,10 +50,12 @@ function Get-ChatCount {
 try {
     $cfgPath = Join-Path $Dir 'config.ini'
     $cfg = [IO.File]::ReadAllText($cfgPath)
+    # The fake answers like Ollama: switch the engine from the built-in model (2.0 default) to Ollama
+    $cfg = Set-IniValue $cfg 'backend' 'ollama'
     $cfg = Set-IniValue $cfg 'ollama_url' 'http://127.0.0.1:11434'
     $cfg = Set-IniValue $cfg 'web_search' 'false'
     [IO.File]::WriteAllText($cfgPath, $cfg, (New-Object Text.UTF8Encoding $false))
-    Write-Host 'config.ini: ollama_url = http://127.0.0.1:11434, web_search = false'
+    Write-Host 'config.ini: backend = ollama, ollama_url = http://127.0.0.1:11434, web_search = false'
 
     $fake = Start-Process -FilePath $Python -PassThru -WindowStyle Hidden `
         -ArgumentList ('-I "' + (Join-Path $PSScriptRoot 'fake_ollama.py') + '" --port 11434 --text "' + $answer + '" --log "' + $fakeLog + '" --ready-file "' + $ready + '"') `
