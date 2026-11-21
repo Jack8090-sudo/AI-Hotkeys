@@ -22,14 +22,14 @@ build the installer, and what CI checks.
 - **Never run `Uninstall.exe` or any installer against a source checkout.** Installer tests run in CI, a VM
   or Windows Sandbox. The installer itself refuses folders inside a git repository.
 - **Tests never touch the live app.** No test may use the real `config.ini`, the real `work\`, port 8888
-  or the real Ollama model. Use the fakes in `tests/support.py`.
+  or the real AI engine (llama-server on 8095, Ollama). Use the fakes in `tests/support.py`.
 - Set `PYTHONDONTWRITEBYTECODE=1` for ad-hoc runs inside the repository.
 
 ## Repository layout
 
 See the [code map](docs/CODEMAPS/INDEX.md). In short: `main.ahk` and `lib/*.ahk` (hotkeys, tray,
-process lifecycle), `actions/*.py` (one entry point per action), `qwen_client.py` (Ollama client and the
-`work\` contract), `websearch.py` (End's web search), `viewer.py` / `settings.py` / `pages.py` (local
+process lifecycle), `actions/*.py` (one entry point per action), `qwen_client.py` (AI client for
+llama-server and Ollama, and the `work\` contract), `prompts_lfm.py` / `prompts.py` (prompts per engine), `websearch.py` (End's web search), `viewer.py` / `settings.py` / `pages.py` (local
 pages), `static/` (page assets), `searxng/` (launcher and settings), `build/` (reproducible build),
 `installer/sorgente/` (NSIS installer), `tests/`, `scripts/` (CI and dev helpers), `tools/` (benchmarks,
 license tooling).
@@ -74,7 +74,7 @@ python test_config_edit.py                           # old entry point, still wo
 ```
 
 The suite imports the app from a temporary copy (`tests/support.py: AppTree`) with its own `config.ini`
-and `work\`. Fake Ollama, SearXNG and web servers run on random `127.0.0.1` ports. Tests that need the
+and `work\`. Fake llama-server, Ollama, SearXNG and web servers run on random `127.0.0.1` ports. Tests that need the
 real SearXNG runtime or `python\python.exe` are skipped when those are missing.
 
 Coverage, as CI measures it (the tests run copies of the files, so a remap step is needed):

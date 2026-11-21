@@ -321,10 +321,6 @@ OPTIONS = {
         "temperature": 0.2, "top_p": 0.95, "top_k": 64,
         "presence_penalty": 0.0, "num_predict": 60,
     },
-    "obsidian_todo": {
-        "temperature": 0.2, "top_p": 0.95, "top_k": 64,
-        "presence_penalty": 0.0, "num_predict": 8192,
-    },
 }
 
 

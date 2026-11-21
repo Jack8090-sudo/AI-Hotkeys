@@ -232,7 +232,7 @@ class WebsearchParseTest(unittest.TestCase):
 def _config(query_mode=None):
     from tests.support import DEFAULT_CONFIG, dead_url
     text = DEFAULT_CONFIG.format(ollama_url=dead_url(), keep_alive="30m", web_search="auto",
-                                 searxng_url=dead_url(), todo_file="x.md")
+                                 searxng_url=dead_url())
     if query_mode is not None:
         text = text.replace("pages_to_read = 3\n", f"pages_to_read = 3\nquery_mode = {query_mode}\n")
     return text

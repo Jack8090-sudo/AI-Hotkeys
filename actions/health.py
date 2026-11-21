@@ -1,4 +1,5 @@
-# AI-Hotkeys — check that Ollama is running, recent enough, and has the model.
+# AI-Hotkeys — check the AI engine: built-in llama-server (started now, so the first key is fast),
+# or Ollama (running, recent enough, model present).
 # Called by main.ahk at startup; on failure work/error.txt says what to do.
 import sys
 from pathlib import Path

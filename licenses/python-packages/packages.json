@@ -49,17 +49,17 @@
     },
     {
       "name": "certifi",
-      "version": "2026.7.22",
+      "version": "2026.10.18",
       "license": "MPL-2.0",
       "url": "https://github.com/certifi/python-certifi",
-      "dist_info": "certifi-2026.7.22.dist-info",
+      "dist_info": "certifi-2026.10.18.dist-info",
       "top_level": [
         "certifi",
-        "certifi-2026.7.22.dist-info"
+        "certifi-2026.10.18.dist-info"
       ],
       "binaries": [],
       "notices": [
-        "licenses/python-packages/certifi-2026.7.22/LICENSE"
+        "licenses/python-packages/certifi-2026.10.18/LICENSE"
       ]
     },
     {

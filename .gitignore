@@ -42,3 +42,7 @@ prompts_user.py
 prompts.py.bak-*
 # Benchmark output (S3)
 tools/bench/out/
+
+# Built-in AI engine (llama.cpp) and model: fetched by builduild.ps1, too big for git
+llama/
+models/*.gguf

@@ -97,7 +97,7 @@ class ModelPickerTest(unittest.TestCase):
 
     def test_cloud_model_in_config_is_shown_as_the_default(self):
         original = self.tree.config_file.read_bytes()
-        self.tree.config_file.write_text("[qwen]\nmodel = gpt-oss:120b-cloud\n", encoding="utf-8")
+        self.tree.config_file.write_text("[qwen]\nbackend = ollama\nmodel = gpt-oss:120b-cloud\n", encoding="utf-8")
         try:
             self.assertEqual(self.s.current_values()["qwen.model"], "gemma4:e4b-it-qat")
             self.assertEqual(self.s.model_choices()["cloud_in_config"], "gpt-oss:120b-cloud")
@@ -214,7 +214,7 @@ class RuntimeCloudGuardTest(unittest.TestCase):
 
     def test_hand_edited_cloud_model_falls_back_with_a_warning(self):
         with FakeOllama(models=["gemma4:e4b-it-qat", "gpt-oss:120b-cloud"]) as ollama:
-            cfg = f"[qwen]\nmodel = gpt-oss:120b-cloud\nollama_url = {ollama.url}\n"
+            cfg = f"[qwen]\nbackend = ollama\nmodel = gpt-oss:120b-cloud\nollama_url = {ollama.url}\n"
             with AppTree(config_text=cfg) as tree:
                 qc = tree.load("qwen_client")
                 self.assertEqual(qc.MODEL, "gemma4:e4b-it-qat")

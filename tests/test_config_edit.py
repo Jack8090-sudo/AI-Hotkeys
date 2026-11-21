@@ -21,8 +21,8 @@ SAMPLE = (
     "[aspetto]\r\n"
     "tema = scuro\r\n"
     "\r\n"
-    "[obsidian]\r\n"
-    "window_title = To-Do\r\n"
+    "[extra]\r\n"
+    "title = To-Do\r\n"
 )
 
 
@@ -59,9 +59,9 @@ class ConfigEditTest(unittest.TestCase):
         self.assertEqual(values["aspetto"], {"tema": "chiaro", "colore": "menta"})
         self.assertEqual(values["tasti"], {"spiega": "F8"})
         self.assertEqual(values["qwen"], {"model": "gemma4:e4b-it-qat"})
-        self.assertEqual(values["obsidian"], {"window_title": "To-Do"})
-        # the new key stays inside [aspetto], before [obsidian]
-        self.assertLess(text.index("colore = menta"), text.index("[obsidian]"))
+        self.assertEqual(values["extra"], {"title": "To-Do"})
+        # the new key stays inside [aspetto], before [extra]
+        self.assertLess(text.index("colore = menta"), text.index("[extra]"))
 
     def test_lf_file_without_bom_stays_lf_without_bom(self):
         self.path.write_bytes(b"[aspetto]\ntema = scuro\n")

@@ -1,5 +1,10 @@
 """
-AI-Hotkeys — shared Ollama connection used by all actions.
+AI-Hotkeys — shared connection to the AI model, used by all actions.
+
+Two engines (config.ini [qwen] backend):
+  llama   (default) the built-in llama-server.exe with the LFM model that ships with
+          AI-Hotkeys: started on demand, hidden, on 127.0.0.1 only.
+  ollama  (optional) a model in Ollama, for whoever already has it installed.
 
 The module name (and the [qwen] config section) are historical: kept for compatibility (I11).
 """
@@ -9,6 +14,8 @@ import http.client
 import json
 import os
 import re
+import subprocess
+import time
 import traceback
 import urllib.error
 import urllib.request
@@ -44,23 +51,17 @@ MIN_OLLAMA_VERSION = (0, 9, 0)
 # =========================================================
 
 DEFAULTS = {
+    "backend": "llama",
+    "llama_model": r"models\lfm-hotkeys-Q6_K.gguf",
+    "llama_port": "8095",
+    "gpu": "auto",
     "model": "gemma4:e4b-it-qat",
     "ollama_url": "http://localhost:11434",
     "keep_alive": "30m",
-    "todo_file": r"%USERPROFILE%\Documents\To-Do List.md",
 }
+BACKENDS = ("llama", "ollama")
 
 CONFIG_WARNINGS = []
-
-# Keys holding a file path: surrounding quotes ("C:\...") are removed
-PATH_KEYS = {"todo_file"}
-
-
-def _unquote(value):
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-        return value[1:-1].strip()
-    return value
-
 
 def _config_error_text(e):
     """Short description of a configparser error, with the line number and without the path."""
@@ -109,10 +110,17 @@ def load_config():
     for section in parser.sections():
         for key, value in parser.items(section):
             value = value.strip()
-            if key in PATH_KEYS:
-                value = _unquote(value)
             if value:
                 cfg[key] = value
+    if cfg["backend"].lower() not in BACKENDS:
+        CONFIG_WARNINGS.append(f"config.ini: backend = {cfg['backend']} is not valid (llama or ollama): "
+                               f"using {DEFAULTS['backend']}.")
+        cfg["backend"] = DEFAULTS["backend"]
+    cfg["backend"] = cfg["backend"].lower()
+    if not re.fullmatch(r"\d{2,5}", cfg["llama_port"]) or not 1024 <= int(cfg["llama_port"]) <= 65535:
+        CONFIG_WARNINGS.append(f"config.ini: llama_port = {cfg['llama_port']} is not a valid port: "
+                               f"using {DEFAULTS['llama_port']}.")
+        cfg["llama_port"] = DEFAULTS["llama_port"]
     if is_cloud_model(cfg["model"]):
         CONFIG_WARNINGS.append(f"config.ini names a cloud model ({cfg['model']}): {CLOUD_MODEL_MESSAGE} "
                                f"Using {DEFAULTS['model']} for now.")
@@ -156,21 +164,44 @@ def report_config_warnings():
 
 
 CONFIG = load_config()
-MODEL = CONFIG["model"]
+BACKEND = CONFIG["backend"]
 OLLAMA_URL = CONFIG["ollama_url"].rstrip("/")
 CHAT_URL = OLLAMA_URL + "/api/chat"
 
-# How long Ollama keeps the model in memory after the last request.
-# Without this the default is 5 minutes: the first press after a pause
-# pays for reloading the model from disk (10-20 seconds).
+# Built-in engine: llama-server.exe + the GGUF model, both inside the app folder
+LLAMA_DIR = BASE_DIR / "llama"
+LLAMA_EXE = LLAMA_DIR / "llama-server.exe"
+LLAMA_MODEL = Path(CONFIG["llama_model"])
+if not LLAMA_MODEL.is_absolute():
+    LLAMA_MODEL = BASE_DIR / LLAMA_MODEL
+LLAMA_PORT = int(CONFIG["llama_port"])
+LLAMA_URL = f"http://127.0.0.1:{LLAMA_PORT}"
+LLAMA_PID_FILE = WORK_DIR / "llama-server.pid"
+LLAMA_LOG_FILE = WORK_DIR / "llama-server.log"
+# The model was trained with this (generation_config.json of LFM2.5)
+LLAMA_REPEAT_PENALTY = 1.05
+
+# The name shown to the user and written in the results page details
+MODEL = LLAMA_MODEL.stem if BACKEND == "llama" else CONFIG["model"]
+
+# How long the model stays in memory after the last request.
+# Without this Ollama's default is 5 minutes: the first press after a pause
+# pays for reloading the model from disk (10-20 seconds; LFM reloads in about 1).
 # Ollama accepts -1 / 0 as numbers; as text it wants a duration ("30m").
 KEEP_ALIVE = CONFIG["keep_alive"]
 if re.fullmatch(r"-?\d+", KEEP_ALIVE):
     KEEP_ALIVE = int(KEEP_ALIVE)
 
 
-def todo_file():
-    return Path(os.path.expandvars(CONFIG["todo_file"]))
+def keep_alive_seconds(value=None):
+    """keep_alive as seconds: -1 = forever, 0 = unload right after the answer."""
+    value = KEEP_ALIVE if value is None else value
+    if isinstance(value, int):
+        return value
+    m = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)\s*([smh]?)\s*", str(value).lower())
+    if not m:
+        return 1800
+    return int(float(m.group(1)) * {"": 1, "s": 1, "m": 60, "h": 3600}[m.group(2)])
 
 
 # =========================================================
@@ -189,9 +220,17 @@ class CloudModelRefused(RuntimeError):
     """The model is an Ollama cloud model: the text would leave this PC."""
 
 
+class EngineError(RuntimeError):
+    """The built-in engine (llama-server) is missing or could not start: str() is for the user."""
+
+
 def describe_error(exc):
     """(message for the user, technical detail) for an exception."""
     detail = f"{type(exc).__name__}: {exc}"
+    if isinstance(exc, EngineError):
+        return str(exc), detail
+    if BACKEND == "llama":
+        return _describe_llama_error(exc, detail)
     if isinstance(exc, urllib.error.HTTPError):
         err = ""
         try:
@@ -219,6 +258,35 @@ def describe_error(exc):
         return str(exc), detail
     if isinstance(exc, RuntimeError) and "not found" in str(exc).lower():
         return f"Model '{MODEL}' not found: run  ollama pull {MODEL}", detail
+    return f"Something went wrong: {str(exc)[:150]}", detail
+
+
+def _describe_llama_error(exc, detail):
+    if isinstance(exc, urllib.error.HTTPError):
+        err = ""
+        try:
+            body = exc.read().decode("utf-8", "replace")
+            try:
+                e = json.loads(body).get("error", "")
+                err = str(e.get("message", e) if isinstance(e, dict) else e)
+            except Exception:
+                err = body.strip()
+        except Exception:
+            pass
+        detail = f"HTTP {exc.code}: {err or exc.reason}"
+        if "context" in err.lower() and ("exceed" in err.lower() or "size" in err.lower()):
+            return "The selected text is too long for the AI: select a shorter part.", detail
+        return f"The AI engine returned an error (HTTP {exc.code}): {err[:120]}".rstrip(": "), detail
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    if isinstance(reason, TimeoutError):
+        return "The AI did not answer in time. Try again, or select less text.", detail
+    if isinstance(reason, (ConnectionResetError, ConnectionAbortedError)):
+        return "The AI engine stopped while answering: try again.", detail
+    if isinstance(exc, (urllib.error.URLError, ConnectionError)):
+        return (f"The AI engine is not responding: try again (details in {LLAMA_LOG_FILE.name} "
+                "in the work folder)."), detail
+    if isinstance(exc, (TruncatedAnswer, StreamIncomplete)):
+        return str(exc), detail
     return f"Something went wrong: {str(exc)[:150]}", detail
 
 
@@ -326,7 +394,147 @@ def _options(mode):
     return opts
 
 
+# ---------------------------------------------------------
+# Built-in engine: llama-server.exe (llama.cpp) on 127.0.0.1
+# ---------------------------------------------------------
+
+def _get_json(url, timeout):
+    with _OPENER.open(url, timeout=timeout) as r:
+        return json.load(r)
+
+
+def llama_status(timeout=2):
+    """'ok' (ready), 'loading', 'other' (another program on the port), or None (nothing there)."""
+    try:
+        data = _get_json(LLAMA_URL + "/health", timeout)
+    except urllib.error.HTTPError as e:
+        return "loading" if e.code == 503 else "other"
+    except Exception:
+        return None
+    if data.get("status") != "ok":
+        return "other"
+    try:
+        props = _get_json(LLAMA_URL + "/props", timeout)
+    except Exception:
+        return "other"
+    path = str(props.get("model_path", ""))
+    return "ok" if Path(path).name.lower() == LLAMA_MODEL.name.lower() else "other"
+
+
+def llama_command():
+    """The llama-server command line (127.0.0.1 only, no web page, one request at a time)."""
+    cmd = [str(LLAMA_EXE), "-m", str(LLAMA_MODEL), "--host", "127.0.0.1", "--port", str(LLAMA_PORT),
+           "-c", str(prompts.NUM_CTX), "-np", "1", "--jinja", "--no-webui"]
+    if str(CONFIG.get("gpu", "auto")).lower() in ("off", "no", "false", "0", "cpu"):
+        cmd += ["-ngl", "0", "--device", "none"]
+    else:
+        cmd += ["-ngl", "99"]     # all layers on the GPU when there is one (Vulkan); CPU otherwise
+    idle = keep_alive_seconds()
+    if idle >= 0:
+        cmd += ["--sleep-idle-seconds", str(max(1, idle))]
+    return cmd
+
+
+def _spawn_llama():
+    """Start llama-server hidden and detached: it outlives this action and serves the next ones."""
+    flags = 0x08000000 | 0x00000200  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    log = open(LLAMA_LOG_FILE, "w", encoding="utf-8", errors="replace")
+    try:
+        try:
+            return subprocess.Popen(llama_command(), cwd=str(LLAMA_DIR), stdin=subprocess.DEVNULL, stdout=log,
+                                    stderr=subprocess.STDOUT, creationflags=flags | 0x01000000)  # BREAKAWAY_FROM_JOB
+        except OSError:
+            return subprocess.Popen(llama_command(), cwd=str(LLAMA_DIR), stdin=subprocess.DEVNULL, stdout=log,
+                                    stderr=subprocess.STDOUT, creationflags=flags)
+    finally:
+        log.close()
+
+
+def ensure_llama(timeout=90):
+    """Make sure the built-in engine answers on LLAMA_URL; start it if needed. EngineError if it cannot."""
+    status = llama_status()
+    if status == "ok":
+        return
+    if status == "other":
+        raise EngineError(f"Port {LLAMA_PORT} is used by another program: change llama_port in config.ini.")
+    if not LLAMA_EXE.is_file():
+        raise EngineError("The AI engine is missing (llama\\llama-server.exe): reinstall AI-Hotkeys.")
+    if not LLAMA_MODEL.is_file():
+        raise EngineError(f"The AI model is missing ({LLAMA_MODEL.name}): reinstall AI-Hotkeys.")
+    proc = None
+    if status is None:
+        proc = _spawn_llama()
+    deadline = time.time() + timeout
+    died = None
+    while time.time() < deadline:
+        status = llama_status()
+        if status == "ok":
+            if proc is not None and proc.poll() is None:
+                try:
+                    _write_atomic(LLAMA_PID_FILE, str(proc.pid))
+                except OSError:
+                    pass
+            return
+        if status == "other":
+            raise EngineError(f"Port {LLAMA_PORT} is used by another program: change llama_port in config.ini.")
+        # Our server exited. If another action started one at the same moment, ours lost the
+        # port and that one is still loading: wait a few seconds before giving up.
+        if proc is not None and proc.poll() is not None and status is None:
+            died = died or time.time()
+            if time.time() - died > 5:
+                raise EngineError(f"The AI engine could not start: see {LLAMA_LOG_FILE.name} in the work folder.")
+        time.sleep(0.2)
+    raise EngineError("The AI engine took too long to start: try again.")
+
+
+def stop_llama():
+    """Stop the llama-server started by AI-Hotkeys (pid file): frees its memory. True if one was stopped."""
+    try:
+        pid = int(LLAMA_PID_FILE.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return False
+    try:
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], capture_output=True,
+                             text=True, timeout=10, creationflags=0x08000000).stdout
+    except (OSError, subprocess.SubprocessError):
+        out = ""
+    stopped = False
+    if "llama-server.exe" in out.lower():   # never kill a recycled pid that is now another program
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, timeout=10,
+                       creationflags=0x08000000)
+        stopped = True
+    try:
+        LLAMA_PID_FILE.unlink()
+    except OSError:
+        pass
+    return stopped
+
+
+def _llama_request(messages, mode, stream):
+    opts = prompts.OPTIONS.get(mode, prompts.OPTIONS["explain"])
+    payload = {
+        "messages": messages,
+        "stream": stream,
+        "temperature": opts.get("temperature", 0.2),
+        "top_p": opts.get("top_p", 0.9),
+        "top_k": opts.get("top_k", 50),
+        "max_tokens": opts.get("num_predict", 2048),
+        "repeat_penalty": opts.get("repeat_penalty", LLAMA_REPEAT_PENALTY),
+        "cache_prompt": True,
+    }
+    return urllib.request.Request(
+        LLAMA_URL + "/v1/chat/completions",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        method="POST",
+    )
+
+
 def _request(messages, mode, stream):
+    if BACKEND == "llama":
+        ensure_llama()
+        return _llama_request(messages, mode, stream)
     if is_cloud_model(MODEL):
         raise CloudModelRefused(CLOUD_MODEL_MESSAGE)
     payload = {
@@ -351,6 +559,9 @@ def chat_ex(messages, mode, timeout=600):
         data = json.load(r)
     if data.get("error"):
         raise RuntimeError(data["error"])
+    if BACKEND == "llama":
+        choice = (data.get("choices") or [{}])[0]
+        return (choice.get("message") or {}).get("content") or "", choice.get("finish_reason")
     return data.get("message", {}).get("content", ""), data.get("done_reason")
 
 
@@ -365,11 +576,15 @@ def open_stream(messages, mode, timeout=600):
 
 
 def unload(timeout=30):
-    """Free VRAM right away: ask Ollama to unload the model.
+    """Free VRAM right away.
 
-    This is done by sending a request with keep_alive = 0 and no prompt:
-    Ollama drops the model from memory without generating anything.
+    Built-in engine: stop llama-server (the next request starts it again in about a second).
+    Ollama: a request with keep_alive = 0 and no prompt drops the model from memory
+    without generating anything.
     """
+    if BACKEND == "llama":
+        stop_llama()
+        return
     req = urllib.request.Request(
         OLLAMA_URL + "/api/generate",
         data=json.dumps({"model": MODEL, "keep_alive": 0}).encode("utf-8"),
@@ -390,6 +605,9 @@ def _lines(response):
 
 def stream_pieces(response):
     """Text pieces of a streamed answer; StreamIncomplete if it stops before "done"."""
+    if BACKEND == "llama":
+        yield from _llama_stream_pieces(response)
+        return
     done = False
     for raw in _lines(response):
         raw = raw.strip()
@@ -413,13 +631,55 @@ def stream_pieces(response):
         raise StreamIncomplete("The answer was interrupted before the end.")
 
 
+def _llama_stream_pieces(response):
+    """Server-sent events of /v1/chat/completions: "data: {json}" lines, then "data: [DONE]"."""
+    done = False
+    for raw in _lines(response):
+        raw = raw.strip()
+        if not raw or raw.startswith(b":"):
+            continue
+        if not raw.startswith(b"data:"):
+            if raw.startswith(b"error:"):
+                raise RuntimeError(raw[6:].decode("utf-8", "replace").strip())
+            continue
+        body = raw[5:].strip()
+        if body == b"[DONE]":
+            done = True
+            break
+        try:
+            chunk = json.loads(body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise StreamIncomplete("The answer was interrupted before the end.") from e
+        if chunk.get("error"):
+            e = chunk["error"]
+            raise RuntimeError(e.get("message", e) if isinstance(e, dict) else e)
+        choice = (chunk.get("choices") or [{}])[0]
+        piece = (choice.get("delta") or {}).get("content") or ""
+        if piece:
+            yield piece
+        reason = choice.get("finish_reason")
+        if reason:
+            done = True
+            if reason == "length":
+                raise TruncatedAnswer("The answer was cut off (too long for the model).")
+    if not done:
+        raise StreamIncomplete("The answer was interrupted before the end.")
+
+
 def _version_tuple(text):
     nums = [int(n) for n in re.findall(r"\d+", str(text))[:3]]
     return tuple(nums + [0] * (3 - len(nums)))
 
 
 def health(timeout=3):
-    """(ok, message): is Ollama running, recent enough, and is the model there?"""
+    """(ok, message): is the engine ready? Built-in: start llama-server now (warm start).
+    Ollama: is it running, recent enough, and is the model there?"""
+    if BACKEND == "llama":
+        try:
+            ensure_llama()
+        except Exception as e:
+            return False, describe_error(e)[0]
+        return True, f"AI engine ready, model {MODEL}."
     if is_cloud_model(MODEL):
         return False, CLOUD_MODEL_MESSAGE
     try:
@@ -707,7 +967,7 @@ def _run_action(mode, input_file, output_file):
         messages = first_request_messages(mode, testo, fonti)
         risposta, done_reason = chat_ex(messages, mode)
     except Exception as e:
-        print(f"Ollama error: {e}", file=sys.stderr)
+        print(f"AI error: {e}", file=sys.stderr)
         write_error(*describe_error(e))
         return 1
 

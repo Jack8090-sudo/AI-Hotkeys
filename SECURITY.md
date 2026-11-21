@@ -107,6 +107,17 @@ copies from running. AI-Hotkeys stops it on exit only after checking that the pr
 the bundled interpreter and has the recorded start time, so an unrelated program that reused the id is
 never killed.
 
+### The built-in AI engine (llama-server)
+
+- `llama\llama-server.exe` (llama.cpp, pinned release) listens on `127.0.0.1` only, at `llama_port` (8095),
+  without its web page (`--no-webui`). Like Ollama, it has no password: any program running as you on this
+  PC could send it requests. It never listens on the network.
+- Before using a server already on the port, AI-Hotkeys checks through `/props` that it serves the bundled
+  model file; otherwise it reports the port as taken and sends nothing.
+- It is stopped only through `work\llama-server.pid`, and only when that process id still runs
+  `llama-server.exe` (AI-Hotkeys checks the image name, and on exit the full path), so a reused id is never
+  killed. The installer stops only `<install folder>\llama\llama-server.exe`.
+
 ### Direct replace
 
 PgUp pastes only into the window it started from, and only when a fresh copy of the selection still matches
@@ -115,7 +126,8 @@ the text that was sent to the model. Consoles never receive Ctrl+C.
 ### Updates and supply chain
 
 - Releases are built by `.github/workflows/release.yml` from a tagged commit with `build\build.ps1`. Every
-  download (Python, AutoHotkey, SearXNG, NSIS and the Python wheels) is pinned by SHA-256, and GitHub Actions
+  download (Python, AutoHotkey, SearXNG, llama.cpp, the AI model, NSIS and the Python wheels) is pinned by
+  SHA-256, and GitHub Actions
   are pinned by commit. The release carries `SHA256SUMS.txt` and a build-provenance attestation, which you
   can check with `gh attestation verify <file> --repo Jack8090-sudo/AI-Hotkeys`.
 - The installer is not code-signed yet, so SmartScreen warns on first run.

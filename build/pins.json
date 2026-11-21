@@ -14,6 +14,20 @@
     "sha256": "4e0d0e65655066a646a210951320feaef0729a3597177131adaec4066bef5869",
     "verified_against": "https://www.autohotkey.com/download/2.0/AutoHotkey_2.0.19.zip.sha256"
   },
+  "llama_cpp": {
+    "version": "b12591",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12591/llama-b12591-bin-win-vulkan-x64.zip",
+    "file": "llama-b12591-bin-win-vulkan-x64.zip",
+    "sha256": "92cdcf16d226cada0b066e693c437dae5359897f6a1a82872a6a16622aa8871a",
+    "verified_against": "GitHub release API asset digest (sha256) of tag b12591"
+  },
+  "model": {
+    "version": "lfm-hotkeys-v1",
+    "url": "https://github.com/Jack8090-sudo/AI-Hotkeys/releases/download/model-lfm-hotkeys-v1/lfm-hotkeys-Q6_K.gguf",
+    "file": "lfm-hotkeys-Q6_K.gguf",
+    "sha256": "df4eeb9155abbfdd4b1c6d60f99d5e9a7035a5b5ea6ec79d6723e2a1daf50694",
+    "verified_against": "built from LiquidAI/LFM2.5-230M by the maintainer (see licenses/lfm/NOTICE-AI-Hotkeys.txt); the file must be attached to the model-lfm-hotkeys-v1 release before a build that downloads it"
+  },
   "searxng": {
     "commit": "6671d89bede8c9fc108b17bb98916170f5657650",
     "version_string": "2026.10.7+6671d89",

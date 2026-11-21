@@ -167,7 +167,7 @@ class CffiDeadlineTest(DeadlineTest):
 
 def config(ollama_url, searxng_url, web_search="auto", results="5", pages_to_read="3"):
     text = DEFAULT_CONFIG.format(ollama_url=ollama_url, keep_alive="30m", web_search=web_search,
-                                 searxng_url=searxng_url, todo_file="x.md")
+                                 searxng_url=searxng_url)
     return (text.replace("results = 5", f"results = {results}")
                 .replace("pages_to_read = 3", f"pages_to_read = {pages_to_read}"))
 

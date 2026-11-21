@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="230" viewBox="0 0 880 230" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <title>How AI-Hotkeys works: select text, press a key, the AI on your PC answers, you get the result</title>
+  <rect width="880" height="230" rx="18" fill="#0d1117"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5eead4"/>
+    </marker>
+  </defs>
+
+  <!-- step 1 -->
+  <g transform="translate(24,40)">
+    <rect width="176" height="150" rx="14" fill="#161b22" stroke="#30363d"/>
+    <circle cx="28" cy="28" r="15" fill="#5eead4"/><text x="28" y="34" text-anchor="middle" font-size="16" font-weight="700" fill="#0d1117">1</text>
+    <rect x="20" y="58" width="136" height="12" rx="3" fill="#30363d"/>
+    <rect x="20" y="78" width="100" height="12" rx="3" fill="#2f81f7" opacity=".85"/>
+    <rect x="20" y="98" width="120" height="12" rx="3" fill="#30363d"/>
+    <text x="88" y="136" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Select some text</text>
+    <text x="52" y="34" font-size="12" fill="#8b949e">in any program</text>
+  </g>
+  <line x1="204" y1="115" x2="236" y2="115" stroke="#5eead4" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- step 2 -->
+  <g transform="translate(242,40)">
+    <rect width="176" height="150" rx="14" fill="#161b22" stroke="#30363d"/>
+    <circle cx="28" cy="28" r="15" fill="#5eead4"/><text x="28" y="34" text-anchor="middle" font-size="16" font-weight="700" fill="#0d1117">2</text>
+    <g font-size="13" font-weight="700" text-anchor="middle">
+      <rect x="16" y="58" width="44" height="34" rx="7" fill="#21262d" stroke="#5eead4"/><text x="38" y="80" fill="#5eead4">PgUp</text>
+      <rect x="66" y="58" width="44" height="34" rx="7" fill="#21262d" stroke="#f0b72f"/><text x="88" y="80" fill="#f0b72f">PgDn</text>
+      <rect x="116" y="58" width="44" height="34" rx="7" fill="#21262d" stroke="#d2a8ff"/><text x="138" y="80" fill="#d2a8ff">End</text>
+    </g>
+    <text x="88" y="136" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Press a key</text>
+  </g>
+  <line x1="422" y1="115" x2="454" y2="115" stroke="#5eead4" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- step 3 -->
+  <g transform="translate(460,40)">
+    <rect width="176" height="150" rx="14" fill="#161b22" stroke="#5eead4"/>
+    <circle cx="28" cy="28" r="15" fill="#5eead4"/><text x="28" y="34" text-anchor="middle" font-size="16" font-weight="700" fill="#0d1117">3</text>
+    <text x="88" y="76" text-anchor="middle" font-size="30">🧠</text>
+    <text x="88" y="106" text-anchor="middle" font-size="12" fill="#8b949e">built-in model, 191 MB</text>
+    <text x="88" y="136" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">The AI on your PC</text>
+    <text x="52" y="34" font-size="12" fill="#8b949e">no internet</text>
+  </g>
+  <line x1="640" y1="115" x2="672" y2="115" stroke="#5eead4" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- step 4 -->
+  <g transform="translate(678,40)">
+    <rect width="178" height="150" rx="14" fill="#161b22" stroke="#30363d"/>
+    <circle cx="28" cy="28" r="15" fill="#5eead4"/><text x="28" y="34" text-anchor="middle" font-size="16" font-weight="700" fill="#0d1117">4</text>
+    <text x="18" y="70" font-size="12" fill="#5eead4">✓ fixed text, in place</text>
+    <text x="18" y="92" font-size="12" fill="#f0b72f">✓ summary page</text>
+    <text x="18" y="114" font-size="12" fill="#d2a8ff">✓ explanation page</text>
+    <text x="89" y="136" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">The result, in ~1 s</text>
+  </g>
+
+  <text x="440" y="24" text-anchor="middle" font-size="13" fill="#8b949e">Everything runs on your PC. Only End's optional web search goes online.</text>
+</svg>

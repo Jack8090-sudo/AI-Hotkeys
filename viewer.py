@@ -16,7 +16,7 @@ How it works:
 - Starts a small local server (127.0.0.1 only, random port).
 - Opens the page in the browser.
 - The page popup sends follow-up requests to this server,
-  which forwards them to Ollama with the full context:
+  which forwards them to the AI engine with the full context:
       original text + current result + new request
 - The server shuts down by itself a few minutes after the tab is closed.
 """
@@ -229,7 +229,7 @@ def first_answer_events(mode, testo, stop, emit):
         with response:
             for piece in qwen_client.stream_pieces(response):
                 if stop.is_set():
-                    return              # closing the response stops Ollama
+                    return              # closing the response stops the AI engine
                 parts.append(piece)
                 emit({"t": piece})
     except qwen_client.TruncatedAnswer:
@@ -422,7 +422,7 @@ def make_handler(session, token, page_html):
             self.end_headers()
 
             # The pipeline runs in its own thread, so a cancel (Esc 2 s) is
-            # honoured at once even while it waits for the web or for Ollama
+            # honoured at once even while it waits for the web or for the AI
             events = queue.Queue()
             worker = threading.Thread(
                 target=first_answer_events,

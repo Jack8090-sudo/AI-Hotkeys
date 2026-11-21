@@ -1159,7 +1159,7 @@ async function submit() {
         setStatus(isRewrite ? "Stopped. The current version has not changed." : "Stopped.");
         setTimeout(() => { if (!state.busy) setStatus(""); }, 2500);
     } else {
-        let msg = errorMsg || "The AI did not answer. Check that Ollama is running.";
+        let msg = errorMsg || "The AI did not answer: try again.";
         if (isRewrite && text) msg += " The incomplete draft was not kept: the current version has not changed.";
         else if (text) msg += " The answer above is incomplete.";
         setStatus(msg, true);
@@ -1172,7 +1172,7 @@ function markIncomplete(target, partial) {
     note.className = "partial-note";
     const b = document.createElement("strong");
     b.textContent = "Incomplete answer.";
-    note.append(b, partial ? " Ollama stopped before the end: ask again to get the full answer."
+    note.append(b, partial ? " The AI stopped before the end: ask again to get the full answer."
                            : " An error interrupted it: ask again to get the full answer.");
     target.appendChild(note);
 }
@@ -1270,7 +1270,7 @@ async function streamFirst() {
     }
     lockComposer();
     if (stopped) setStatus("Stopped. To start again, select the text and press the hotkey.");
-    else setStatus((errorMsg || "The AI did not answer. Check that Ollama is running.")
+    else setStatus((errorMsg || "The AI did not answer: try again.")
                    + (text ? " The answer above is incomplete." : ""), true);
 }
 

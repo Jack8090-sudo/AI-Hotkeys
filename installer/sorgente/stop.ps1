@@ -2,6 +2,7 @@
 # Stops only what AI-Hotkeys itself starts (SEC1: nothing else that merely mentions <Dir>\):
 #   - the bundled interpreter: python*.exe directly in <Dir>\python\
 #   - the bundled AutoHotkey: AutoHotkey*.exe directly in <Dir>\ahk\
+#   - the built-in AI engine: <Dir>\llama\llama-server.exe
 #   - AutoHotkey running <Dir>\main.ahk (also a system-wide AutoHotkey)
 #   - any python*.exe whose command line runs one of our scripts: <Dir>\<name>.py (viewer,
 #     settings, ...), or something under <Dir>\actions\ or <Dir>\searxng\ (SearXNG)
@@ -20,6 +21,7 @@ if ($root.Length -lt 4) { Write-Host "stop.ps1: refusing a drive root: $Dir"; ex
 $rootL = ($root + '\').ToLowerInvariant()
 $pyDir = ($root + '\python\').ToLowerInvariant()
 $ahkDir = ($root + '\ahk\').ToLowerInvariant()
+$llamaExe = ($root + '\llama\llama-server.exe').ToLowerInvariant()
 $mainAhk = ($root + '\main.ahk').ToLowerInvariant()
 # <Dir>\name.py[w] (top-level script), <Dir>\actions\..., <Dir>\searxng\...
 $ourScript = [regex]::Escape($rootL) + '([^\\/:*?"<>|]+\.pyw?(["\s]|$)|actions\\|searxng\\)'
@@ -31,6 +33,7 @@ function Test-Ours([string]$exe, [string]$name, [string]$cmd) {
     if ($name -match $pyName -and $exe.StartsWith($pyDir) -and -not $exe.Substring($pyDir.Length).Contains('\')) { return $true }
     if ($name -like 'autohotkey*.exe' -and $exe.StartsWith($ahkDir) -and -not $exe.Substring($ahkDir.Length).Contains('\')) { return $true }
     if ($name -like 'autohotkey*' -and $cmd.Contains($mainAhk)) { return $true }
+    if ($name -eq 'llama-server.exe' -and $exe -eq $llamaExe) { return $true }
     if ($name -match $pyName -and $cmd -match $ourScript) { return $true }
     return $false
 }
@@ -66,6 +69,8 @@ if ($SelfTest) {
         @('c:\py\python.exe', 'python.exe', ('python -m http.server -d "' + $rootL + 'work"'), $false),
         @('c:\py\python.exe', 'python.exe', ('python "' + $rootL + 'sub\x.py"'), $false),
         @('c:\windows\notepad.exe', 'notepad.exe', ('notepad "' + $rootL + 'config.ini"'), $false),
+        @(($rootL + 'llama\llama-server.exe'), 'llama-server.exe', '', $true),
+        @('c:\tools\llama\llama-server.exe', 'llama-server.exe', ('llama-server -m "' + $rootL + 'models\x.gguf"'), $false),
         @('c:\py\python.exe', 'python.exe', ('python "' + $rootL.TrimEnd('\') + '2\viewer.py"'), $false)
     )
     $bad = 0

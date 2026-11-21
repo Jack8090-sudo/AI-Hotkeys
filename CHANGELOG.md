@@ -2,6 +2,34 @@
 
 All notable changes to AI-Hotkeys. Versions follow [`VERSION`](VERSION).
 
+## [2.0.0] - 2026-11-21
+
+The built-in AI release: AI-Hotkeys now brings its own small AI model, so Ollama and the 6 GB Gemma
+download are no longer needed. Comparison with Gemma: [docs/audit/model-choice-2026-11.md](docs/audit/model-choice-2026-11.md).
+
+### Changed
+
+- **Built-in AI model, nothing to install.** AI-Hotkeys now ships its own model, LFM2.5-230M fine-tuned for
+  its three keys (`models/lfm-hotkeys-Q6_K.gguf`, about 190 MB), and runs it with llama.cpp's
+  `llama-server.exe` (`llama/`, Vulkan build: any graphics card, or the processor). It starts hidden on
+  127.0.0.1 at the first use, loads in about a second and unloads after `keep_alive`. On an RTX 3060 it
+  writes about 500 tokens/s (Gemma 4 E4B in Ollama: about 75), on the processor alone about 200.
+  `config.ini` `[qwen]` gains `backend` (`llama` default, or `ollama`), `gpu` (`auto` / `off`),
+  `llama_port` and `llama_model`; Settings → Model has the engine and graphics-card choices.
+- **Ollama is optional.** With `backend = ollama` everything works as in 1.1.0 (same prompts, models and
+  checks). The installer no longer checks for Ollama or offers to install it; `/NOOLLAMA` is accepted and
+  ignored. **Upgrade note:** a 1.1.0 `config.ini` has no `backend`, so it switches to the built-in model;
+  set the engine to Ollama in Settings to keep using Gemma.
+- The built-in model uses its own short prompts (`prompts_lfm.py`), the ones it was trained on;
+  `prompts.py` keeps the Ollama prompts. Tray → Free VRAM stops `llama-server`; exiting or reloading
+  AI-Hotkeys stops it too, and the installer closes it before an upgrade.
+
+### Removed
+
+- The Obsidian To-Do feature (PgUp reorganizing a whole note) and its `[obsidian]` config section. PgUp in
+  Obsidian now fixes the selected text like in any other editor. An old `[obsidian]` section in `config.ini`
+  is ignored.
+
 ## [1.1.0] - 2026-10-18
 
 The production-readiness release: first public build, English UI, a private install folder, specific

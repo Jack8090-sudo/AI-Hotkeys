@@ -1,4 +1,4 @@
-# AI-Hotkeys — free VRAM by unloading the model from Ollama.
+# AI-Hotkeys — free VRAM: stop the built-in engine, or unload the model from Ollama.
 # Called from the taskbar tray-icon menu.
 import sys
 from pathlib import Path

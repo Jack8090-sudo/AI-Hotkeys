@@ -29,9 +29,23 @@ class _UserPrompts:
             return getattr(self._standard, name)
 
 
+def _backend():
+    """config.ini [qwen] backend, read here directly (qwen_client imports this module first)."""
+    import configparser
+    from pathlib import Path
+
+    parser = configparser.RawConfigParser()
+    try:
+        parser.read(Path(__file__).resolve().parent / "config.ini", encoding="utf-8-sig")
+        return parser.get("qwen", "backend", fallback="llama").strip().lower() or "llama"
+    except Exception:
+        return "llama"      # qwen_client reports what is wrong with config.ini
+
+
 def _load():
     global PROMPTS_WARNING
-    standard = importlib.import_module("prompts")
+    # The built-in model was trained on its own short prompts; Ollama models get prompts.py
+    standard = importlib.import_module("prompts" if _backend() == "ollama" else "prompts_lfm")
     try:
         return _UserPrompts(importlib.import_module("prompts_user"), standard)
     except ModuleNotFoundError as e:

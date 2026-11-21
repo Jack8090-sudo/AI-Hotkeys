@@ -25,7 +25,6 @@ ENTRIES = [
     "actions/rewrite.py",
     "actions/summarize.py",
     "actions/explain.py",
-    "actions/obsidian_todo.py",
     "actions/unload.py",
     "viewer.py",
     "settings.py",

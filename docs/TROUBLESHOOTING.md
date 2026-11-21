@@ -14,13 +14,34 @@ The install folder is `%LOCALAPPDATA%\Programs\AI-Hotkeys` unless you chose anot
 | `work\server.log` | Errors of the local results and Settings pages. Restarted when it passes 1 MB. |
 | `work\searxng.log` | The SearXNG search engine's log. Rotated to `searxng.log.1` at 5 MB. |
 | `work\config_warning.txt` | Problems found in `config.ini` or `prompts_user.py`. Shown as a toast once, then deleted. |
-| `work\obsidian_status.txt` | Result of the last Obsidian To-Do run. |
-| `work\obsidian_output.txt` | The AI's version of the To-Do note, kept only when a safety check rejected it, so you can compare. |
+| `work\llama-server.log` | The built-in AI engine's log, rewritten every time it starts. The last lines say why it could not start (missing file, graphics driver, port). |
 
 The `work\` folder is private to your account and may contain parts of the text you selected. Do not
 attach it to a bug report without reading it first. See [PRIVACY.md](../PRIVACY.md).
 
 ## Messages
+
+### Built-in engine (the default)
+
+**"The AI engine is not responding: try again"** / **"The AI engine could not start: see llama-server.log
+in the work folder."**
+`llama\llama-server.exe` could not start or stopped. Read the last lines of `work\llama-server.log`. A
+graphics-driver problem shows up there as a Vulkan error: set Settings → **Model → Graphics card →
+Processor only** (`[qwen] gpu = off`) and try again. An antivirus may also have quarantined a file in
+`llama\` (see [Antivirus or quarantine](#antivirus-or-quarantine)).
+
+**"Port 8095 is used by another program: change llama_port in config.ini."**
+Another program, or another copy of llama-server with a different model, listens on that port. Set
+`[qwen] llama_port` to a free port, for example `8096`, and reload.
+
+**"The AI engine is missing (llama\llama-server.exe)" / "The AI model is missing (…gguf): reinstall
+AI-Hotkeys."**
+A file of the install was deleted or quarantined. Run the Setup again; your settings are kept.
+
+**"The AI engine stopped while answering" / "The answer was interrupted before the end."**
+The engine was stopped (tray → Free VRAM, Reload) or crashed during the answer. Try again.
+
+### Ollama engine (`backend = ollama`)
 
 **"Ollama is not running: start Ollama, then try again."**
 Start Ollama from the Start menu (it then runs in the notification area), or run `ollama serve`. If
@@ -28,8 +49,7 @@ Start Ollama from the Start menu (it then runs in the notification area), or run
 
 **"Model 'gemma4:e4b-it-qat' not found: run  ollama pull gemma4:e4b-it-qat"**
 The model in `[qwen] model` is not downloaded. Run the command shown. If you changed `model`, check the
-spelling against `ollama list`. After an upgrade, `config.ini` keeps the model it named before
-(`qwen3.5:9b` before 1.1.0): pull that one, or switch to `gemma4:e4b-it-qat` in Settings → **Model**.
+spelling against `ollama list`.
 
 **"Ollama 0.x is too old: update it to 0.9.0 or newer."**
 Install the current version from <https://ollama.com/download>. Your models are kept.
@@ -42,6 +62,8 @@ before the end."**
 Ollama was busy, crashed or was restarted. Try again. If it keeps happening, look at Ollama's own log
 (Ollama tray icon → View logs).
 
+### Any engine
+
 **"The selected text is too long (N characters, about M at most): select a shorter part."**
 The text does not fit in the model's context. Fixing allows less text than summarizing, because the
 answer is as long as the input. Select a part and run the key again.
@@ -52,7 +74,7 @@ The model reached its answer limit. Nothing was pasted, so your text is unchange
 **"Nothing selected: select some text first."**
 The copy produced empty text. Some programs copy nothing for an empty selection.
 
-**"The AI did not respond. Check that Ollama is running and that the model is downloaded."**
+**"The AI did not respond: try again. If it keeps failing, see Troubleshooting in the docs."**
 The job ended without a result and without a specific reason, for example because Python crashed. Try
 again; if it repeats, check the points above and the [antivirus](#antivirus-or-quarantine) section.
 
@@ -111,7 +133,7 @@ Unsigned AutoHotkey programs and new installers are sometimes flagged by antivir
 the Setup is blocked, the ✦ icon never appears, or "The AI did not respond" on every key.
 
 1. Open your antivirus quarantine and check whether it removed `ahk\AutoHotkey64.exe`, a file under
-   `python\`, or the Setup itself.
+   `python\` or `llama\`, or the Setup itself.
 2. Check the file against the release: every installed file is listed with its SHA-256 in `.manifest` in
    the install folder, and the Setup in the release's `SHA256SUMS.txt`.
 3. If it matches, restore it and add an exclusion for the install folder, or reinstall.
@@ -129,10 +151,13 @@ the Setup is blocked, the ✦ icon never appears, or "The AI did not respond" on
 
 - **With nothing selected**, a key waits up to 2 s for a copy before acting normally. Lower it with
   `[comportamento] clip_wait_ms`, for example `500`.
-- **The first job after a while** waits for Ollama to load the model into video memory (seconds, up to
-  about a minute after a reboot). Raise `[qwen] keep_alive` to keep it loaded longer.
-- **Everything is slow**: the model probably does not fit in video memory. Close games or other GPU
-  programs, check `ollama ps` (the PROCESSOR column should say 100% GPU), or choose a smaller model.
+- **The first job after a while** waits for the model to load: about a second for the built-in model,
+  seconds up to a minute for an Ollama model after a reboot. Raise `[qwen] keep_alive` to keep it loaded
+  longer.
+- **Everything is slow with the built-in model**: check `work\llama-server.log` for the line that names
+  the Vulkan device. Without one it runs on the processor (still about 200 tokens/s on a recent CPU).
+- **Everything is slow with Ollama**: the model probably does not fit in video memory. Close games or other
+  GPU programs, check `ollama ps` (the PROCESSOR column should say 100% GPU), or choose a smaller model.
 
 ### The results page says "Disconnected" or shows a 403 page
 
@@ -147,5 +172,6 @@ to `4000` or more.
 ## Reporting a problem
 
 Open an issue on the project's GitHub page with your Windows version, the AI-Hotkeys version
-([`VERSION`](../VERSION) or Windows Settings → Apps), the Ollama version (`ollama -v`), and the exact message.
+([`VERSION`](../VERSION) or Windows Settings → Apps), the engine (built-in, or Ollama with `ollama -v`), and
+the exact message.
 Remove personal text from any log you attach. Security problems: see [SECURITY.md](../SECURITY.md).

@@ -188,6 +188,8 @@ $pins = Get-Content -Raw -LiteralPath (Join-Path $BuildDir 'pins.json') | Conver
 Step 'Downloading and verifying pins'
 $pyZip = Get-Pin $pins.python
 $ahkZip = Get-Pin $pins.autohotkey
+$llamaZip = Get-Pin $pins.llama_cpp
+$modelFile = Get-Pin $pins.model
 $sxTgz = Get-Pin $pins.searxng
 $nsisZip = $null
 if (-not $SkipInstaller) { $nsisZip = Get-Pin $pins.nsis }
@@ -341,6 +343,24 @@ Expand-ZipSafe $ahkZip $ahkDir {
     return $null
 }
 Copy-Item -LiteralPath (Join-Path $src 'config.example.ini') -Destination (Join-Path $Payload 'config.ini')
+
+Step "Adding llama.cpp $($pins.llama_cpp.version) (llama-server, Vulkan) and the model $($pins.model.file)"
+# Only llama-server and the libraries it loads: the other llama.cpp tools stay out.
+$llamaDir = Join-Path $app 'llama'
+New-Item -ItemType Directory -Path $llamaDir -Force | Out-Null
+Expand-ZipSafe $llamaZip $llamaDir {
+    param($n)
+    if ($n -match '/') { return $null }
+    if ($n -ceq 'llama-server.exe' -or $n -ceq 'libomp.dll' -or $n -ceq 'llama.dll' -or $n -ceq 'llama-common.dll' -or
+        $n -ceq 'llama-server-impl.dll' -or $n -ceq 'mtmd.dll' -or ($n -like 'ggml*.dll' -and $n -cne 'ggml-rpc.dll')) {
+        return $n
+    }
+    return $null
+}
+if (-not (Test-Path -LiteralPath (Join-Path $llamaDir 'llama-server.exe'))) { throw 'llama-server.exe missing from the llama.cpp archive' }
+$modelsDir = Join-Path $app 'models'
+New-Item -ItemType Directory -Path $modelsDir -Force | Out-Null
+Copy-Item -LiteralPath $modelFile -Destination (Join-Path $modelsDir $pins.model.file)
 
 # ---------------------------------------------------------------------------
 Step 'Auditing the payload'

@@ -1,19 +1,16 @@
 # AI-Hotkeys: guida per l'utente
 
-AI-Hotkeys usa un modello di intelligenza artificiale locale (Gemma 4 come predefinito, tramite Ollama) sul testo che
-selezioni in qualsiasi programma di Windows. L'interfaccia del programma è in inglese; questa guida
+AI-Hotkeys usa un piccolo modello di intelligenza artificiale che gira sul tuo PC (LFM, incluso nel
+programma e allenato apposta per i suoi tre tasti) sul testo che selezioni in qualsiasi programma di Windows. L'interfaccia del programma è in inglese; questa guida
 spiega tutto in italiano.
 
 ## Cosa serve
 
 - Windows 10 o 11 a 64 bit.
-- [Ollama](https://ollama.com/download), versione **0.9.0 o successiva** (meglio la più recente).
-- Il modello `gemma4:e4b-it-qat` (Gemma 4 E4B, QAT): circa 6 GB da scaricare.
-- Una scheda video con circa **3-4 GB di memoria (VRAM)** libera: una scheda da **8 GB** basta con
-  margine, una da 6 GB probabilmente funziona.
-  Con meno memoria Ollama sposta una parte del modello nella RAM e sul processore: funziona, ma le
-  risposte diventano molto più lente.
-- Circa 7 GB liberi su disco (quasi tutti per il modello; AI-Hotkeys occupa circa 110 MB).
+- Nient'altro: il modello (circa 190 MB) e il programma che lo fa girare sono inclusi nell'installer.
+- Scheda video non obbligatoria. Se c'è (NVIDIA, AMD o Intel) le risposte sono circa due volte più veloci e
+  il modello occupa circa 0,5 GB della sua memoria; senza, usa il processore.
+- Circa 400 MB liberi su disco.
 
 ## Installazione
 
@@ -22,17 +19,8 @@ spiega tutto in italiano.
    **Esegui comunque**: l'installer non è firmato digitalmente.
 2. Segui i passaggi. La cartella proposta è `%LOCALAPPDATA%\Programs\AI-Hotkeys`, accessibile solo al tuo
    account di Windows. Python e AutoHotkey sono inclusi: non devi installarli.
-3. Se Ollama non è installato, l'installer te lo propone:
-   - **Sì**: lo installa con winget (accettando le condizioni di Ollama e di winget);
-   - **No**: apre la pagina di download di Ollama;
-   - **Annulla**: salta questo passaggio.
-4. Alla fine apri il Prompt dei comandi e scarica il modello (una volta sola):
-
-   ```
-   ollama pull gemma4:e4b-it-qat
-   ```
-
-5. AI-Hotkeys parte insieme a Windows (si può disattivare durante l'installazione). La sua icona ✦ è vicino
+3. Non serve scaricare niente: il modello è già incluso.
+4. AI-Hotkeys parte insieme a Windows (si può disattivare durante l'installazione). La sua icona ✦ è vicino
    all'orologio, a volte sotto la freccia delle icone nascoste.
 
 Guida completa (in inglese): [INSTALL.md](INSTALL.md).
@@ -52,33 +40,24 @@ chiede se spostarla. Rispondendo **Sì**:
 
 La vecchia cartella resta dov'è: quando la nuova versione funziona, puoi cancellare `C:\AI-Hotkeys` a mano.
 
-### Cambiare modello dopo un aggiornamento
+### Se avevi la versione 1.1.0 (con Ollama e Gemma)
 
-L'aggiornamento non modifica mai il tuo `config.ini`, quindi resta il modello che c'era (prima della 1.1.0
-`qwen3.5:9b`). Per passare a Gemma 4, più veloce e più preciso sui compiti di AI-Hotkeys, esegui
-`ollama pull gemma4:e4b-it-qat`, poi icona ✦ → **Settings** → **Model** = `gemma4:e4b-it-qat`.
-Per tenere Qwen non serve fare niente. Per la massima qualità c'è anche `gemma4:12b-it-qat`
-(circa 7,4 GB di VRAM, circa due volte più lento).
+Dopo l'aggiornamento AI-Hotkeys usa il modello incluso, perché il `config.ini` della 1.1.0 non dice quale
+motore usare. Se preferisci restare con Gemma: icona ✦ → **Settings** → **Model** → **Engine** = **Ollama**
+(oppure scrivi `backend = ollama` nella sezione `[qwen]` di `config.ini`). Il modello di Ollama che avevi
+scelto resta salvato.
 
-### Scegliere il modello
+### Scegliere il motore
 
-Gemma 4 è il modello predefinito e consigliato; se vuoi puoi usare un altro modello, purché sia
-installato in locale in Ollama. In **Settings → Model** trovi in alto i tre Gemma 4 consigliati:
+In **Settings → Model**:
 
-- `gemma4:e4b-it-qat`: predefinito, consigliato;
-- `gemma4:e2b-it-qat`: leggero, per schede video con 4 GB o meno;
-- `gemma4:12b-it-qat`: massima qualità, più lento.
-
-Accanto a ciascuno c'è scritto "Installed" (installato) oppure il comando `ollama pull <nome>` per
-scaricarlo. Sotto, in **Other local models**, ci sono gli altri modelli già installati in Ollama sul tuo PC.
-Puoi salvare solo un modello installato oppure uno dei tre Gemma consigliati (se non è ancora scaricato, la
-pagina ti mostra il comando `ollama pull`). Dopo aver scaricato un modello premi **Check installed models
-again** per aggiornare l'elenco.
-
-I modelli cloud di Ollama (quelli con `:cloud` o `-cloud` nel nome) non sono mai permessi: girano sui
-server di Ollama e il testo selezionato uscirebbe dal tuo PC. Non compaiono nell'elenco e, se qualcuno li
-scrive a mano in `config.ini`, AI-Hotkeys usa `gemma4:e4b-it-qat` e mostra un avviso. Se Ollama non è
-avviato, la pagina mostra il modello attuale in sola lettura e l'elenco dei consigliati.
+- **Engine → Built-in (LFM)** (predefinito): il modello incluso, non serve installare altro. Con
+  **Graphics card** scegli se usare la scheda video quando c'è oppure solo il processore (utile mentre giochi).
+- **Engine → Ollama**: un modello che fai girare tu in [Ollama](https://ollama.com/download) (0.9.0 o
+  successivo), per esempio `gemma4:e4b-it-qat` (circa 6 GB, 3-4 GB di memoria video). Scrive spiegazioni più
+  ricche, ma è molto più pesante e più lento. Dopo averlo installato e scaricato il modello
+  (`ollama pull gemma4:e4b-it-qat`) lo scegli dall'elenco. I modelli cloud di Ollama (`:cloud` / `-cloud`)
+  non sono mai permessi: il testo uscirebbe dal tuo PC.
 
 ## Uso
 
@@ -106,8 +85,8 @@ Seleziona del testo in qualsiasi programma e premi:
   6 domande e risposte e riusa le fonti trovate sul web.
 - La pagina dei risultati non si può ricaricare con F5: per rivederla, premi di nuovo il tasto. Si chiude
   da sola dopo circa 4 minuti di inattività.
-- La prima pressione dopo un po' di tempo può essere lenta: Ollama deve caricare il modello nella
-  memoria della scheda video (fino a circa un minuto dopo l'accensione del PC).
+- La prima pressione dopo un po' di tempo aspetta che il modello si carichi: circa un secondo con il
+  modello incluso (con Ollama può volerci fino a un minuto dopo l'accensione del PC).
 
 ### Menu dell'icona
 
@@ -116,7 +95,7 @@ Tasto destro sull'icona ✦:
 | Voce | Cosa fa |
 |---|---|
 | Settings | impostazioni: tasti, tema, lunghezza delle risposte, ricerca web, modello |
-| Free VRAM | libera subito la memoria della scheda video (utile prima di giocare) |
+| Free VRAM | libera subito la memoria usata dal modello (utile prima di giocare); al tasto dopo si ricarica |
 | Open SearXNG in browser | apre il motore di ricerca locale nel browser |
 | Edit prompts | apre i tuoi prompt personali (`prompts_user.py`) |
 | Open config.ini | apre il file delle impostazioni |
@@ -130,9 +109,11 @@ I più comuni:
 
 | Messaggio | Cosa fare |
 |---|---|
-| Ollama is not running | avvia Ollama dal menu Start |
-| Model 'gemma4:e4b-it-qat' not found: run  ollama pull gemma4:e4b-it-qat | scarica il modello con il comando indicato (dopo un aggiornamento il nome è quello scritto nel tuo `config.ini`) |
-| Ollama … is too old: update it to 0.9.0 or newer | aggiorna Ollama |
+| The AI engine is not responding / could not start | riprova; se continua guarda le ultime righe di `work\llama-server.log`; con problemi della scheda video metti **Graphics card → Processor only** |
+| Port 8095 is used by another program | cambia `llama_port` in `config.ini` (per esempio `8096`) |
+| The AI engine / model is missing: reinstall | un file è stato cancellato o messo in quarantena dall'antivirus: rilancia il Setup |
+| Ollama is not running (solo con il motore Ollama) | avvia Ollama dal menu Start |
+| Model '…' not found: run  ollama pull … (solo con Ollama) | scarica il modello con il comando indicato |
 | The selected text is too long | seleziona una parte più corta |
 | The answer was cut off | la risposta era troppo lunga: non è stato incollato nulla; seleziona meno testo |
 | un avviso su config.ini (per esempio "'model' appears twice in [qwen]") | correggi la riga indicata nel file; nel frattempo valgono le impostazioni predefinite |
@@ -156,46 +137,27 @@ Le più utili:
   soli non sono ammessi, perché servono per scrivere.
 - `[comportamento] sostituisci_testo = si | no`: PgUp sostituisce il testo o apre la pagina.
 - `[comportamento] lunghezza = breve | normale | dettagliata`: lunghezza di riassunti e spiegazioni.
-- `[qwen] model`: il modello di Ollama (predefinito `gemma4:e4b-it-qat`). Deve girare in locale: i
-  modelli cloud non sono ammessi. La sezione si chiama `[qwen]` per motivi storici e vale per qualsiasi
-  modello locale.
+- `[qwen] backend = llama | ollama`: il modello incluso (predefinito) oppure Ollama. La sezione si chiama
+  `[qwen]` per motivi storici.
+- `[qwen] gpu = auto | off`: con il modello incluso, usare la scheda video se c'è oppure solo il processore.
+- `[qwen] model`: con Ollama, il modello da usare (predefinito `gemma4:e4b-it-qat`). Deve girare in locale: i
+  modelli cloud non sono ammessi.
 - `[qwen] keep_alive`: per quanto tempo il modello resta pronto in memoria (predefinito `30m`).
 - `[comportamento] clip_wait_ms` (facoltativa): quanti millisecondi un tasto aspetta la copia della
   selezione (predefinito 2000). Abbassala, per esempio a `500`, se senza selezione i tasti ti sembrano
   lenti; alzala se Excel o il desktop remoto copiano lentamente.
-
-### La nota To-Do di Obsidian
-
-Con la nota To-Do aperta in Obsidian, **PgUp** riorganizza l'intera nota invece di correggere la
-selezione. Imposta in `config.ini`:
-
-```
-[obsidian]
-todo_file = %USERPROFILE%\Documents\To-Do List.md
-window_title = To-Do List -
-```
-
-- `todo_file` è il percorso completo della nota.
-- `window_title` è l'inizio del titolo della finestra di Obsidian quando la nota è aperta
-  (i titoli sono del tipo `To-Do List - IlMioVault - Obsidian`).
-- Se la cartella Documenti è salvata su **OneDrive**, la nota si trova di solito in
-  `%USERPROFILE%\OneDrive\Documents`: copia il percorso dalla barra degli indirizzi di Esplora file e
-  usalo in `todo_file`.
-
-Prima di ogni modifica viene salvata una copia nella cartella nascosta `.ai-hotkeys-backups`, accanto alla
-nota (restano le 20 più recenti). Se un controllo di sicurezza fallisce (attività, link, tag o paragrafi
-persi), la nota non viene toccata e una finestra elenca i problemi.
 
 ### I tuoi prompt
 
 Tasto destro → **Edit prompts** apre `prompts_user.py`. La prima volta il file viene creato con una copia
 commentata dei prompt standard: togli il commento solo a ciò che vuoi cambiare. Gli aggiornamenti non
 toccano mai questo file. Se contiene un errore, AI-Hotkeys usa i prompt standard e mostra un avviso.
-Per tornare ai prompt standard basta cancellarlo.
+Per tornare ai prompt standard basta cancellarlo. Attenzione: il modello incluso è stato allenato sui prompt
+corti di `prompts_lfm.py`; con prompt diversi di solito risponde peggio.
 
 ## Ricerca sul web e privacy
 
-Il testo selezionato e le risposte restano sul tuo PC: il modello gira in locale, tramite Ollama.
+Il testo selezionato e le risposte restano sul tuo PC: il modello gira in locale (anche con Ollama).
 
 L'unica eccezione è la ricerca sul web del tasto **End**. Passa da SearXNG, un motore di ricerca che gira
 sul tuo PC, ma che inoltra le **parole di ricerca** a motori pubblici (Startpage, Yahoo); poi le pagine
@@ -216,5 +178,5 @@ Dettagli (in inglese): [PRIVACY.md](../PRIVACY.md).
 
 Impostazioni di Windows → App → AI-Hotkeys → Disinstalla (oppure menu Start → AI-Hotkeys → Uninstall).
 Ti viene chiesto se cancellare anche le impostazioni (`config.ini`) e la cartella `work`. I tuoi prompt
-(`prompts_user.py`) e le copie della nota To-Do restano comunque. Ollama e il modello si tolgono a parte
-(App di Windows, e `ollama rm gemma4:e4b-it-qat`, o il nome del modello che usi).
+(`prompts_user.py`) restano comunque. Il modello incluso viene tolto con il programma; Ollama, se lo hai
+installato, si toglie a parte (App di Windows, e `ollama rm <modello>`).

@@ -112,6 +112,21 @@
       "license": "OFL-1.1",
       "paths": ["static/fonts/barlow-*.woff2", "static/fonts/ibm-plex-*.woff2"],
       "notices": ["licenses/fonts/OFL-Barlow.txt", "licenses/fonts/OFL-IBM-Plex.txt"]
+    },
+    {
+      "id": "llama-cpp",
+      "name": "llama.cpp b12591 (llama-server, Vulkan build)",
+      "license": "MIT (bundled LLVM OpenMP runtime: Apache-2.0 WITH LLVM-exception)",
+      "paths": ["llama/**"],
+      "binaries": ["llama/llama-server.exe", "llama/*.dll"],
+      "notices": ["licenses/llama.cpp/LICENSE", "licenses/llama.cpp/LICENSE-LLVM-OpenMP"]
+    },
+    {
+      "id": "lfm-model",
+      "name": "LFM2.5-230M, fine-tuned for AI-Hotkeys (GGUF)",
+      "license": "LFM Open License v1.0 (modified weights)",
+      "paths": ["models/*.gguf"],
+      "notices": ["licenses/lfm/LICENSE", "licenses/lfm/NOTICE-AI-Hotkeys.txt"]
     }
   ],
   "python_packages": {
