@@ -29,7 +29,6 @@ import threading
 import time
 import webbrowser
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -257,33 +256,8 @@ def first_answer_events(mode, testo, stop, emit):
 
 def make_handler(session, token, page_html):
 
-    class Handler(BaseHTTPRequestHandler):
-
-        protocol_version = "HTTP/1.0"
-        timeout = pages.REQUEST_TIMEOUT
-
-        def log_message(self, *args):
-            pass
-
-        # ---------------------------------------------
-
-        def _authorized(self):
-            return pages.token_ok(self.headers.get("X-Token", ""), token)
-
-        def _send_json(self, status, data):
-            body = json.dumps(data, ensure_ascii=False).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(body)
-
-        # ---------------------------------------------
-
-        def _bad_host(self):
-            host = (self.headers.get("Host") or "").split(":")[0].lower()
-            return host not in ("127.0.0.1", "localhost")
+    class Handler(pages.PageHandler):
+        page_token = token
 
         def do_GET(self):
             url = urlparse(self.path)
@@ -300,18 +274,7 @@ def make_handler(session, token, page_html):
                     return
 
                 session.touch()
-
-                body = page_html.encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Referrer-Policy", "no-referrer")
-                self.send_header("X-Content-Type-Options", "nosniff")
-                self.send_header("X-Frame-Options", "DENY")
-                self.send_header("Content-Security-Policy", pages.CSP)
-                self.end_headers()
-                self.wfile.write(body)
+                self._send(200, page_html.encode("utf-8"), "text/html; charset=utf-8")
                 return
 
             if pages.try_serve_font(self, url.path):
@@ -323,7 +286,7 @@ def make_handler(session, token, page_html):
                     return
 
                 session.touch()
-                self._send_json(200, {"ok": True})
+                self._json(200, {"ok": True})
                 return
 
             self.send_error(404)
@@ -349,7 +312,7 @@ def make_handler(session, token, page_html):
                 return
 
             if not session.ready():
-                self._send_json(409, {"error": "There is no first answer to ask about."})
+                self._json(409, {"error": "There is no first answer to ask about."})
                 return
 
             try:
@@ -360,15 +323,15 @@ def make_handler(session, token, page_html):
                 question = str(data.get("question", "")).strip()
                 base_index = int(data.get("base", 0))
             except Exception:
-                self._send_json(400, {"error": "Invalid request."})
+                self._json(400, {"error": "Invalid request."})
                 return
 
             if not question:
-                self._send_json(400, {"error": "Write a request."})
+                self._json(400, {"error": "Write a request."})
                 return
 
             if len(question) > MAX_QUESTION:
-                self._send_json(400, {"error": f"Max {MAX_QUESTION} characters."})
+                self._json(400, {"error": f"Max {MAX_QUESTION} characters."})
                 return
 
             session.touch()
@@ -384,6 +347,13 @@ def make_handler(session, token, page_html):
                 session.touch()
 
         # ---------------------------------------------
+
+        def _start_ndjson(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
 
         def _emit(self, obj):
             line = json.dumps(obj, ensure_ascii=False) + "\n"
@@ -401,7 +371,7 @@ def make_handler(session, token, page_html):
                     first.claimed = True
                     session.active_requests += 1
             if claimed:
-                self._send_json(409, {"error": "This page was already used. To start again, "
+                self._json(409, {"error": "This page was already used. To start again, "
                                                "select the text and press the hotkey."})
                 return
             session.touch()
@@ -415,11 +385,7 @@ def make_handler(session, token, page_html):
                 session.touch()
 
         def _stream_first(self, first):
-            self.send_response(200)
-            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Accel-Buffering", "no")
-            self.end_headers()
+            self._start_ndjson()
 
             # The pipeline runs in its own thread, so a cancel (Esc 2 s) is
             # honoured at once even while it waits for the web or for the AI
@@ -463,11 +429,7 @@ def make_handler(session, token, page_html):
                 session.touch()
 
         def _stream_answer(self, question, base_index):
-            self.send_response(200)
-            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Accel-Buffering", "no")
-            self.end_headers()
+            self._start_ndjson()
 
             parts = []
             messages = session.build_messages(question, base_index)

@@ -1,5 +1,17 @@
 # Code Deletion Log
 
+## [2026-11-21] Duplication pass
+
+- `pages.PageHandler`: one base for the results and settings page handlers (Host check, X-Token check,
+  hardened headers, JSON replies). Before, both handlers had their own copy; the results page JSON replies
+  now also carry `nosniff` / `X-Frame-Options` / `Referrer-Policy`.
+- `qwen_client._http_error_text` and `_post_json`: the Ollama and llama-server paths shared copied code for
+  reading an HTTP error body and building a JSON POST.
+- `viewer.py`: the two NDJSON reply headers blocks are one `_start_ndjson()`.
+- `websearch.CITE_RE` (unused) removed; `_decode` reuses `_charset`.
+- Root `test_config_edit.py` shim removed: `python -m unittest tests.test_config_edit` runs the same tests.
+- Tests: 266 Python tests pass before and after; settings page and the built-in engine checked live.
+
 ## [2026-10-14] Refactor Session
 
 ### Unused Functions Removed
